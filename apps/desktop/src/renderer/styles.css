@@ -75,6 +75,12 @@ body {
   border-radius: var(--radius-sm);
 }
 
+.icon-button svg {
+  inline-size: 1em;
+  block-size: 1em;
+  display: block;
+}
+
 .icon-button:hover:not(:disabled) {
   color: var(--color-text);
   background-color: var(--color-surface-raised);
@@ -112,11 +118,45 @@ body {
   padding: var(--space-sm);
 }
 
+.provider-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-xs);
+}
+
 .provider-title {
-  margin: 0 0 var(--space-xs) 0;
+  margin: 0;
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-accent);
+}
+
+.provider-logo {
+  flex: none;
+  inline-size: var(--size-provider-logo);
+  block-size: var(--size-provider-logo);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.provider-logo img {
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  display: block;
+}
+
+.provider-logo .logo-dark {
+  display: none;
+}
+
+[data-theme="dark"] .provider-logo .logo-light {
+  display: none;
+}
+
+[data-theme="dark"] .provider-logo .logo-dark {
+  display: block;
 }
 
 .table {

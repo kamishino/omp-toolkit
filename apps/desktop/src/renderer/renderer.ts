@@ -1,3 +1,4 @@
+import { mdiClose, mdiRefresh } from "@mdi/js";
 import {
   type DashboardLimit,
   type DashboardProvider,
@@ -8,6 +9,7 @@ import {
   summaryText,
 } from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
+import { providerLogo } from "./provider-logos";
 import { applyTheme } from "./tokens";
 
 const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -16,6 +18,17 @@ media.addEventListener("change", (e) => {
   applyTheme(e.matches ? "dark" : "light");
 });
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+function icon(pathData: string): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const pathElem = document.createElementNS(SVG_NS, "path");
+  pathElem.setAttribute("d", pathData);
+  pathElem.setAttribute("fill", "currentColor");
+  svg.appendChild(pathElem);
+  return svg;
+}
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], {
     hour: "2-digit",
@@ -77,14 +90,40 @@ function renderProviderCard(
 ): HTMLElement {
   const card = document.createElement("section");
   card.className = "provider-card";
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "provider-header";
+
+  const logoSlot = document.createElement("span");
+  logoSlot.className = "provider-logo";
+
+  const logo = providerLogo(provider.id);
+  if (logo) {
+    const lightImg = document.createElement("img");
+    lightImg.src = `./assets/providers/${logo.light}`;
+    lightImg.alt = "";
+    lightImg.setAttribute("aria-hidden", "true");
+    if (logo.dark) {
+      lightImg.className = "logo-light";
+      const darkImg = document.createElement("img");
+      darkImg.src = `./assets/providers/${logo.dark}`;
+      darkImg.alt = "";
+      darkImg.setAttribute("aria-hidden", "true");
+      darkImg.className = "logo-dark";
+      darkImg.onerror = () => darkImg.remove();
+      logoSlot.appendChild(darkImg);
+    }
+    lightImg.onerror = () => lightImg.remove();
+    logoSlot.appendChild(lightImg);
+  }
+  headerDiv.appendChild(logoSlot);
 
   const titleId = `provider-title-${providerIndex}`;
   const h2 = document.createElement("h2");
   h2.id = titleId;
   h2.className = "provider-title";
   h2.textContent = `${provider.name}${provider.suffix} · ${provider.accounts} ${provider.accounts === 1 ? "account" : "accounts"}`;
-  card.appendChild(h2);
-
+  headerDiv.appendChild(h2);
+  card.appendChild(headerDiv);
   const table = document.createElement("table");
   table.className = "table";
   table.setAttribute("aria-labelledby", titleId);
@@ -188,7 +227,7 @@ function buildPanel(state: PanelState): HTMLElement {
   refreshBtn.type = "button";
   refreshBtn.className = "icon-button";
   refreshBtn.setAttribute("aria-label", "Refresh");
-  refreshBtn.textContent = "↻";
+  refreshBtn.appendChild(icon(mdiRefresh));
   if (state.status === "loading") {
     refreshBtn.disabled = true;
   }
@@ -201,7 +240,7 @@ function buildPanel(state: PanelState): HTMLElement {
   closeBtn.type = "button";
   closeBtn.className = "icon-button";
   closeBtn.setAttribute("aria-label", "Close");
-  closeBtn.textContent = "×";
+  closeBtn.appendChild(icon(mdiClose));
   closeBtn.addEventListener("click", () => {
     window.omp.hide();
   });

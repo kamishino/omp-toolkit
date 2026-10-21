@@ -5,6 +5,7 @@
   "type": "module",
   "main": "dist/main.cjs",
   "dependencies": {
+    "@mdi/js": "^7.4.47",
     "@omp-toolkit/core": "workspace:*",
     "plist": "^5.0.0",
     "shell-quote": "^1.12.0",
