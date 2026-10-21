@@ -1,11 +1,24 @@
 # OMP Toolkit
 
-> **Unofficial.** This project is not affiliated with OMP, Orca, or Google.
-> Gemini account rotation is experimental. Provider terms may restrict automated
-> account rotation; use at your own risk.
+> **Unofficial.** Not affiliated with OMP, Orca, or Google. Gemini account
+> rotation is experimental. Provider terms may restrict automated account
+> rotation; use at your own risk.
 
 [![check](https://github.com/kamishino/omp-toolkit/actions/workflows/check.yml/badge.svg)](https://github.com/kamishino/omp-toolkit/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+One terminal view for OMP provider usage, Gemini route health, DeepSeek balance,
+and a 30-day reliability history.
+
+## Features
+
+- Provider usage monitor for Google Antigravity, OpenAI Codex, Muse Code, and
+  DeepSeek.
+- Per-account Gemini route health with temporary account circuit breakers.
+- DeepSeek balance with CNY preference and USD fallback.
+- Local SQLite reliability history and `reliability:report`.
+- One-command Orca Floating Workspace launcher on Windows; best-effort on
+  macOS/Linux.
 
 ## Status
 
@@ -14,49 +27,30 @@
 | Provider usage monitor / TUI | Supported |
 | DeepSeek balance (CNY preferred) | Supported |
 | Reliability history and report | Supported |
-| Orca Floating Workspace launcher | Supported on Windows |
+| Orca Floating Workspace launcher | Supported on Windows; best-effort on macOS/Linux |
 | Gemini route-health rotation | Experimental |
+
+## Platform support
+
+| Platform | Install / build / CLI | Orca Floating Workspace |
+|---|---|---|
+| Windows 10/11 | Supported | Supported |
+| macOS | Supported | Best-effort |
+| Linux | Supported | Best-effort; resolves `orca-ide` or `ORCA_BIN` |
+
+CI runs the full check suite on `windows-latest`, `macos-latest`, and
+`ubuntu-latest`.
 
 ## Requirements
 
-- Windows 10 or 11
 - Bun 1.4.3 or newer
 - OMP 18.12.5
+- Git
 - Orca 1.4.226 (optional; only for `monitor:orca`)
 
-macOS and Linux are not supported. Contributions that improve Windows behavior
-are welcome; cross-platform ports are best-effort.
+## Installation
 
-A Bun workspace monorepo for OMP operations tooling:
-
-- **OMP Provider Usage** - one terminal view for every authenticated OMP
-  provider, with per-account Gemini route health layered onto Google
-  Antigravity.
-- **Gemini Health extension** - event-driven route probing, temporary account
-  circuit breakers, healthy-streak auto-restore, and guarded manual recovery.
-
-The toolkit keeps `gemini-3.8-flash`; it rotates around a saturated account
-instead of falling back to a less capable model.
-
-## Layout
-
-```text
-omp-toolkit/
-├─ apps/
-│  ├─ omp-extension/        OMP adapter: hooks, commands, tool, health CLI
-│  └─ provider-usage/       OMP Provider Usage CLI
-├─ packages/
-│  ├─ core/                 Pure domain: usage grouping, streaks, policies
-│  └─ tui/                  ANSI design tokens + provider usage renderer
-├─ design/tokens.json       Design-token SSOT for the terminal UI
-├─ docs/                    Architecture, runbook, design, ADRs
-├─ scripts/                 Build and install tooling
-├─ package.json             Bun workspaces
-├─ tsconfig.json
-└─ biome.json
-```
-
-## Quick start
+### Windows (PowerShell)
 
 ```powershell
 git clone https://github.com/kamishino/omp-toolkit.git
@@ -66,19 +60,33 @@ bun run check
 bun run install:omp
 ```
 
-`install:omp` builds both apps, backs up the existing OMP artifacts under
-`~/.omp/agent/backups/<timestamp>/`, installs:
+### macOS / Linux (Bash)
 
-```text
-~/.omp/agent/extensions/gemini-health.js
-~/.omp/agent/scripts/omp-provider-usage.js
+```bash
+git clone https://github.com/kamishino/omp-toolkit.git
+cd omp-toolkit
+bun install
+bun run check
+bun run install:omp
 ```
 
-and removes the legacy `.ts` copies so OMP does not load both.
+`install:omp` writes to `$HOME/.omp/agent` (or `PI_CODING_AGENT_DIR`) and
+backs up existing artifacts first. Use
+`bun scripts/install.ts --dry-run` to print the source and destination paths
+without changing anything.
 
-## Commands
+## Quick start
 
-OMP extension:
+```bash
+bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --health
+bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --watch --interval=300 --health
+```
+
+Windows PowerShell accepts the same `$HOME` paths.
+
+## Usage
+
+### OMP extension commands
 
 ```text
 /gemini-health [--confirm]
@@ -88,108 +96,87 @@ OMP extension:
 /gemini-health-widget [on|off]
 ```
 
-Provider usage CLI:
+### Provider usage CLI
 
 ```bash
-bun ~/.omp/agent/scripts/omp-provider-usage.js
-bun ~/.omp/agent/scripts/omp-provider-usage.js --health
-bun ~/.omp/agent/scripts/omp-provider-usage.js --watch --interval=300 --health
-bun ~/.omp/agent/scripts/omp-provider-usage.js --json
+bun "$HOME/.omp/agent/scripts/omp-provider-usage.js"
+bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --health
+bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --json
+bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --watch --interval=300 --health
 ```
 
-Orca terminal tab (Floating Workspace):
+### Orca Floating Workspace
 
 ```bash
 bun run monitor:orca
 ```
 
-Press `Ctrl+Alt+A` to toggle the Floating Workspace panel.
-
-Manual fallback in another worktree:
-
-```powershell
-orca terminal create `
-  --worktree active `
-  --title "OMP Provider Usage" `
-  --command "bun `"$HOME/.omp/agent/scripts/omp-provider-usage.js`" --watch --interval=300 --health" `
-  --json
-```
-
-## Data flow
-
-```text
-OMP auto_retry_start / agent_end
-        │
-        ▼
-gemini-health probe sweep (event/manual only)
-        │
-        ├─ auth.accountPolicies (reservePct=100)
-        ├─ gemini-health-state.json
-        ├─ gemini-health-streaks.json
-        └─ gemini-health-latest.json
-                    │
-                    ▼
-OMP Provider Usage CLI reads omp usage + the snapshot
-```
-
-- Usage reads (`omp usage`) are quota queries, not inference.
-- The provider usage view reads the last health snapshot; it never probes.
-- Health probes run only on a retry/error, a manual command, or the health CLI.
-- Auto-restore applies to managed exclusions after three spaced healthy checks.
-- Manual exclusions require `/gemini-enable` (guarded by the snapshot).
-
-## Intervals and cost
-
-Recommended refresh: **300 s**.
-
-| Interval | `omp usage` calls/day | Model tokens |
-|---:|---:|---:|
-| 60 s | 1,440 | 0 |
-| 120 s | 720 | 0 |
-| 300 s | 288 | 0 |
-| 600 s | 144 | 0 |
-
-A health sweep (six Antigravity accounts) is about **66 tokens**; it happens
-only on an event/manual check, not on the monitor's interval.
+Windows shortcut: `Ctrl+Alt+A`. macOS shortcut: `Cmd+Alt+A`.
+The launcher resolves `ORCA_BIN`, then `ORCA_CLI_COMMAND`, then
+`ORCA_DEV_REPO_ROOT` (`orca-dev`), then `orca-ide` on Linux, then `orca`.
+Orca integration outside Windows is best-effort.
 
 ## Configuration
 
-Environment variables:
+| Variable | Purpose |
+|---|---|
+| `DEEPSEEK_API_KEY` | DeepSeek balance queries |
+| `OMP_BIN` | OMP executable, default `omp` |
+| `PI_CODING_AGENT_DIR` | OMP agent directory override |
+| `GEMINI_HEALTH_RESTORE_STREAK` | Healthy checks before auto-restore |
+| `GEMINI_HEALTH_RESTORE_GAP_SECONDS` | Minimum spacing between checks |
+| `PI_AI_ANTIGRAVITY_VERSION` | Antigravity client version header |
+| `ORCA_BIN` | Orca CLI executable override |
+| `ORCA_CLI_COMMAND` | Orca-managed CLI command override |
+
+## Project structure
 
 ```text
-GEMINI_HEALTH_RESTORE_STREAK=3
-GEMINI_HEALTH_RESTORE_GAP_SECONDS=60
-PI_AI_ANTIGRAVITY_VERSION=2.24.0
-OMP_BIN=omp
-PI_CODING_AGENT_DIR=...
+apps/
+  omp-extension/        OMP adapter: hooks, commands, tool, health CLI
+  provider-usage/       OMP Provider Usage CLI
+packages/
+  core/                 Pure domain logic and history types
+  tui/                  ANSI design tokens and provider usage renderer
+docs/
+  adr/                  Architecture decision records
+  architecture.md
+  design.md
+  roadmap.md
+  runbook.md
+design/tokens.json      Design-token SSOT
+scripts/                Build, install, Orca launcher, reliability report
 ```
-
-## Documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Runbook](docs/RUNBOOK.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Glossary](GLOSSARY.md)
-- [Design tokens](docs/DESIGN.md)
-- [ADR-0001: event-driven health](docs/ADR-0001-event-driven-health.md)
-- [ADR-0002: opt-in auto-restore](docs/ADR-0002-opt-in-auto-restore.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
-- [License](LICENSE)
 
 ## Development
 
 ```bash
-bun test          # domain + TUI tests, no network
-bun run typecheck # tsc --noEmit
-bun run format    # Biome formatter
-bun run check     # Biome + tsc + tests
-bun run build     # bundle both apps
+bun test
+bun run typecheck
+bun run format
+bun run check
+bun run build
 ```
 
-The OMP extension is deliberately bundled to one file because OMP auto-discovers
-single extension modules. Shared domain and presentation logic lives in the
-workspace packages.
+## Documentation
 
-Local AI assistant instructions, session handoffs, transcripts, and tool
-configuration are intentionally not tracked. See `CONTRIBUTING.md`.
+- [Architecture](docs/architecture.md)
+- [Design](docs/design.md)
+- [Runbook](docs/runbook.md)
+- [Roadmap](docs/roadmap.md)
+- [ADRs](docs/adr/README.md)
+- [Glossary](GLOSSARY.md)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). AI assistant instructions, session
+handoffs, transcripts, and local tool configuration are intentionally not
+tracked.
+
+## Security
+
+See [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)

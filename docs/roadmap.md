@@ -29,6 +29,10 @@
 - No history database, no cross-process lock, no opt-in auto-restore, no
   recovery timer, no incident alerting, no reliability report.
 
+Cross-platform installation and CLI support are defined by
+[ADR-0004](adr/0004-cross-platform-support.md); the 30-day reliability proof
+remains on Windows.
+
 > This roadmap is public. Personal machine names, account emails, and terminal
 > handles must not be added to it.
 
@@ -278,7 +282,7 @@ policy update when they overlap.
      `orca terminal list --worktree id:global-floating-terminal --json`;
    - print PASS/FAIL per check and exit 1 on any FAIL.
 
-4. Document the two-machine rollout in `docs/RUNBOOK.md`:
+4. Document the two-machine rollout in `docs/runbook.md`:
    - install on machine 1, run the 30-day proof;
    - install the same independent setup on machine 2 on day 51;
    - each machine has its own agent dir, history DB, machine id, and monitor;

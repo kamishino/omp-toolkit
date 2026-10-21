@@ -45,7 +45,7 @@ A state where every account fails, or where automatic recovery cannot restore
 service and the operator must act.
 
 ## Machine
-One Windows host with its own OMP agent directory and its own toolkit state.
+One host with its own OMP agent directory and its own toolkit state.
 
 ## Monitor
 The Orca Floating Workspace tab that renders the provider-usage view.
@@ -63,3 +63,10 @@ The person who sets project direction and merges contributions.
 ## Public release
 A tagged source snapshot published on GitHub. The project does not publish npm
 packages.
+
+## Supported platform
+A platform covered by CI and documented installation, build, and CLI support.
+
+## Best-effort platform
+A platform where installation and CLI are expected to work, but
+integration-specific behavior may be untested.

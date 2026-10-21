@@ -7,6 +7,7 @@ const agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".om
 const extensionsDir = path.join(agentDir, "extensions");
 const scriptsDir = path.join(agentDir, "scripts");
 const backupDir = path.join(agentDir, "backups", new Date().toISOString().replace(/[:.]/g, "-"));
+const dryRun = process.argv.includes("--dry-run");
 
 function backup(target: string): void {
   if (!fs.existsSync(target)) return;
@@ -20,6 +21,10 @@ function install(source: string, destination: string): void {
   if (!fs.existsSync(source)) {
     throw new Error(`missing build artifact: ${source} (run bun run build)`);
   }
+  if (dryRun) {
+    console.log(`would install ${source} -> ${destination}`);
+    return;
+  }
   backup(destination);
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.copyFileSync(source, destination);
@@ -27,7 +32,10 @@ function install(source: string, destination: string): void {
 }
 
 function removeLegacy(target: string): void {
-  if (!fs.existsSync(target)) return;
+  if (dryRun) {
+    console.log(`would remove legacy ${target}`);
+    return;
+  }
   backup(target);
   fs.rmSync(target, { force: true });
   console.log(`removed legacy ${target}`);
@@ -46,5 +54,11 @@ removeLegacy(path.join(extensionsDir, "gemini-health.ts"));
 removeLegacy(path.join(scriptsDir, "omp-provider-usage.ts"));
 removeLegacy(path.join(scriptsDir, "gemini-usage.ts"));
 
-console.log("OMP toolkit installed.");
-console.log("Run `bun run monitor:orca` to place OMP Provider Usage in Orca's Floating Workspace.");
+if (dryRun) {
+  console.log("OMP toolkit install dry run complete.");
+} else {
+  console.log("OMP toolkit installed.");
+  console.log(
+    "Run `bun run monitor:orca` to place OMP Provider Usage in Orca's Floating Workspace.",
+  );
+}

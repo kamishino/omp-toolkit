@@ -1,5 +1,11 @@
 # Runbook
 
+## Platform notes
+
+Windows examples use PowerShell. macOS/Linux use the same `bun` commands in
+Bash. `bun run install:omp` and `bun run reliability:report` work on all
+supported platforms. Orca integration is best-effort outside Windows.
+
 ## Normal checks
 
 ```bash
@@ -12,7 +18,7 @@ bun ~/.omp/agent/extensions/gemini-health.js
 # Inside an OMP TUI
 /gemini-health
 
-# Reliability audit & doctor checks (see ROADMAP.md; run on each machine)
+# Reliability audit & doctor checks (see roadmap.md; run on each machine)
 bun run reliability:report --days=7
 bun run reliability:report --days=30
 bun run doctor
@@ -68,9 +74,14 @@ One-command launcher (Floating Workspace):
 bun run monitor:orca
 ```
 
-Press `Ctrl+Alt+A` to show the Floating Workspace panel. Note that `--focus`
-focuses the tab inside the floating layout but does not unhide or open the panel
-overlay if it is currently closed.
+Press `Ctrl+Alt+A` on Windows/Linux (or `Cmd+Alt+A` on macOS) to show the
+Floating Workspace panel. Note that `--focus` focuses the tab inside the
+floating layout but does not unhide or open the panel overlay if it is
+currently closed.
+
+The launcher resolves `ORCA_BIN`, then `ORCA_CLI_COMMAND`, then
+`ORCA_DEV_REPO_ROOT` (`orca-dev`), then `orca-ide` on Linux, then `orca`.
+Windows/Linux use `Ctrl+Alt+A`; macOS uses `Cmd+Alt+A`.
 
 To restart or re-anchor the monitor:
 
@@ -102,8 +113,14 @@ orca terminal close --terminal <terminal-handle> --json
 Preferred: Settings (`Ctrl+,`) -> Appearance -> Status bar toggles. Turn off
 the provider items (Gemini, Antigravity, and any others you do not want).
 
-File fallback: quit Orca first, back up
-`%APPDATA%\orca\profiles\local-default\orca-data.json`,
+File fallback: quit Orca first, back up:
+
+```text
+Windows: %APPDATA%\orca\profiles\local-default\orca-data.json
+macOS:   ~/Library/Application Support/orca/profiles/local-default/orca-data.json
+Linux:   ~/.config/orca/profiles/local-default/orca-data.json
+```
+
 then set:
 
 ```json

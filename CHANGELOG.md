@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Reorganize documentation into lowercase files and `docs/adr/`.
+- Add cross-platform installation and a Windows/macOS/Linux CI matrix.
+
 ## 0.1.0 — Initial public release (2026-10-21)
 
 - Add `@omp-toolkit/core` domain package for provider usage grouping, column

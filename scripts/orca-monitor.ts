@@ -9,7 +9,31 @@ const execFileAsync = promisify(execFile);
 const FLOATING_WORKTREE = "id:global-floating-terminal";
 const TITLE = "OMP Provider Usage";
 const DEFAULT_INTERVAL = 300;
-const ORCA = process.env.ORCA_BIN || "orca";
+export function resolveOrcaBin(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const explicit = env.ORCA_BIN?.trim();
+  if (explicit) return explicit;
+  const managed = env.ORCA_CLI_COMMAND?.trim();
+  if (managed) return managed;
+  if (env.ORCA_DEV_REPO_ROOT) return "orca-dev";
+  if (platform === "linux") return "orca-ide";
+  return "orca";
+}
+
+export function quoteArg(value: string, platform: NodeJS.Platform = process.platform): string {
+  if (platform === "win32") {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function floatingShortcut(platform: NodeJS.Platform = process.platform): string {
+  return platform === "darwin" ? "Cmd+Alt+A" : "Ctrl+Alt+A";
+}
+
+const ORCA = resolveOrcaBin();
 const AGENT_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
 const ROOT = path.resolve(import.meta.dir, "..");
 
@@ -26,10 +50,6 @@ interface OrcaResponse<T = unknown> {
     code?: string;
     message?: string;
   };
-}
-
-function quoteArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function resolveMonitorScript(): string {
@@ -126,13 +146,15 @@ export async function launchOrFocusMonitor(): Promise<void> {
       console.log("OMP Provider Usage: started in Orca Floating Workspace.");
     }
 
-    console.log("Press Ctrl+Alt+A to show the Floating Workspace panel.");
+    console.log(`Press ${floatingShortcut()} to show the Floating Workspace panel.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Orca monitor: ${message}`);
-    if (message.includes("selector_not_found")) {
+    if (message.includes("ENOENT")) {
+      console.error(`Orca CLI not found (${ORCA}). Set ORCA_BIN or install Orca.`);
+    } else if (message.includes("selector_not_found")) {
       console.error(
-        `Orca rejected the floating workspace selector. Open it with Ctrl+Alt+A, then run:\n  ${command}`,
+        `Orca rejected the floating workspace selector. Open it with ${floatingShortcut()}, then run:\n  ${command}`,
       );
     }
     process.exitCode = 1;
