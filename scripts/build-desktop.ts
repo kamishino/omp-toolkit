@@ -72,7 +72,7 @@ export async function buildDesktop(): Promise<void> {
     path.join(distDir, "index.html"),
     path.join(distDir, "styles.css"),
     path.join(assetsDir, "app-icon.png"),
-    path.join(assetsDir, "providers", "google.svg"),
+    path.join(assetsDir, "providers", "google-gemini.svg"),
     path.join(assetsDir, "providers", "openai-light.svg"),
     path.join(assetsDir, "providers", "openai-dark.svg"),
     path.join(assetsDir, "providers", "deepseek.svg"),

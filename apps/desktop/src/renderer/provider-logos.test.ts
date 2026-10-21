@@ -3,7 +3,9 @@ import { providerLogo } from "./provider-logos";
 
 describe("providerLogo mapping", () => {
   test("returns logo files for supported providers", () => {
-    expect(providerLogo("google-antigravity")).toEqual({ light: "google.svg" });
+    expect(providerLogo("google-antigravity")).toEqual({
+      light: "google-gemini.svg",
+    });
     expect(providerLogo("openai-codex")).toEqual({
       light: "openai-light.svg",
       dark: "openai-dark.svg",
