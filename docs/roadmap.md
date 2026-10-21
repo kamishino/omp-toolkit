@@ -380,4 +380,6 @@ The 90-day roadmap is complete when all of the following are true:
 - The second machine uses independent state; no sync or shared database.
 
 > This roadmap deliberately excludes public distribution, a provider SDK, a web
-> dashboard, and macOS/Linux support until the 30-day proof is complete.
+> dashboard, and macOS/Linux support until the 30-day proof is complete. The
+> desktop widget is a monitor host and does not change the Windows-only 30-day
+> reliability proof.

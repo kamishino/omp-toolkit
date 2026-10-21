@@ -52,8 +52,21 @@ A live provider-usage view. It runs in any terminal, or in an Orca Floating
 Workspace tab when Orca is the chosen host.
 
 ## Monitor host
-The terminal or Orca Floating Workspace tab that runs the monitor.
+The terminal, desktop widget, or Orca Floating Workspace tab that runs the
+monitor.
 
+## Desktop widget
+A cross-platform tray host for the monitor: a tray icon plus a compact panel
+showing the same provider-usage dashboard. It is separate from the OMP
+`/gemini-health-widget` TUI toggle and is not a Windows 11 Widgets-board widget.
+_Avoid_: Tray widget, menu bar app
+
+## Tray icon
+The OS notification-area (Windows/Linux) or menu-bar (macOS) icon that indicates
+status and toggles the desktop widget panel.
+
+## Panel
+The compact, always-on-top window owned by the desktop widget.
 ## History
 The 30-day local record of route checks, policy changes, manual interventions,
 incidents, and monitor heartbeats.

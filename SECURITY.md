@@ -15,6 +15,7 @@ technical details.
 - Writes to `~/.omp/agent` config, state, history, and snapshot files.
 - The SQLite history database and report script.
 - Orca CLI invocation and command-string construction.
+- Desktop widget IPC surface, sandbox and context isolation, CSP policy, and terminal command construction.
 
 ## What this project does not do
 It has no telemetry and no remote upload path. It calls OMP, the configured

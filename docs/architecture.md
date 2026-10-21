@@ -4,11 +4,12 @@
 
 | Layer | Package | Responsibility |
 |---|---|---|
-| Domain | `packages/core` | Pure usage grouping, column selection, route ordering, streak transitions, policy membership |
-| Presentation | `packages/tui` | ANSI design tokens, semantic thresholds, bars, percentages, provider usage frame |
+| Domain | `packages/core` | Pure usage grouping, column selection, route ordering, streak transitions, dashboard model |
+| Presentation (terminal) | `packages/tui` | ANSI design tokens, semantic thresholds, bars, percentages, provider usage frame |
+| Presentation (desktop) | `apps/desktop` | Electron host, tray/menu, OS login item, terminal/Orca launch; renderer consumes dashboard JSON |
 | Adapters | `apps/omp-extension` | OMP hooks, commands, tool, account probing, state/config persistence |
-| Adapter | `apps/provider-usage` | CLI flags, `omp usage` read, snapshot read, watch loop |
-| Design | `design/tokens.json` | Color and threshold SSOT consumed by `packages/tui` |
+| Adapter | `apps/provider-usage` | CLI flags, `omp usage` read, snapshot read, watch loop, schema-2 JSON payload |
+| Design | `design/tokens.json` | Color and threshold SSOT for TUI ANSI and desktop OKLCH |
 
 `core` has no filesystem, process, network, or OMP imports. `tui` imports only
 `core` and JSON tokens. The apps own I/O and runtime boundaries.
@@ -36,7 +37,10 @@ apps/provider-usage/src/index.ts -> apps/provider-usage/dist/index.js
 omp usage --json
   -> apps/provider-usage/usage.ts: fetchUsage()
   -> core/sectionsFor(): group by provider, select windows, sort rows
+  -> core/buildDashboard(): pure view model (schema 2)
   -> tui/renderProviderUsage(): ANSI frame
+  -> apps/provider-usage --json: versioned dashboard object
+  -> apps/desktop: Electron tray/panel (DOM/CSS)
 ```
 
 For Google Antigravity, `columnsFor` keeps only `Gemini` limits. Shared
@@ -81,6 +85,7 @@ a model, so an idle monitoring tab spends zero model tokens. See
 | `gemini-health-streaks.json` | Extension | Spaced healthy-check streaks |
 | `gemini-health-latest.json` | Extension | Cached route snapshot for read-only UIs |
 | `gemini-health-widget.json` | Extension | TUI widget visibility |
+| `desktop-widget-error.log` | Desktop widget | Append-only fatal and refresh diagnostics |
 
 All non-config files use atomic writes. Mutating paths use strict reads so a
 corrupt state file is surfaced rather than silently replaced. Streak corruption
@@ -99,6 +104,8 @@ is backed up to `.corrupt-<timestamp>` and rebuilt.
 - Probe `401/403` invalidates the token cache.
 - The usage monitor watch loop survives `omp usage` failures and keeps the last
   frame until the next successful read.
+- The desktop widget never probes a model; it spawns the installed monitor CLI and renders its versioned JSON.
+- The desktop renderer is local-only, sandboxed, with context isolation and CSP blocking all network access.
 
 ## Non-goals
 
@@ -107,3 +114,5 @@ is backed up to `.corrupt-<timestamp>` and rebuilt.
 - No periodic health probing; the snapshot is refreshed by events/manual checks.
 - No custom Orca status-bar item; Orca's public plugin API exposes right-sidebar
   panels and commands, not status-bar contributions.
+- No packaged desktop binaries or auto-updater; the desktop widget runs from source via Bun.
+- No Windows 11 Widgets-board provider; the widget uses the notification area / menu bar.
