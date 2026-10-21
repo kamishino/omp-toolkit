@@ -57,6 +57,11 @@ export async function buildDesktop(): Promise<void> {
   );
 
   const assetsDir = path.join(distDir, "assets");
+  const srcProvidersDir = path.join(appDir, "src", "renderer", "assets", "providers");
+  const distProvidersDir = path.join(assetsDir, "providers");
+  fs.mkdirSync(distProvidersDir, { recursive: true });
+  fs.cpSync(srcProvidersDir, distProvidersDir, { recursive: true });
+
   buildTrayIcons(assetsDir);
 
   // Verification assertions
@@ -67,6 +72,10 @@ export async function buildDesktop(): Promise<void> {
     path.join(distDir, "index.html"),
     path.join(distDir, "styles.css"),
     path.join(assetsDir, "app-icon.png"),
+    path.join(assetsDir, "providers", "google.svg"),
+    path.join(assetsDir, "providers", "openai-light.svg"),
+    path.join(assetsDir, "providers", "openai-dark.svg"),
+    path.join(assetsDir, "providers", "deepseek.svg"),
   ];
 
   const modes = ["light", "dark"] as const;
