@@ -1,4 +1,4 @@
-import { mdiClose, mdiRefresh } from "@mdi/js";
+import { mdiClose, mdiRefresh, mdiWindowMinimize } from "@mdi/js";
 import {
   type DashboardLimit,
   type DashboardProvider,
@@ -236,16 +236,27 @@ function buildPanel(state: PanelState): HTMLElement {
   });
   actions.appendChild(refreshBtn);
 
+  const minimizeBtn = document.createElement("button");
+  minimizeBtn.type = "button";
+  minimizeBtn.className = "icon-button";
+  minimizeBtn.setAttribute("aria-label", "Minimize to tray");
+  minimizeBtn.title = "Minimize to tray";
+  minimizeBtn.appendChild(icon(mdiWindowMinimize));
+  minimizeBtn.addEventListener("click", () => {
+    window.omp.hide();
+  });
+  actions.appendChild(minimizeBtn);
+
   const closeBtn = document.createElement("button");
   closeBtn.type = "button";
   closeBtn.className = "icon-button";
-  closeBtn.setAttribute("aria-label", "Close");
+  closeBtn.setAttribute("aria-label", "Close to tray");
+  closeBtn.title = "Close to tray";
   closeBtn.appendChild(icon(mdiClose));
   closeBtn.addEventListener("click", () => {
     window.omp.hide();
   });
   actions.appendChild(closeBtn);
-
   header.appendChild(actions);
   panel.appendChild(header);
 

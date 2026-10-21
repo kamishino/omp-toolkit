@@ -259,7 +259,7 @@ void app.whenReady().then(async () => {
         },
       },
       {
-        label: isVisible ? "Hide panel" : "Show panel",
+        label: isVisible ? "Minimize to tray" : "Show panel",
         click: () => {
           togglePanel();
         },

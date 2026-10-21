@@ -98,10 +98,12 @@ zero model tokens. Use `600 s` to halve API traffic.
 bun run desktop
 ```
 
-Left-click toggles the compact panel; right-click offers Refresh, Show/Hide, Open
-terminal monitor, Open Orca tab, Start at login, and Exit. The panel follows the OS
-light/dark theme. `OMP_WIDGET_INTERVAL_SECONDS` overrides the 300 s refresh interval
-(minimum 30). `bun run widget` remains an alias for `bun run desktop`.
+Left-click toggles the compact panel; right-click offers Refresh, Minimize to
+tray / Show panel, Open terminal monitor, Open Orca tab, Start at login, and Exit.
+The header minimize and close buttons hide the panel to the tray; the tray menu
+shows Minimize to tray / Show panel. The panel follows the OS light/dark theme.
+`OMP_WIDGET_INTERVAL_SECONDS` overrides the 300 s refresh interval (minimum 30).
+`bun run widget` remains an alias for `bun run desktop`.
 
 Supported on Windows 10/11 and macOS; Linux is best-effort (requires StatusNotifierItem
 or an AppIndicator extension on GNOME). Diagnostics without the UI:
