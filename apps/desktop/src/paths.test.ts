@@ -30,6 +30,10 @@ describe("paths helpers", () => {
     const bunName = process.platform === "win32" ? "bun.exe" : "bun";
     const bunFile = path.join(binDir, bunName);
     fs.writeFileSync(bunFile, "#!/bin/sh\n", "utf8");
+    if (process.platform !== "win32") {
+      // which.sync requires the X_OK bit on POSIX.
+      fs.chmodSync(bunFile, 0o755);
+    }
 
     const res = findBun({ PATH: binDir }, process.platform, tmpDir);
     expect(res?.toLowerCase()).toBe(bunFile.toLowerCase());
