@@ -1,0 +1,13 @@
+{
+  "name": "@omp-toolkit/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "dependencies": {
+    "@omp-toolkit/core": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^34.3.0"
+  }
+}

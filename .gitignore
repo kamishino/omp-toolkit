@@ -54,6 +54,7 @@ Desktop.ini
 
 # Private agent/session artifacts
 HANDOFF.md
+OMP_PROVIDER_USAGE_WINDOWS_TRAY.md
 **/AGENTS.md
 **/CLAUDE.md
 **/HANDOFF.md

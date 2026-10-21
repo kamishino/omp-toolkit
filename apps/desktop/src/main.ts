@@ -1,0 +1,464 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { type Dashboard, truncate } from "@omp-toolkit/core";
+import {
+  app,
+  type BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  powerMonitor,
+  screen,
+  Tray,
+} from "electron";
+import tokens from "../../../design/tokens.json";
+import { fetchDashboard } from "./data";
+import { parseInterval } from "./interval";
+import { IPC, type PanelState } from "./ipc";
+import { createLoginItem, type LoginItem } from "./login-item";
+import { openOrca, openTerminal } from "./open";
+import { createPanel } from "./panel";
+import { placePanel } from "./panel-position";
+import { errorLogPath, findBun, resolveCheckout, resolveMonitorScript } from "./paths";
+import { trayImage } from "./tray";
+
+app.setName("OMP Provider Usage");
+if (process.platform === "win32") {
+  app.setAppUserModelId("dev.omp-toolkit.desktop-widget");
+}
+
+if (!app.requestSingleInstanceLock()) {
+  console.log("OMP Provider Usage is already running.");
+  app.quit();
+}
+
+let panel: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let menu: Menu | null = null;
+let loginItem: LoginItem | null = null;
+let refreshTimer: NodeJS.Timeout | null = null;
+
+let lastDashboard: Dashboard | null = null;
+let lastError: string | null = null;
+let refreshing = false;
+let quitting = false;
+let lastHiddenAt = 0;
+
+const desktopTokens = tokens.desktop;
+const panelWidth = desktopTokens.size.panelWidth.$value;
+const panelHeight = desktopTokens.size.panelHeight.$value;
+const margin = desktopTokens.size.margin.$value;
+
+function logError(error: unknown): void {
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  try {
+    const file = errorLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, line, "utf8");
+  } catch {
+    // Logging must not crash the widget
+  }
+}
+
+process.on("uncaughtException", (error) => {
+  logError(error);
+  if (app.isReady()) {
+    dialog.showErrorBox(
+      "OMP Provider Usage",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  app.quit();
+});
+
+process.on("unhandledRejection", (error) => {
+  logError(error);
+});
+
+process.on("SIGINT", () => {
+  app.quit();
+});
+
+function currentState(intervalSeconds: number): PanelState {
+  if (refreshing) {
+    return {
+      status: "loading",
+      data: lastDashboard,
+      intervalSeconds,
+    };
+  }
+
+  if (lastError) {
+    return {
+      status: "error",
+      data: lastDashboard,
+      message: lastError,
+      intervalSeconds,
+    };
+  }
+
+  if (lastDashboard) {
+    return {
+      status: "ready",
+      data: lastDashboard,
+      intervalSeconds,
+    };
+  }
+
+  return {
+    status: "loading",
+    data: null,
+    intervalSeconds,
+  };
+}
+
+void app.whenReady().then(async () => {
+  if (process.platform === "darwin") {
+    app.dock?.hide();
+  }
+  Menu.setApplicationMenu(null);
+
+  const checkoutRoot = path.resolve(app.getAppPath(), "../..");
+  const assetsDir = path.join(app.getAppPath(), "dist", "assets");
+  const iconPath = path.join(assetsDir, "app-icon.png");
+
+  const intervalArg = process.argv.find((arg) => arg.startsWith("--interval="));
+  const intervalSeconds = parseInterval(intervalArg?.slice("--interval=".length), process.env);
+
+  const preview = process.argv.includes("--preview");
+
+  function sendState(): void {
+    if (panel && !panel.isDestroyed()) {
+      panel.webContents.send(IPC.state, currentState(intervalSeconds));
+    }
+  }
+
+  function updateTray(): void {
+    if (!tray) return;
+    const mode = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+    const level = lastDashboard?.iconLevel ?? "unknown";
+    tray.setImage(trayImage(assetsDir, mode, level));
+
+    let tooltip = "OMP: loading...";
+    if (lastError && !lastDashboard) {
+      tooltip = "OMP: refresh failed";
+    } else if (lastDashboard) {
+      tooltip = truncate(lastDashboard.tooltip, 63);
+    }
+    tray.setToolTip(tooltip);
+  }
+
+  function showPanel(): void {
+    if (!panel) return;
+    const trayBounds = tray?.getBounds() ?? null;
+    const cursor = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(
+      trayBounds && trayBounds.width > 0
+        ? {
+            x: trayBounds.x + trayBounds.width / 2,
+            y: trayBounds.y + trayBounds.height / 2,
+          }
+        : cursor,
+    );
+
+    const pos = placePanel({
+      tray: trayBounds,
+      cursor,
+      workArea: display.workArea,
+      panel: { width: panelWidth, height: panelHeight },
+      platform: process.platform,
+      margin,
+    });
+
+    panel.setBounds(pos);
+    panel.show();
+    panel.focus();
+    sendState();
+  }
+
+  function hidePanel(): void {
+    if (!panel?.isVisible()) return;
+    panel.hide();
+  }
+
+  function togglePanel(): void {
+    if (Date.now() - lastHiddenAt < 300) return;
+    if (panel?.isVisible()) {
+      hidePanel();
+    } else {
+      showPanel();
+    }
+  }
+
+  loginItem = createLoginItem({
+    platform: process.platform,
+    home: os.homedir(),
+    electronPath: process.execPath,
+    appPath: app.getAppPath(),
+    iconPath,
+  });
+
+  async function openTerminalMonitor(): Promise<void> {
+    const bun = findBun();
+    const script = resolveMonitorScript(process.env, checkoutRoot);
+    if (!bun) {
+      dialog.showErrorBox("OMP Provider Usage", "Bun not found. Install Bun or set BUN_BIN.");
+      return;
+    }
+    if (!script) {
+      dialog.showErrorBox(
+        "OMP Provider Usage",
+        'Monitor script not found. Run "bun run install:omp".',
+      );
+      return;
+    }
+
+    const command = [bun, script, "--watch", "--health", `--interval=${intervalSeconds}`];
+    const res = openTerminal(process.platform, command);
+    if (res === "copied") {
+      const boxOpts: Electron.MessageBoxOptions = {
+        type: "info",
+        title: "OMP Provider Usage",
+        message: "Terminal monitor command copied to clipboard.",
+        detail: command.join(" "),
+      };
+      if (panel) {
+        await dialog.showMessageBox(panel, boxOpts);
+      } else {
+        await dialog.showMessageBox(boxOpts);
+      }
+    }
+  }
+
+  function openOrcaTab(): void {
+    const checkout = resolveCheckout(process.env, checkoutRoot);
+    const bun = findBun();
+    try {
+      openOrca(checkout, bun);
+    } catch (error) {
+      dialog.showErrorBox(
+        "OMP Provider Usage",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
+
+  function rebuildMenu(): void {
+    const isVisible = Boolean(panel?.isVisible());
+    const isAutostart = Boolean(loginItem?.isEnabled());
+
+    menu = Menu.buildFromTemplate([
+      {
+        label: "Refresh now",
+        click: () => {
+          void refresh();
+        },
+      },
+      {
+        label: isVisible ? "Hide panel" : "Show panel",
+        click: () => {
+          togglePanel();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Open terminal monitor",
+        click: () => {
+          void openTerminalMonitor();
+        },
+      },
+      {
+        label: "Open Orca tab",
+        click: () => {
+          openOrcaTab();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Start at login",
+        type: "checkbox",
+        checked: isAutostart,
+        click: (item) => {
+          try {
+            loginItem?.setEnabled(item.checked);
+          } catch (error) {
+            logError(error);
+            dialog.showErrorBox(
+              "OMP Provider Usage",
+              `Could not update login item: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+          rebuildMenu();
+        },
+      },
+      { type: "separator" },
+      {
+        label: "Exit",
+        click: () => {
+          app.quit();
+        },
+      },
+    ]);
+
+    if (process.platform === "linux") {
+      tray?.setContextMenu(menu);
+    }
+  }
+
+  panel = createPanel({
+    preloadPath: path.join(__dirname, "preload.cjs"),
+    htmlPath: path.join(__dirname, "index.html"),
+    width: panelWidth,
+    height: panelHeight,
+    onEscape: hidePanel,
+  });
+
+  panel.on("close", (event) => {
+    if (!quitting) {
+      event.preventDefault();
+      hidePanel();
+    }
+  });
+
+  panel.on("blur", () => {
+    if (!quitting) {
+      hidePanel();
+    }
+  });
+
+  panel.on("show", () => {
+    rebuildMenu();
+  });
+
+  panel.on("hide", () => {
+    lastHiddenAt = Date.now();
+    rebuildMenu();
+  });
+
+  panel.once("ready-to-show", () => {
+    if (preview) {
+      showPanel();
+    }
+  });
+
+  tray = new Tray(
+    trayImage(assetsDir, nativeTheme.shouldUseDarkColors ? "dark" : "light", "unknown"),
+  );
+  tray.setToolTip("OMP: loading...");
+
+  rebuildMenu();
+
+  if (process.platform === "darwin") {
+    tray.setIgnoreDoubleClickEvents(true);
+  }
+
+  tray.on("click", () => {
+    togglePanel();
+  });
+
+  if (process.platform !== "linux") {
+    tray.on("right-click", () => {
+      if (menu) {
+        tray?.popUpContextMenu(menu);
+      }
+    });
+  }
+
+  ipcMain.on(IPC.refresh, () => {
+    void refresh();
+  });
+  ipcMain.on(IPC.hide, () => {
+    hidePanel();
+  });
+  ipcMain.on(IPC.openTerminal, () => {
+    void openTerminalMonitor();
+  });
+  ipcMain.on(IPC.openOrca, () => {
+    openOrcaTab();
+  });
+  ipcMain.on(IPC.ready, () => {
+    sendState();
+  });
+
+  panel.webContents.on("did-finish-load", () => {
+    sendState();
+  });
+
+  async function refresh(): Promise<void> {
+    if (refreshing || quitting) return;
+    refreshing = true;
+    sendState();
+
+    try {
+      const bun = findBun();
+      const script = resolveMonitorScript(process.env, checkoutRoot);
+
+      if (!bun) {
+        throw new Error("Bun not found. Install Bun or set BUN_BIN.");
+      }
+      if (!script) {
+        throw new Error('Monitor script not found. Run "bun run install:omp".');
+      }
+
+      const dashboard = await fetchDashboard({ bun, script });
+      lastDashboard = dashboard;
+      lastError = null;
+      updateTray();
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      logError(error);
+      updateTray();
+    } finally {
+      refreshing = false;
+      sendState();
+    }
+  }
+
+  void refresh();
+  refreshTimer = setInterval(() => {
+    void refresh();
+  }, intervalSeconds * 1000);
+
+  powerMonitor.on("resume", () => {
+    void refresh();
+  });
+
+  try {
+    powerMonitor.on("unlock-screen", () => {
+      void refresh();
+    });
+  } catch {
+    // not supported on all platforms
+  }
+
+  nativeTheme.on("updated", () => {
+    updateTray();
+  });
+
+  app.on("second-instance", () => {
+    showPanel();
+  });
+
+  app.on("activate", () => {
+    showPanel();
+  });
+});
+
+app.on("window-all-closed", () => {
+  // Keep app active in the background tray
+});
+
+app.on("before-quit", () => {
+  quitting = true;
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+});
