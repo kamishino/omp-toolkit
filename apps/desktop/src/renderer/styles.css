@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "Inter Variable";
+  src: url("./assets/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  src: url("./assets/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -16,38 +32,42 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: var(--font-size-md);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .panel {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--space-md);
   width: 100%;
   height: 100%;
-  padding: var(--space-md);
-  gap: var(--space-sm);
+  padding: var(--space-lg);
   border: var(--size-border) solid var(--color-border);
   background-color: var(--color-surface);
 }
 
 .header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-sm);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: var(--space-md);
+  padding-bottom: var(--space-sm);
+  border-bottom: var(--size-border) solid var(--color-border);
 }
 
 .title {
   margin: 0;
   font-size: var(--font-size-xl);
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
   color: var(--color-accent);
-  letter-spacing: 0.05em;
 }
 
 .subtitle {
   margin: var(--space-xs) 0 0 0;
   font-size: var(--font-size-xs);
+  line-height: 1.5;
   color: var(--color-muted);
 }
 
@@ -61,34 +81,34 @@ body {
 }
 
 .icon-button {
-  display: flex;
+  inline-size: var(--size-icon-button);
+  block-size: var(--size-icon-button);
+  padding: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: var(--size-icon-button);
-  height: var(--size-icon-button);
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--color-muted);
-  font-size: var(--font-size-lg);
-  cursor: pointer;
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  border: var(--size-border) solid var(--color-border);
   border-radius: var(--radius-sm);
+  cursor: pointer;
+  line-height: 1;
 }
 
 .icon-button svg {
-  inline-size: 1em;
-  block-size: 1em;
-  display: block;
+  inline-size: calc(var(--size-icon-button) - var(--space-sm));
+  block-size: calc(var(--size-icon-button) - var(--space-sm));
+  fill: currentColor;
 }
 
 .icon-button:hover:not(:disabled) {
-  color: var(--color-text);
-  background-color: var(--color-surface-raised);
+  background-color: var(--color-surface);
+  border-color: var(--color-accent);
 }
 
 .icon-button:disabled {
-  opacity: 0.5;
-  cursor: default;
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .icon-button:focus-visible {
@@ -99,36 +119,43 @@ body {
 .summary {
   margin: 0;
   font-size: var(--font-size-sm);
+  line-height: 1.5;
+  padding-top: var(--space-xs);
   color: var(--color-muted);
 }
 
 .content {
-  flex: 1 1 0%;
-  overflow-y: auto;
+  display: grid;
+  gap: var(--space-md);
+  align-content: start;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
+  overflow-y: auto;
+  padding-right: var(--space-xs);
+  scrollbar-gutter: stable;
 }
 
 .provider-card {
   background-color: var(--color-surface-raised);
   border: var(--size-border) solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-sm);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  display: grid;
+  gap: var(--space-sm);
 }
 
 .provider-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: var(--space-xs);
-  margin-bottom: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 .provider-title {
   margin: 0;
+  font-family: var(--font-sans);
   font-size: var(--font-size-sm);
   font-weight: 600;
+  line-height: 1.4;
   color: var(--color-accent);
 }
 
@@ -161,36 +188,43 @@ body {
 
 .table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0 var(--space-xs);
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   table-layout: fixed;
 }
 
+.col-account {
+  width: 26%;
+}
+
+.col-route {
+  width: 12%;
+}
+
+.col-limit {
+  width: auto;
+}
+
 .table th,
 .table td {
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--space-sm);
   text-align: left;
   vertical-align: middle;
   white-space: nowrap;
 }
 
 .table th {
+  font-family: var(--font-sans);
   font-size: var(--font-size-xs);
   font-weight: 700;
+  letter-spacing: 0.04em;
   color: var(--color-muted);
 }
 
-.col-account {
-  width: 30%;
-}
-
-.col-route {
-  width: 15%;
-}
-
-.col-limit {
-  width: auto;
+tbody tr:not(:last-child) > * {
+  border-bottom: var(--size-border) solid color-mix(in oklch, var(--color-border) 65%, transparent);
 }
 
 .account {
@@ -212,7 +246,7 @@ body {
 .limit-cell {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
 progress {
@@ -238,17 +272,20 @@ progress::-webkit-progress-value {
   min-width: 6ch;
   text-align: right;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .reset {
   display: inline-block;
-  min-width: 6ch;
+  min-width: 7ch;
   color: var(--color-muted);
   font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .money {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .low {
@@ -258,9 +295,10 @@ progress::-webkit-progress-value {
 }
 
 .footer {
-  padding-top: var(--space-xs);
+  padding-top: var(--space-sm);
   border-top: var(--size-border) solid var(--color-border);
   font-size: var(--font-size-xs);
+  line-height: 1.5;
   color: var(--color-muted);
 }
 
@@ -268,7 +306,7 @@ progress::-webkit-progress-value {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1 1 0%;
+  padding: var(--space-2xl);
   margin: 0;
   color: var(--color-muted);
   font-size: var(--font-size-md);
