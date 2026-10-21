@@ -16,7 +16,8 @@ ADR-0003.
 
 - Implement the desktop widget using Electron and TypeScript in `apps/desktop`.
   The UI renderer is vanilla DOM and CSS without frameworks.
-- Distribution is source-run only via `bun run widget`; no packaged binaries,
+- Distribution is source-run only via `bun run desktop` (`bun run widget`
+  remains a compatibility alias); no packaged binaries,
   installers, codesigning identities, or auto-updaters are introduced.
 - The installed monitor CLI (`omp-provider-usage.js --json --health`) is the
   single data seam. It outputs a versioned schema-2 payload containing a

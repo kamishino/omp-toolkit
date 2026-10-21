@@ -146,7 +146,7 @@ bun scripts/install.ts --dry-run
 
 ```bash
 bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --health
-bun run widget -- --once
+bun run desktop:once
 ```
 
 Expected: the provider usage frame with `ROUTE`, `WEEKLY`, and `5 HOUR`
@@ -237,18 +237,13 @@ Windows is best-effort.
 ### 🖥️ Desktop widget
 
 ```bash
-bun run widget
+bun run desktop
+bun run desktop:preview
+bun run desktop:once
 ```
 
-A tray icon appears; left-click toggles the compact panel; right-click offers Refresh,
-Show/Hide, Open terminal monitor, Open Orca tab, Start at login, and Exit. The panel
-follows the OS light/dark theme. `--preview` shows the panel immediately; `--once`
-prints a data-only summary without Electron:
-
-```bash
-bun run widget -- --preview
-bun run widget -- --once
-```
+Prerequisites: `bun install` installs Electron, and `bun run install:omp` installs
+the monitor CLI; `bun run widget` remains an alias for `bun run desktop`.
 
 Supported on Windows 10/11 and macOS. Linux is best-effort: Electron uses
 StatusNotifierItem; GNOME may need an AppIndicator extension, and activation

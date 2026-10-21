@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `desktop`, `desktop:preview`, and `desktop:once` NPM scripts; keep
+  `bun run widget` as a compatibility alias.
 ## 0.2.0 — Cross-platform desktop widget (2026-10-21)
 
 - Add Electron desktop widget host (`bun run widget`) with a notification-area /
