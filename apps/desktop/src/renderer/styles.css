@@ -35,6 +35,10 @@ body {
   line-height: 1.5;
 }
 
+#app {
+  height: 100%;
+}
+
 .panel {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
