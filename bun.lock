@@ -16,7 +16,7 @@
     },
     "apps/desktop": {
       "name": "@omp-toolkit/desktop",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@mdi/js": "^7.4.47",
         "@omp-toolkit/core": "workspace:*",
@@ -31,14 +31,14 @@
     },
     "apps/omp-extension": {
       "name": "@omp-toolkit/omp-extension",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@omp-toolkit/core": "workspace:*",
       },
     },
     "apps/provider-usage": {
       "name": "@omp-toolkit/provider-usage",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@omp-toolkit/core": "workspace:*",
         "@omp-toolkit/tui": "workspace:*",
@@ -46,11 +46,11 @@
     },
     "packages/core": {
       "name": "@omp-toolkit/core",
-      "version": "0.1.0",
+      "version": "0.2.0",
     },
     "packages/tui": {
       "name": "@omp-toolkit/tui",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@omp-toolkit/core": "workspace:*",
       },
