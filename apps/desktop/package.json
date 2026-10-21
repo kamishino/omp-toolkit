@@ -5,9 +5,13 @@
   "type": "module",
   "main": "dist/main.cjs",
   "dependencies": {
-    "@omp-toolkit/core": "workspace:*"
+    "@omp-toolkit/core": "workspace:*",
+    "plist": "^5.0.0",
+    "shell-quote": "^1.12.0",
+    "which": "^6.0.0"
   },
   "devDependencies": {
+    "@types/which": "^3.0.4",
     "electron": "^34.3.0"
   }
 }

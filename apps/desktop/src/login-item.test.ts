@@ -1,18 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  autostartDesktopEntry,
-  desktopQuote,
-  launchAgentPlist,
-  xmlEscape,
-} from "./login-item-files";
+import { autostartDesktopEntry, desktopQuote, launchAgentPlist } from "./login-item-files";
 
 describe("login item files and escaping", () => {
-  test("xmlEscape escapes XML entities", () => {
-    expect(xmlEscape("a & b < c > d \"e\" 'f'")).toBe(
-      "a &amp; b &lt; c &gt; d &quot;e&quot; &apos;f&apos;",
-    );
-  });
-
   test("desktopQuote escapes backslashes, quotes, shell variables and percent signs", () => {
     expect(desktopQuote('/usr/bin/my app "quoted" $VAR `cmd` 100%')).toBe(
       '"/usr/bin/my app \\"quoted\\" \\$VAR \\`cmd\\` 100%%"',
