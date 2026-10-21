@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
 import tokens from "../design/tokens.json";
-import { oklchToRgb, parseOklch, type Rgb } from "./oklch";
+import { oklchToRgb, type Rgb } from "./color";
 
 const desktop = tokens.desktop;
 
@@ -100,11 +100,11 @@ export function buildTrayIcons(assetsDir: string): void {
 
   for (const mode of modes) {
     const palette = desktop.color[mode] as Record<string, { $value: string }>;
-    const ringColor = oklchToRgb(parseOklch(palette.text.$value));
+    const ringColor = oklchToRgb(palette.text.$value);
 
     for (const level of levels) {
       const colorKey = level === "critical" ? "danger" : level === "unknown" ? "muted" : level;
-      const dotColor = oklchToRgb(parseOklch(palette[colorKey].$value));
+      const dotColor = oklchToRgb(palette[colorKey].$value);
 
       // 16x16 standard
       const icon16 = drawCircleIcon(16, dotColor, ringColor);
@@ -120,8 +120,8 @@ export function buildTrayIcons(assetsDir: string): void {
 
   // App icon (256x256)
   const darkPalette = desktop.color.dark as Record<string, { $value: string }>;
-  const darkSurface = oklchToRgb(parseOklch(darkPalette.surface.$value));
-  const darkAccent = oklchToRgb(parseOklch(darkPalette.accent.$value));
+  const darkSurface = oklchToRgb(darkPalette.surface.$value);
+  const darkAccent = oklchToRgb(darkPalette.accent.$value);
 
   const appIcon = drawAppIcon(256, darkSurface, darkAccent);
   fs.writeFileSync(path.join(assetsDir, "app-icon.png"), PNG.sync.write(appIcon));

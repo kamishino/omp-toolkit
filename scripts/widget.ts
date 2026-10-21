@@ -27,7 +27,7 @@ async function buildIfNeeded(): Promise<void> {
     path.join(root, "design", "tokens.json"),
     path.join(root, "scripts", "build-desktop.ts"),
     path.join(root, "scripts", "build-tray-icons.ts"),
-    path.join(root, "scripts", "oklch.ts"),
+    path.join(root, "scripts", "color.ts"),
   ];
 
   let newest = 0;
