@@ -11,6 +11,21 @@ function isRegularFile(filePath: string): boolean {
   }
 }
 
+export interface PanelPaths {
+  distDir: string;
+  preload: string;
+  html: string;
+}
+
+export function panelPaths(appPath: string): PanelPaths {
+  const distDir = path.join(appPath, "dist");
+  return {
+    distDir,
+    preload: path.join(distDir, "preload.cjs"),
+    html: path.join(distDir, "index.html"),
+  };
+}
+
 export function agentDir(env = process.env, home = os.homedir()): string {
   return env.PI_CODING_AGENT_DIR ?? path.join(home, ".omp", "agent");
 }

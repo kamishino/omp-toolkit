@@ -21,7 +21,7 @@ import { createLoginItem, type LoginItem } from "./login-item";
 import { openOrca, openTerminal } from "./open";
 import { createPanel } from "./panel";
 import { placePanel } from "./panel-position";
-import { errorLogPath, findBun, resolveCheckout, resolveMonitorScript } from "./paths";
+import { errorLogPath, findBun, panelPaths, resolveCheckout, resolveMonitorScript } from "./paths";
 import { trayImage } from "./tray";
 
 app.setName("OMP Provider Usage");
@@ -122,7 +122,8 @@ void app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
   const checkoutRoot = path.resolve(app.getAppPath(), "../..");
-  const assetsDir = path.join(app.getAppPath(), "dist", "assets");
+  const { distDir, preload: preloadPath, html: htmlPath } = panelPaths(app.getAppPath());
+  const assetsDir = path.join(distDir, "assets");
   const iconPath = path.join(assetsDir, "app-icon.png");
 
   const intervalArg = process.argv.find((arg) => arg.startsWith("--interval="));
@@ -309,8 +310,8 @@ void app.whenReady().then(async () => {
   }
 
   panel = createPanel({
-    preloadPath: path.join(__dirname, "preload.cjs"),
-    htmlPath: path.join(__dirname, "index.html"),
+    preloadPath,
+    htmlPath,
     width: panelWidth,
     height: panelHeight,
     onEscape: hidePanel,

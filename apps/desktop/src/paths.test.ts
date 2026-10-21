@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { errorLogPath, findBun, resolveCheckout, resolveMonitorScript } from "./paths";
+import { errorLogPath, findBun, panelPaths, resolveCheckout, resolveMonitorScript } from "./paths";
 
 describe("paths helpers", () => {
   let tmpDir: string;
@@ -119,5 +119,13 @@ describe("paths helpers", () => {
   test("errorLogPath returns path under agent directory", () => {
     const res = errorLogPath({ PI_CODING_AGENT_DIR: "/test/agent" }, tmpDir);
     expect(res).toBe(path.join("/test/agent", "desktop-widget-error.log"));
+  });
+  test("panelPaths resolves HTML and preload under dist, not src", () => {
+    const appPath = path.join(tmpDir, "apps", "desktop");
+    const result = panelPaths(appPath);
+    expect(result.distDir).toBe(path.join(appPath, "dist"));
+    expect(result.html).toBe(path.join(appPath, "dist", "index.html"));
+    expect(result.preload).toBe(path.join(appPath, "dist", "preload.cjs"));
+    expect(result.html).not.toContain(`${path.sep}src${path.sep}`);
   });
 });
