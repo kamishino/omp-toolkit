@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/kamishino/omp-toolkit/tree/main/docs
+    about: Architecture, runbook, roadmap, and ADRs
+  - name: Security report
+    url: https://github.com/kamishino/omp-toolkit/security/advisories/new
+    about: Report vulnerabilities privately

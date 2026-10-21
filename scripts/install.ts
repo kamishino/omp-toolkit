@@ -1,0 +1,50 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+const root = path.resolve(import.meta.dir, "..");
+const agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
+const extensionsDir = path.join(agentDir, "extensions");
+const scriptsDir = path.join(agentDir, "scripts");
+const backupDir = path.join(agentDir, "backups", new Date().toISOString().replace(/[:.]/g, "-"));
+
+function backup(target: string): void {
+  if (!fs.existsSync(target)) return;
+  fs.mkdirSync(backupDir, { recursive: true });
+  const destination = path.join(backupDir, path.basename(target));
+  fs.copyFileSync(target, destination);
+  console.log(`backed up ${path.basename(target)} -> ${destination}`);
+}
+
+function install(source: string, destination: string): void {
+  if (!fs.existsSync(source)) {
+    throw new Error(`missing build artifact: ${source} (run bun run build)`);
+  }
+  backup(destination);
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.copyFileSync(source, destination);
+  console.log(`installed ${destination}`);
+}
+
+function removeLegacy(target: string): void {
+  if (!fs.existsSync(target)) return;
+  backup(target);
+  fs.rmSync(target, { force: true });
+  console.log(`removed legacy ${target}`);
+}
+
+install(
+  path.join(root, "apps/omp-extension/dist/index.js"),
+  path.join(extensionsDir, "gemini-health.js"),
+);
+install(
+  path.join(root, "apps/provider-usage/dist/index.js"),
+  path.join(scriptsDir, "omp-provider-usage.js"),
+);
+
+removeLegacy(path.join(extensionsDir, "gemini-health.ts"));
+removeLegacy(path.join(scriptsDir, "omp-provider-usage.ts"));
+removeLegacy(path.join(scriptsDir, "gemini-usage.ts"));
+
+console.log("OMP toolkit installed.");
+console.log("Run `bun run monitor:orca` to place OMP Provider Usage in Orca's Floating Workspace.");

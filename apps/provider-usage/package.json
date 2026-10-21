@@ -1,0 +1,10 @@
+{
+  "name": "@omp-toolkit/provider-usage",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@omp-toolkit/core": "workspace:*",
+    "@omp-toolkit/tui": "workspace:*"
+  }
+}

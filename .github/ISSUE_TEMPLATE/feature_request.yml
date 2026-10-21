@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose a scoped improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow is blocked or painful?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Monitor / TUI
+        - DeepSeek balance
+        - Reliability history / report
+        - Experimental Gemini health rotation
+        - Docs / tooling
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is Windows-first and does not require cross-platform support
+          required: true

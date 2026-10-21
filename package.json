@@ -1,0 +1,51 @@
+{
+  "name": "omp-toolkit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unofficial Windows-first OMP + Orca toolkit for provider usage, Gemini route health, and reliability history.",
+  "license": "MIT",
+  "author": "OMP Toolkit contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kamishino/omp-toolkit.git"
+  },
+  "homepage": "https://github.com/kamishino/omp-toolkit#readme",
+  "bugs": {
+    "url": "https://github.com/kamishino/omp-toolkit/issues"
+  },
+  "engines": {
+    "bun": ">=1.4.3"
+  },
+  "packageManager": "bun@1.4.3",
+  "keywords": [
+    "omp",
+    "orca",
+    "bun",
+    "cli",
+    "provider-usage",
+    "gemini",
+    "deepseek",
+    "windows"
+  ],
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "format": "biome format --write .",
+    "check": "biome check . && tsc --noEmit && bun test",
+    "install:omp": "bun scripts/build.ts && bun scripts/install.ts",
+    "monitor:orca": "bun scripts/orca-monitor.ts",
+    "reliability:report": "bun scripts/reliability-report.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@types/bun": "latest",
+    "@types/node": "latest",
+    "typescript": "latest"
+  }
+}
