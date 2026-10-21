@@ -1,3 +1,4 @@
+import { formatPercent, formatResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
 import tokens from "../../../design/tokens.json";
 
 function ansiColor(value: string): string {
@@ -22,6 +23,7 @@ export const USAGE_THRESHOLDS = {
   warm: tokens.usage.warmThreshold.$value,
   hot: tokens.usage.hotThreshold.$value,
   critical: tokens.usage.criticalThreshold.$value,
+  above: tokens.usage.aboveThreshold.$value,
 } as const;
 
 export const HEALTH_THRESHOLDS = {
@@ -50,12 +52,23 @@ export function padVisible(text: string, width: number): string {
   return length >= width ? text : text + " ".repeat(width - length);
 }
 
+export function colorForLevel(level: UsageLevel): string {
+  switch (level) {
+    case "critical":
+      return ANSI.red;
+    case "hot":
+      return ANSI.orange;
+    case "warn":
+      return ANSI.yellow;
+    case "ok":
+      return ANSI.green;
+    default:
+      return ANSI.muted;
+  }
+}
+
 export function colorFor(value: number | undefined): string {
-  if (value === undefined) return ANSI.muted;
-  if (value >= USAGE_THRESHOLDS.critical) return ANSI.red;
-  if (value >= USAGE_THRESHOLDS.hot) return ANSI.orange;
-  if (value >= USAGE_THRESHOLDS.warm) return ANSI.yellow;
-  return ANSI.green;
+  return colorForLevel(usageLevel(value, USAGE_THRESHOLDS));
 }
 
 export function bar(value: number | undefined, width = 10): string {
@@ -65,34 +78,9 @@ export function bar(value: number | undefined, width = 10): string {
 }
 
 export function percent(value: number | undefined): string {
-  return value === undefined ? "     —" : `${(value * 100).toFixed(1)}%`.padStart(6);
+  return formatPercent(value).padStart(6);
 }
 
-export function resetIn(limit: { window?: { resetsAt?: number } } | undefined): string {
-  const resetsAt = limit?.window?.resetsAt;
-  if (typeof resetsAt !== "number" || !Number.isFinite(resetsAt)) return "     —";
-  const delta = resetsAt - Date.now();
-  if (delta <= 0) return "   now";
-  const minutes = Math.floor(delta / 60_000);
-  const days = Math.floor(minutes / (24 * 60));
-  const hours = Math.floor((minutes % (24 * 60)) / 60);
-  const mins = minutes % 60;
-  if (days > 0) return `${days}d${hours}h`.padStart(6);
-  if (hours > 0) return `${hours}h${mins}m`.padStart(6);
-  return `${mins}m`.padStart(6);
-}
-
-export function healthAge(checkedAt: number | undefined, coarse = false): string {
-  if (!checkedAt) return "no snapshot";
-  const seconds = Math.max(0, Math.round((Date.now() - checkedAt) / 1000));
-  if (coarse) {
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 1) return "<1m ago";
-    if (minutes < 60) return `${minutes}m ago`;
-    return `${Math.floor(minutes / 60)}h ago`;
-  }
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${Math.floor(minutes / 60)}h ago`;
+export function resetInAt(resetsAt: number | undefined): string {
+  return formatResetCompact(resetsAt, Date.now()).padStart(6);
 }
