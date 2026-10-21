@@ -1,11 +1,4 @@
-export function xmlEscape(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
+import { build } from "plist";
 
 export function desktopQuote(value: string): string {
   const escaped = value
@@ -22,25 +15,12 @@ export function launchAgentPlist(options: {
   electronPath: string;
   appPath: string;
 }): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${xmlEscape(options.label)}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${xmlEscape(options.electronPath)}</string>
-    <string>${xmlEscape(options.appPath)}</string>
-    <string>--hidden</string>
-  </array>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>ProcessType</key>
-  <string>Interactive</string>
-</dict>
-</plist>
-`;
+  return build({
+    Label: options.label,
+    ProgramArguments: [options.electronPath, options.appPath, "--hidden"],
+    RunAtLoad: true,
+    ProcessType: "Interactive",
+  });
 }
 
 export function autostartDesktopEntry(options: {

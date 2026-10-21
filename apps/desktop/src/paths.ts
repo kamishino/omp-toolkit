@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import which from "which";
 
 function isRegularFile(filePath: string): boolean {
   try {
@@ -23,18 +24,17 @@ export function findBun(
     return env.BUN_BIN;
   }
 
-  const names = platform === "win32" ? ["bun.exe", "bun"] : ["bun"];
-  const pathDirs = (env.PATH ?? "").split(path.delimiter);
-
-  for (const dir of pathDirs) {
-    const cleanDir = dir.replace(/^"|"$/g, "");
-    if (!cleanDir) continue;
-    for (const name of names) {
-      const candidate = path.join(cleanDir, name);
-      if (isRegularFile(candidate)) {
-        return candidate;
-      }
+  try {
+    const found = which.sync("bun", {
+      nothrow: true,
+      path: env.PATH,
+      pathExt: env.PATHEXT,
+    });
+    if (found) {
+      return found;
     }
+  } catch {
+    // ignore and fall through to fallback
   }
 
   const fallback = path.join(home, ".bun", "bin", platform === "win32" ? "bun.exe" : "bun");

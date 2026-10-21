@@ -1,15 +1,9 @@
+import { quote } from "shell-quote";
+
 export interface Command {
   file: string;
   args: string[];
   cwd?: string;
-}
-
-export function shQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-export function shQuoteCommand(command: string[]): string {
-  return command.map(shQuote).join(" ");
 }
 
 export function appleScriptString(value: string): string {
@@ -22,7 +16,7 @@ export function commandLine(platform: NodeJS.Platform, command: string[]): strin
       .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
       .join(" ");
   }
-  return shQuoteCommand(command);
+  return quote(command);
 }
 
 export function terminalInvocations(platform: NodeJS.Platform, command: string[]): Command[] {
@@ -36,7 +30,7 @@ export function terminalInvocations(platform: NodeJS.Platform, command: string[]
   }
 
   if (platform === "darwin") {
-    const shellCmd = shQuoteCommand(command);
+    const shellCmd = quote(command);
     return [
       {
         file: "osascript",

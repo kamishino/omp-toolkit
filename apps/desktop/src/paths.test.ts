@@ -27,23 +27,24 @@ describe("paths helpers", () => {
   test("findBun finds bun in PATH", () => {
     const binDir = path.join(tmpDir, "bin");
     fs.mkdirSync(binDir, { recursive: true });
-    const bunFile = path.join(binDir, "bun");
+    const bunName = process.platform === "win32" ? "bun.exe" : "bun";
+    const bunFile = path.join(binDir, bunName);
     fs.writeFileSync(bunFile, "#!/bin/sh\n", "utf8");
 
-    const res = findBun({ PATH: binDir }, "linux", tmpDir);
-    expect(res).toBe(bunFile);
+    const res = findBun({ PATH: binDir }, process.platform, tmpDir);
+    expect(res?.toLowerCase()).toBe(bunFile.toLowerCase());
   });
 
   test("findBun finds fallback in home directory", () => {
     const bunDir = path.join(tmpDir, ".bun", "bin");
     fs.mkdirSync(bunDir, { recursive: true });
-    const bunFile = path.join(bunDir, "bun");
+    const bunName = process.platform === "win32" ? "bun.exe" : "bun";
+    const bunFile = path.join(bunDir, bunName);
     fs.writeFileSync(bunFile, "#!/bin/sh\n", "utf8");
 
-    const res = findBun({ PATH: "" }, "linux", tmpDir);
+    const res = findBun({ PATH: "" }, process.platform, tmpDir);
     expect(res).toBe(bunFile);
   });
-
   test("findBun returns null if bun is nowhere", () => {
     const res = findBun({ PATH: "" }, "linux", tmpDir);
     expect(res).toBeNull();
