@@ -27,3 +27,34 @@ jobs:
       - run: bun run check
       - run: bun run build
       - run: bun scripts/install.ts --dry-run
+  installer:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - name: Run PowerShell installer twice
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File ./install.ps1
+          pwsh -NoProfile -File ./install.ps1
+          if (-not (Test-Path "$HOME/.omp/agent/extensions/gemini-health.js")) { throw "missing gemini-health.js" }
+          if (-not (Test-Path "$HOME/.omp/agent/scripts/omp-provider-usage.js")) { throw "missing omp-provider-usage.js" }
+      - name: Run Bash installer twice
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          bash install.sh
+          bash install.sh
+          test -f "$HOME/.omp/agent/extensions/gemini-health.js"
+          test -f "$HOME/.omp/agent/scripts/omp-provider-usage.js"

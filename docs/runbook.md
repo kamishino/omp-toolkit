@@ -184,10 +184,14 @@ cat ~/.omp/agent/gemini-health-state.json
 
 **Update the installed toolkit**
 
+Re-run the installer; it fetches `main` and reinstalls:
+
 ```bash
-cd omp-toolkit
-bun test && bun run typecheck
-bun run install:omp
+curl -fsSL https://raw.githubusercontent.com/kamishino/omp-toolkit/main/install.sh | bash
 ```
+
+On Windows, re-run `irm https://raw.githubusercontent.com/kamishino/omp-toolkit/main/install.ps1 | iex`.
+If you installed from a manual checkout, run `bun run install:omp` in that
+checkout instead.
 
 The installer backs up existing OMP artifacts first.
