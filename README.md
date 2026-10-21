@@ -61,6 +61,8 @@ not require Orca.
   runner.
 - **Electron** — cross-platform desktop widget host; vanilla TypeScript/CSS
   renderer driven by OKLCH tokens from `design/tokens.json`.
+- **Inter & JetBrains Mono** — self-hosted variable font pairing via Fontsource (SIL OFL 1.1)
+  for UI hierarchy and tabular data density.
 - **TypeScript** — domain and adapter code checked with `tsc --noEmit`.
 - **Biome** — formatter and lint gate.
 - **SQLite** — reliability history through `bun:sqlite`.
