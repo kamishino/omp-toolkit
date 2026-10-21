@@ -1,5 +1,5 @@
 import tokens from "../design/tokens.json";
-import { apcaLc, contrastRatio, oklchToRgb, parseOklch, type Rgb } from "./oklch";
+import { apcaLc, contrastRatio, oklchToRgb, type Rgb } from "./color";
 
 const desktop = tokens.desktop;
 if (!desktop?.color) {
@@ -14,9 +14,9 @@ const failures: string[] = [];
 
 for (const mode of modes) {
   const palette = desktop.color[mode] as Record<string, { $value: string }>;
-  const surfaceRgb: Rgb = oklchToRgb(parseOklch(palette.surface.$value));
-  const raisedRgb: Rgb = oklchToRgb(parseOklch(palette.surfaceRaised.$value));
-  const borderRgb: Rgb = oklchToRgb(parseOklch(palette.border.$value));
+  const surfaceRgb: Rgb = oklchToRgb(palette.surface.$value);
+  const raisedRgb: Rgb = oklchToRgb(palette.surfaceRaised.$value);
+  const borderRgb: Rgb = oklchToRgb(palette.border.$value);
 
   const borderCr = contrastRatio(borderRgb, surfaceRgb);
   if (borderCr < 1.3) {
@@ -24,7 +24,7 @@ for (const mode of modes) {
   }
 
   for (const key of textKeys) {
-    const textRgb: Rgb = oklchToRgb(parseOklch(palette[key].$value));
+    const textRgb: Rgb = oklchToRgb(palette[key].$value);
 
     const lcSurface = apcaLc(textRgb, surfaceRgb);
     if (Math.abs(lcSurface) < 60) {
