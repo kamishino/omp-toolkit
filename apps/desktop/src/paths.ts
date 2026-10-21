@@ -1,0 +1,86 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+function isRegularFile(filePath: string): boolean {
+  try {
+    return fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function agentDir(env = process.env, home = os.homedir()): string {
+  return env.PI_CODING_AGENT_DIR ?? path.join(home, ".omp", "agent");
+}
+
+export function findBun(
+  env = process.env,
+  platform = process.platform,
+  home = os.homedir(),
+): string | null {
+  if (env.BUN_BIN) {
+    return env.BUN_BIN;
+  }
+
+  const names = platform === "win32" ? ["bun.exe", "bun"] : ["bun"];
+  const pathDirs = (env.PATH ?? "").split(path.delimiter);
+
+  for (const dir of pathDirs) {
+    const cleanDir = dir.replace(/^"|"$/g, "");
+    if (!cleanDir) continue;
+    for (const name of names) {
+      const candidate = path.join(cleanDir, name);
+      if (isRegularFile(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  const fallback = path.join(home, ".bun", "bin", platform === "win32" ? "bun.exe" : "bun");
+  if (isRegularFile(fallback)) {
+    return fallback;
+  }
+
+  return null;
+}
+
+export function resolveMonitorScript(
+  env = process.env,
+  checkoutRoot: string,
+  home = os.homedir(),
+): string | null {
+  const dir = agentDir(env, home);
+  const candidates = [
+    path.join(dir, "scripts", "omp-provider-usage.js"),
+    path.join(checkoutRoot, "apps", "provider-usage", "dist", "index.js"),
+    path.join(checkoutRoot, "apps", "provider-usage", "src", "index.ts"),
+  ];
+
+  return candidates.find(isRegularFile) ?? null;
+}
+
+export function resolveCheckout(
+  env = process.env,
+  checkoutRoot: string,
+  home = os.homedir(),
+): string | null {
+  const candidates = [
+    env.OMP_TOOLKIT_HOME,
+    path.join(home, ".omp", "omp-toolkit"),
+    checkoutRoot,
+  ].filter((p): p is string => Boolean(p && p.trim().length > 0));
+
+  for (const candidate of candidates) {
+    const probe = path.join(candidate, "scripts", "orca-monitor.ts");
+    if (isRegularFile(probe)) {
+      return path.resolve(candidate);
+    }
+  }
+
+  return null;
+}
+
+export function errorLogPath(env = process.env, home = os.homedir()): string {
+  return path.join(agentDir(env, home), "desktop-widget-error.log");
+}

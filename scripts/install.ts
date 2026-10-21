@@ -61,6 +61,7 @@ if (dryRun) {
   console.log(
     `Monitor in any terminal: bun "${path.join(agentDir, "scripts", "omp-provider-usage.js")}" --watch --health`,
   );
+  console.log("Desktop widget: bun run widget");
   console.log("Orca tab (optional): bun run monitor:orca");
   console.log("OMP command: /gemini-health");
 }

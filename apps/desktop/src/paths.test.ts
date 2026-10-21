@@ -1,0 +1,122 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { errorLogPath, findBun, resolveCheckout, resolveMonitorScript } from "./paths";
+
+describe("paths helpers", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-desktop-paths-"));
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  test("findBun honors BUN_BIN override", () => {
+    const res = findBun({ BUN_BIN: "/custom/bun" }, "linux", tmpDir);
+    expect(res).toBe("/custom/bun");
+  });
+
+  test("findBun finds bun in PATH", () => {
+    const binDir = path.join(tmpDir, "bin");
+    fs.mkdirSync(binDir, { recursive: true });
+    const bunFile = path.join(binDir, "bun");
+    fs.writeFileSync(bunFile, "#!/bin/sh\n", "utf8");
+
+    const res = findBun({ PATH: binDir }, "linux", tmpDir);
+    expect(res).toBe(bunFile);
+  });
+
+  test("findBun finds fallback in home directory", () => {
+    const bunDir = path.join(tmpDir, ".bun", "bin");
+    fs.mkdirSync(bunDir, { recursive: true });
+    const bunFile = path.join(bunDir, "bun");
+    fs.writeFileSync(bunFile, "#!/bin/sh\n", "utf8");
+
+    const res = findBun({ PATH: "" }, "linux", tmpDir);
+    expect(res).toBe(bunFile);
+  });
+
+  test("findBun returns null if bun is nowhere", () => {
+    const res = findBun({ PATH: "" }, "linux", tmpDir);
+    expect(res).toBeNull();
+  });
+
+  test("resolveMonitorScript respects precedence: installed > dist > source", () => {
+    const agentScripts = path.join(tmpDir, ".omp", "agent", "scripts");
+    fs.mkdirSync(agentScripts, { recursive: true });
+    const installed = path.join(agentScripts, "omp-provider-usage.js");
+    fs.writeFileSync(installed, "// installed\n");
+
+    const checkoutRoot = path.join(tmpDir, "checkout");
+    const distDir = path.join(checkoutRoot, "apps", "provider-usage", "dist");
+    fs.mkdirSync(distDir, { recursive: true });
+    const distFile = path.join(distDir, "index.js");
+    fs.writeFileSync(distFile, "// dist\n");
+
+    const srcDir = path.join(checkoutRoot, "apps", "provider-usage", "src");
+    fs.mkdirSync(srcDir, { recursive: true });
+    const srcFile = path.join(srcDir, "index.ts");
+    fs.writeFileSync(srcFile, "// src\n");
+
+    // All 3 exist -> installed wins
+    expect(
+      resolveMonitorScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBe(installed);
+
+    // Remove installed -> dist wins
+    fs.unlinkSync(installed);
+    expect(
+      resolveMonitorScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBe(distFile);
+
+    // Remove dist -> src wins
+    fs.unlinkSync(distFile);
+    expect(
+      resolveMonitorScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBe(srcFile);
+
+    // Remove src -> null
+    fs.unlinkSync(srcFile);
+    expect(
+      resolveMonitorScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBeNull();
+  });
+
+  test("resolveCheckout respects precedence and requires scripts/orca-monitor.ts", () => {
+    const custom = path.join(tmpDir, "custom-checkout");
+    fs.mkdirSync(path.join(custom, "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(custom, "scripts", "orca-monitor.ts"), "// ok\n");
+
+    const res = resolveCheckout({ OMP_TOOLKIT_HOME: custom }, tmpDir, tmpDir);
+    expect(res).toBe(path.resolve(custom));
+  });
+
+  test("errorLogPath returns path under agent directory", () => {
+    const res = errorLogPath({ PI_CODING_AGENT_DIR: "/test/agent" }, tmpDir);
+    expect(res).toBe(path.join("/test/agent", "desktop-widget-error.log"));
+  });
+});

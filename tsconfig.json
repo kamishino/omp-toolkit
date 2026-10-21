@@ -13,5 +13,5 @@
     "verbatimModuleSyntax": true
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts", "design/**/*.json"],
-  "exclude": ["**/dist", "**/node_modules"]
+  "exclude": ["**/dist", "**/node_modules", "apps/desktop"]
 }
