@@ -13,21 +13,40 @@ function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-function drawCircleIcon(size: number, dotColor: Rgb, ringColor: Rgb): PNG {
+function drawTrayIcon(size: number, mode: "light" | "dark", level: (typeof levels)[number]): PNG {
   const png = new PNG({ width: size, height: size });
+  const palette = desktop.color[mode] as Record<string, { $value: string }>;
+  const surfaceRaised = oklchToRgb(palette.surfaceRaised.$value);
+  const border = oklchToRgb(palette.border.$value);
+  const surface = oklchToRgb(palette.surface.$value);
+  const accent = oklchToRgb(palette.accent.$value);
+  const colorKey = level === "critical" ? "danger" : level === "unknown" ? "muted" : level;
+  const statusColor = oklchToRgb(palette[colorKey].$value);
+
   const cx = size / 2;
   const cy = size / 2;
-  const radius = size * 0.36;
+  const cornerRadius = size * 0.22;
+  const borderWidth = Math.max(1, size / 16);
+  const accentRadius = size * 0.2;
+  const dotX = size * 0.78;
+  const dotY = size * 0.78;
+  const dotRadius = size * 0.2;
   const ringWidth = Math.max(1, size / 16);
-  const innerRadius = radius - ringWidth;
+  const outerDotRadius = dotRadius + ringWidth;
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const idx = (size * y + x) << 2;
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
+      const px = x + 0.5;
+      const py = y + 0.5;
 
-      const alpha = clamp(radius - d + 0.5, 0, 1);
-      if (alpha <= 0) {
+      // Base chip: rounded rectangle
+      const qx = Math.max(Math.abs(px - cx) - (cx - cornerRadius), 0);
+      const qy = Math.max(Math.abs(py - cy) - (cy - cornerRadius), 0);
+      const dist = Math.hypot(qx, qy);
+      const chipAlpha = clamp(cornerRadius - dist + 0.5, 0, 1);
+
+      if (chipAlpha <= 0) {
         png.data[idx] = 0;
         png.data[idx + 1] = 0;
         png.data[idx + 2] = 0;
@@ -35,16 +54,46 @@ function drawCircleIcon(size: number, dotColor: Rgb, ringColor: Rgb): PNG {
         continue;
       }
 
-      // Blend between inner dot and outer ring
-      const ringRatio = clamp(d - innerRadius + 0.5, 0, 1);
-      const r = Math.round(dotColor.r * (1 - ringRatio) + ringColor.r * ringRatio);
-      const g = Math.round(dotColor.g * (1 - ringRatio) + ringColor.g * ringRatio);
-      const b = Math.round(dotColor.b * (1 - ringRatio) + ringColor.b * ringRatio);
+      // Border outline of the chip
+      const innerCornerRadius = Math.max(0.5, cornerRadius - borderWidth);
+      const iqx = Math.max(Math.abs(px - cx) - (cx - borderWidth - innerCornerRadius), 0);
+      const iqy = Math.max(Math.abs(py - cy) - (cy - borderWidth - innerCornerRadius), 0);
+      const innerDist = Math.hypot(iqx, iqy);
+      const innerAlpha = clamp(innerCornerRadius - innerDist + 0.5, 0, 1);
 
-      png.data[idx] = r;
-      png.data[idx + 1] = g;
-      png.data[idx + 2] = b;
-      png.data[idx + 3] = Math.round(alpha * 255);
+      let r = border.r * (1 - innerAlpha) + surfaceRaised.r * innerAlpha;
+      let g = border.g * (1 - innerAlpha) + surfaceRaised.g * innerAlpha;
+      let b = border.b * (1 - innerAlpha) + surfaceRaised.b * innerAlpha;
+
+      // Center accent circle
+      const distCenter = Math.hypot(px - cx, py - cy);
+      const accentAlpha = clamp(accentRadius - distCenter + 0.5, 0, 1);
+      if (accentAlpha > 0) {
+        r = r * (1 - accentAlpha) + accent.r * accentAlpha;
+        g = g * (1 - accentAlpha) + accent.g * accentAlpha;
+        b = b * (1 - accentAlpha) + accent.b * accentAlpha;
+      }
+
+      // Status dot with surface ring at bottom right
+      const distDot = Math.hypot(px - dotX, py - dotY);
+      const ringAlpha = clamp(outerDotRadius - distDot + 0.5, 0, 1);
+      if (ringAlpha > 0) {
+        r = r * (1 - ringAlpha) + surface.r * ringAlpha;
+        g = g * (1 - ringAlpha) + surface.g * ringAlpha;
+        b = b * (1 - ringAlpha) + surface.b * ringAlpha;
+
+        const dotAlpha = clamp(dotRadius - distDot + 0.5, 0, 1);
+        if (dotAlpha > 0) {
+          r = r * (1 - dotAlpha) + statusColor.r * dotAlpha;
+          g = g * (1 - dotAlpha) + statusColor.g * dotAlpha;
+          b = b * (1 - dotAlpha) + statusColor.b * dotAlpha;
+        }
+      }
+
+      png.data[idx] = Math.round(r);
+      png.data[idx + 1] = Math.round(g);
+      png.data[idx + 2] = Math.round(b);
+      png.data[idx + 3] = Math.round(chipAlpha * 255);
     }
   }
 
@@ -99,20 +148,14 @@ export function buildTrayIcons(assetsDir: string): void {
   fs.mkdirSync(trayDir, { recursive: true });
 
   for (const mode of modes) {
-    const palette = desktop.color[mode] as Record<string, { $value: string }>;
-    const ringColor = oklchToRgb(palette.text.$value);
-
     for (const level of levels) {
-      const colorKey = level === "critical" ? "danger" : level === "unknown" ? "muted" : level;
-      const dotColor = oklchToRgb(palette[colorKey].$value);
-
       // 16x16 standard
-      const icon16 = drawCircleIcon(16, dotColor, ringColor);
+      const icon16 = drawTrayIcon(16, mode, level);
       const buf16 = PNG.sync.write(icon16);
       fs.writeFileSync(path.join(trayDir, `tray-${mode}-${level}.png`), buf16);
 
       // 32x32 @2x
-      const icon32 = drawCircleIcon(32, dotColor, ringColor);
+      const icon32 = drawTrayIcon(32, mode, level);
       const buf32 = PNG.sync.write(icon32);
       fs.writeFileSync(path.join(trayDir, `tray-${mode}-${level}@2x.png`), buf32);
     }

@@ -68,7 +68,7 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
 - Typography: Inter Variable (UI headings, labels, button text) + JetBrains Mono Variable (account, route, limits, numeric data), self-hosted as WOFF2. Scale: `xs: 12`, `sm: 13`, `md: 14`, `lg: 16`, `xl: 20`.
 - Contrast gate: all body, label, and status text meet APCA |Lc| >= 60 against both `surface` and `surfaceRaised`, checked via `scripts/check-tokens.ts`.
 - Layout:
-  - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh (`mdiRefresh`) and Close (`mdiClose`) vector icon buttons from Material Design Icons (`@mdi/js`).
+  - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh (`mdiRefresh`), Minimize (`mdiWindowMinimize`), and Close (`mdiClose`) vector icon buttons from Material Design Icons (`@mdi/js`).
   - Summary: provider count, account count, >=80% count, maxed count, tightest provider:account.
   - Content: scrollable container holding cards per provider section.
   - Provider cards: each card features a 24 px provider logo slot before the title. Google Antigravity (Gemini mark), OpenAI, and DeepSeek display vector marks from Dashboard-Icons; OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays an empty slot to maintain vertical alignment.
@@ -76,7 +76,7 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
   - Route cell: text badge (`OK`, `HANG`, `AUTH`, `MODEL`, `ERR`, `—`) with semantic color.
   - Limits: progress bar (`<progress>` with `currentColor` value) + numeric percentage + reset countdown; DeepSeek displays currency amount with red `LOW` label.
   - Footer: data source line with health age (`(stale)` when > 15 minutes) and refresh interval.
-  - Tray icon: 16×16 (@2x 32×32) status dot matching the worst route/usage severity rank, anti-aliased with a 1px ring in the theme's text color.
+  - Tray icon: 16×16 (@2x 32×32) rounded-square app mark with a status badge dot matching the worst route/usage severity rank, anti-aliased with a 1px ring in the theme's surface color.
 ## Accessibility
 
 - Every colored value has a text label (`HANG`, `LOW`, percentage, reset).
@@ -85,5 +85,5 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
   monochrome terminals.
 - Width is capped at 86 columns; the layout does not require a wide terminal.
 - On the desktop widget, progress bars use accessible `<progress>` elements with `aria-label` describing the limit and value.
-- Desktop icon buttons include explicit `aria-label` attributes (`Refresh`, `Close`).
+- Desktop icon buttons include explicit `aria-label` attributes (`Refresh`, `Minimize to tray`, `Close to tray`).
 - Status updates in the desktop header use `aria-live="polite"` on the status subtitle.

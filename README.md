@@ -248,10 +248,12 @@ the monitor CLI; `bun run widget` remains an alias for `bun run desktop`.
 Supported on Windows 10/11 and macOS. Linux is best-effort: Electron uses
 StatusNotifierItem; GNOME may need an AppIndicator extension, and activation
 semantics vary by desktop environment. The terminal monitor remains the fallback.
-The desktop widget is not a Windows 11 Widgets-board provider and is separate from
-the OMP `/gemini-health-widget` TUI toggle. Provider logos are from theSVG (MIT) and
-are trademarks of their respective owners; this unofficial project is not affiliated with
-them. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for licenses.
+The header minimize and close buttons hide the panel to the tray; the tray menu shows
+Minimize to tray / Show panel. The desktop widget is not a Windows 11 Widgets-board
+provider and is separate from the OMP `/gemini-health-widget` TUI toggle. Provider logos
+are from Dashboard-Icons (Apache-2.0) and are trademarks of their respective owners; this
+unofficial project is not affiliated with them. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+for licenses.
 
 ## ⚙️ Configuration
 
