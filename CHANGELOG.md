@@ -1,9 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — Desktop widget refresh, terminal launchers, and scrolling (2026-10-22)
 
+- Add cross-platform terminal launchers (`omp-widget.cmd`, `omp-widget.sh`) and
+  Windows desktop shortcut creator (`scripts/create-desktop-shortcut.ps1`).
+- Fix desktop panel container height so provider content scrolls properly
+  instead of clipping off-screen.
+- Replace theSVG provider marks with Dashboard-Icons (Gemini, OpenAI,
+  DeepSeek).
+- Add self-hosted variable font pairing: Inter Variable for UI hierarchy and
+  JetBrains Mono Variable for numeric and route tabular density.
+- Expand desktop panel to 700×720 CSS Grid with roomier card padding, 24 px
+  logos, and 30 px action buttons.
+- Add rounded-square app-mark chip tray icon with bottom-right status badge
+  dot.
+- Add minimize-to-tray affordance with dynamic tray-menu label (`Minimize to tray`
+  / `Show panel`).
 - Add `desktop`, `desktop:preview`, and `desktop:once` NPM scripts; keep
   `bun run widget` as a compatibility alias.
+- Fix desktop Electron entry point path to resolve `dist/main.cjs`.
 ## 0.2.0 — Cross-platform desktop widget (2026-10-21)
 
 - Add Electron desktop widget host (`bun run widget`) with a notification-area /
