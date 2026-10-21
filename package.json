@@ -35,6 +35,9 @@
   "scripts": {
     "build": "bun scripts/build.ts && bun scripts/build-desktop.ts",
     "build:desktop": "bun scripts/build-desktop.ts",
+    "desktop": "bun scripts/widget.ts",
+    "desktop:preview": "bun scripts/widget.ts --preview",
+    "desktop:once": "bun scripts/widget.ts --once",
     "test": "bun test",
     "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.json --noEmit",
     "format": "biome format --write .",
