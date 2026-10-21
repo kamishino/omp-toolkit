@@ -95,19 +95,19 @@ zero model tokens. Use `600 s` to halve API traffic.
 ### Desktop widget
 
 ```bash
-bun run widget
+bun run desktop
 ```
 
 Left-click toggles the compact panel; right-click offers Refresh, Show/Hide, Open
 terminal monitor, Open Orca tab, Start at login, and Exit. The panel follows the OS
 light/dark theme. `OMP_WIDGET_INTERVAL_SECONDS` overrides the 300 s refresh interval
-(minimum 30).
+(minimum 30). `bun run widget` remains an alias for `bun run desktop`.
 
 Supported on Windows 10/11 and macOS; Linux is best-effort (requires StatusNotifierItem
 or an AppIndicator extension on GNOME). Diagnostics without the UI:
 
 ```bash
-bun run widget -- --once
+bun run desktop:once
 ```
 
 Start at login registers:
@@ -183,7 +183,7 @@ The custom **OMP Provider Usage** tab is unaffected.
 | Action | Tokens |
 |---|---:|
 | `omp-provider-usage.js --watch` | 0 |
-| Desktop widget (`bun run widget`) | 0 (quota read) |
+| Desktop widget (`bun run desktop`) | 0 (quota read) |
 | `omp usage --json` | 0 (quota read) |
 | Snapshot read | 0 |
 | Health sweep | ~66 per six accounts |
@@ -236,7 +236,7 @@ cat ~/.omp/agent/desktop-widget-error.log
 Run the data diagnostic:
 
 ```bash
-bun run widget -- --once
+bun run desktop:once
 ```
 
 On Linux without a system tray or graphical session, use `bun run monitor` in a terminal.
