@@ -2,12 +2,11 @@ import {
   type BalanceAlertThresholds,
   DEFAULT_BALANCE_ALERT,
   type HealthResult,
-  limitFor,
-  type ProviderSection,
   sectionsFor,
 } from "@omp-toolkit/core";
-import { isLowBalance, renderProviderUsage } from "@omp-toolkit/tui";
+import { renderProviderUsage } from "@omp-toolkit/tui";
 import { writeHeartbeat } from "./heartbeat";
+import { jsonPayload } from "./json";
 import { useAlternateScreen } from "./terminal";
 import { fetchUsage, readSnapshot } from "./usage";
 
@@ -15,27 +14,6 @@ function sleep(ms: number): Promise<void> {
   const { promise, resolve } = Promise.withResolvers<void>();
   setTimeout(resolve, ms);
   return promise;
-}
-
-function jsonSections(sections: ProviderSection[], balanceAlert: BalanceAlertThresholds) {
-  return sections.map((section) => ({
-    provider: section.provider,
-    accounts: section.reports.length,
-    columns: section.columns,
-    rows: section.rows.map((row) => ({
-      account: row.account,
-      maxUsed: row.max,
-      health: row.health?.status ?? null,
-      limits: section.columns.map((column) => {
-        const limit = limitFor(row.report, column);
-        return {
-          label: column.label,
-          ...limit,
-          low: isLowBalance(limit, balanceAlert),
-        };
-      }),
-    })),
-  }));
 }
 
 async function main(): Promise<void> {
@@ -95,13 +73,10 @@ async function main(): Promise<void> {
     const sections = sectionsFor(reports, health);
 
     if (json) {
+      const fetchedAt = Date.now();
       console.log(
         JSON.stringify(
-          {
-            fetchedAt: Date.now(),
-            providers: jsonSections(sections, balanceAlert),
-            ...(showHealth ? { health: snapshot } : {}),
-          },
+          jsonPayload(sections, { fetchedAt, showHealth, snapshot, balanceAlert }),
           null,
           2,
         ),
