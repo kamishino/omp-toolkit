@@ -48,7 +48,11 @@ service and the operator must act.
 One host with its own OMP agent directory and its own toolkit state.
 
 ## Monitor
-The Orca Floating Workspace tab that renders the provider-usage view.
+A live provider-usage view. It runs in any terminal, or in an Orca Floating
+Workspace tab when Orca is the chosen host.
+
+## Monitor host
+The terminal or Orca Floating Workspace tab that runs the monitor.
 
 ## History
 The 30-day local record of route checks, policy changes, manual interventions,

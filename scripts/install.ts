@@ -59,6 +59,8 @@ if (dryRun) {
 } else {
   console.log("OMP toolkit installed.");
   console.log(
-    "Run `bun run monitor:orca` to place OMP Provider Usage in Orca's Floating Workspace.",
+    `Monitor in any terminal: bun "${path.join(agentDir, "scripts", "omp-provider-usage.js")}" --watch --health`,
   );
+  console.log("Orca tab (optional): bun run monitor:orca");
+  console.log("OMP command: /gemini-health");
 }

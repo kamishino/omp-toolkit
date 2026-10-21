@@ -2,7 +2,7 @@
   "name": "omp-toolkit",
   "version": "0.1.0",
   "private": true,
-  "description": "Unofficial Windows-first OMP + Orca toolkit for provider usage, Gemini route health, and reliability history.",
+  "description": "Unofficial OMP toolkit for provider usage, Gemini route health, and reliability history, with optional Orca integration.",
   "license": "MIT",
   "author": "OMP Toolkit contributors",
   "repository": {
@@ -39,6 +39,7 @@
     "format": "biome format --write .",
     "check": "biome check . && tsc --noEmit && bun test",
     "install:omp": "bun scripts/build.ts && bun scripts/install.ts",
+    "monitor": "bun scripts/monitor.ts",
     "monitor:orca": "bun scripts/orca-monitor.ts",
     "reliability:report": "bun scripts/reliability-report.ts"
   },

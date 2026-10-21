@@ -1,6 +1,5 @@
 $RepoUrl = "https://github.com/kamishino/omp-toolkit.git"
 $InstallDir = if ($env:OMP_TOOLKIT_HOME) { $env:OMP_TOOLKIT_HOME } else { Join-Path $HOME ".omp\omp-toolkit" }
-$AgentDir = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME ".omp\agent" }
 $MinBun = [version]"1.4.3"
 
 function Fail([string]$Message) {
@@ -47,7 +46,4 @@ try {
 }
 
 Write-Host ""
-Write-Host "OMP Toolkit installed."
-Write-Host "Health CLI: bun `"$AgentDir\scripts\omp-provider-usage.js`" --health"
-Write-Host "OMP command: /gemini-health"
-Write-Host "Orca tab: cd `"$InstallDir`"; bun run monitor:orca"
+Write-Host "Orca tab from this checkout: cd `"$InstallDir`"; bun run monitor:orca"

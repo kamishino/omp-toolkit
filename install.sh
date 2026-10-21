@@ -3,7 +3,6 @@ set -euo pipefail
 
 REPO_URL="https://github.com/kamishino/omp-toolkit.git"
 INSTALL_DIR="${OMP_TOOLKIT_HOME:-$HOME/.omp/omp-toolkit}"
-AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.omp/agent}"
 MIN_BUN="1.4.3"
 
 fail() {
@@ -47,7 +46,4 @@ fi
   bun run install:omp
 )
 
-printf '\nOMP Toolkit installed.\n'
-printf 'Health CLI: bun "%s/scripts/omp-provider-usage.js" --health\n' "$AGENT_DIR"
-printf 'OMP command: /gemini-health\n'
-printf 'Orca tab: cd "%s" && bun run monitor:orca\n' "$INSTALL_DIR"
+printf '\nOrca tab from this checkout: cd "%s" && bun run monitor:orca\n' "$INSTALL_DIR"

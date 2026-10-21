@@ -72,10 +72,29 @@ GEMINI_HEALTH_RESTORE_GAP_SECONDS=60
 A managed exclusion restores after three healthy checks that are at least 60 s
 apart. Checks occur only on an event/manual probe; there is no idle polling.
 
-## Orca widget
+## Monitor
 
-One-command launcher (Floating Workspace):
+### Any terminal
 
+```bash
+bun run monitor
+```
+
+Runs the installed monitor (falls back to `dist` or source in a checkout) with
+`--watch --health --interval=300`. Options: `--interval=<seconds>`,
+`--no-health`, `--no-alt-screen`.
+
+`--no-alt-screen` appends frames instead of using the alternate screen. The
+monitor also falls back automatically when `TERM=dumb` or stdout is not a TTY.
+Works in Windows Terminal, PowerShell, cmd, Git Bash, iTerm2, Terminal.app,
+GNOME Terminal, tmux, and screen.
+
+Recommended interval: **300 s**. `omp usage` is a quota read; the monitor spends
+zero model tokens. Use `600 s` to halve API traffic.
+
+### Orca Floating Workspace (optional)
+
+Orca is the preferred host on Windows but is not required. One-command launcher:
 ```bash
 bun run monitor:orca
 ```
@@ -105,8 +124,6 @@ orca terminal create \
   --json
 ```
 
-Recommended interval: **300 s**. `omp usage` is a quota read; the monitor spends
-zero model tokens. Use `600 s` to halve API traffic.
 
 Close it:
 

@@ -20,15 +20,16 @@
 
 ## 💡 Overview
 
-OMP Toolkit is an unofficial, Windows-first toolkit for OMP and Orca. It reads
+OMP Toolkit is an unofficial, Windows-first toolkit for OMP. It reads
 `omp usage --json` and the extension's cached route snapshot, then renders one
-ANSI frame showing which provider window is burning, which Gemini account is
-circuit-broken, and when each limit resets.
+ANSI frame in any terminal showing which provider window is burning, which
+Gemini account is circuit-broken, and when each limit resets.
 
 The monitor never probes a model, so an idle watch tab spends zero tokens.
 Route checks are event-driven, exclusions are backed by a local snapshot and a
 30-day SQLite history, and managed exclusions restore only after a configurable
-healthy streak.
+healthy streak. Orca's Floating Workspace is an optional host; the monitor does
+not require Orca.
 
 ## ✨ Features
 
@@ -41,8 +42,12 @@ healthy streak.
   red `LOW` label at configurable thresholds.
 - **🗂️ Reliability history:** Local SQLite log of route checks, policy changes,
   interventions, and monitor heartbeats, plus a 30-day `reliability:report`.
-- **🪟 Orca Floating Workspace:** One-command live monitor tab; `Ctrl+Alt+A` on
-  Windows and `Cmd+Alt+A` on macOS.
+- **🖥️ Any terminal:** `--watch` redraws in place in Windows Terminal,
+  PowerShell, cmd, Git Bash, iTerm2, Terminal.app, GNOME Terminal, tmux, and
+  screen. `--no-alt-screen` appends frames for terminals without alternate
+  screen support.
+- **🪟 Orca Floating Workspace (optional):** One-command live monitor tab on
+  Windows; `Ctrl+Alt+A` on Windows and `Cmd+Alt+A` on macOS.
 - **🔒 Local-first:** No server and no telemetry; state stays under
   `~/.omp/agent`.
 
@@ -142,10 +147,10 @@ widget.
 
 | Component | Status | Platforms |
 |---|---|---|
-| Provider usage monitor / TUI | Supported | Windows, macOS, Linux |
+| Provider usage monitor / TUI | Supported | Windows, macOS, Linux (any ANSI TTY) |
 | DeepSeek balance and alerts | Supported | Windows, macOS, Linux |
 | Reliability history and report | Supported | Windows, macOS, Linux |
-| Orca Floating Workspace launcher | Best-effort | Supported on Windows; resolves `orca-ide` or `ORCA_BIN` elsewhere |
+| Orca Floating Workspace launcher | Best-effort (optional) | Supported on Windows; resolves `orca-ide` or `ORCA_BIN` elsewhere |
 | Gemini route-health rotation | Experimental | Windows, macOS, Linux (OMP CLI) |
 
 Windows 10/11 is the primary platform. CI runs the full check suite on
@@ -153,7 +158,19 @@ Windows 10/11 is the primary platform. CI runs the full check suite on
 
 ## 📖 Usage
 
-### 🖥️ Provider usage CLI
+### 🖥️ Any terminal
+
+From a checkout, `bun run monitor` starts the watch view in the current
+terminal with health data and a 300 s interval:
+
+```bash
+bun run monitor
+bun run monitor --interval=600
+bun run monitor --no-health
+bun run monitor --no-alt-screen
+```
+
+The installed CLI works without the checkout:
 
 ```bash
 bun "$HOME/.omp/agent/scripts/omp-provider-usage.js"
@@ -164,7 +181,8 @@ bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --watch --interval=300 --he
 
 `--watch` redraws in place every `--interval` seconds (default 300). Press
 `Ctrl+C` to leave the alternate screen. `--json` prints the same sections for
-scripting.
+scripting. The monitor falls back to append-only frames when stdout is not a
+TTY, `TERM=dumb`, or `--no-alt-screen` is passed.
 
 ```text
 ╭─ OMP Provider Usage ───────────────────────────────────────────────── 08:53:04 PM ─╮
@@ -193,8 +211,9 @@ scripting.
 /gemini-health-widget [on|off]
 ```
 
-### 🪟 Orca Floating Workspace
+### 🪟 Orca Floating Workspace (optional)
 
+Orca is the preferred host on Windows but is not required.
 ```bash
 bun run monitor:orca
 ```
@@ -236,7 +255,7 @@ docs/
   roadmap.md
   runbook.md
 design/tokens.json      Design-token SSOT
-scripts/                Build, install, Orca launcher, reliability report
+scripts/                Build, install, monitor launchers, reliability report
 ```
 
 ## 🧑‍💻 Development

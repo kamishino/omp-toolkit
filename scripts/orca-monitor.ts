@@ -1,14 +1,11 @@
 import { execFile } from "node:child_process";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { promisify } from "node:util";
+import { monitorCommandArgs, parseMonitorArgs, resolveMonitorScript } from "./monitor-target";
 
 const execFileAsync = promisify(execFile);
 
 const FLOATING_WORKTREE = "id:global-floating-terminal";
 const TITLE = "OMP Provider Usage";
-const DEFAULT_INTERVAL = 300;
 export function resolveOrcaBin(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
@@ -34,8 +31,6 @@ export function floatingShortcut(platform: NodeJS.Platform = process.platform): 
 }
 
 const ORCA = resolveOrcaBin();
-const AGENT_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
-const ROOT = path.resolve(import.meta.dir, "..");
 
 interface OrcaTerminalEntry {
   handle?: string;
@@ -50,14 +45,6 @@ interface OrcaResponse<T = unknown> {
     code?: string;
     message?: string;
   };
-}
-
-function resolveMonitorScript(): string {
-  const installed = path.join(AGENT_DIR, "scripts", "omp-provider-usage.js");
-  const dist = path.resolve(ROOT, "apps/provider-usage/dist/index.js");
-  const source = path.resolve(ROOT, "apps/provider-usage/src/index.ts");
-  const candidates = [installed, dist, source];
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? installed;
 }
 
 async function orca<T = unknown>(args: string[]): Promise<OrcaResponse<T>> {
@@ -77,18 +64,11 @@ async function orca<T = unknown>(args: string[]): Promise<OrcaResponse<T>> {
 export async function launchOrFocusMonitor(): Promise<void> {
   const args = process.argv.slice(2);
   const restart = args.includes("--restart");
-  const health = !args.includes("--no-health");
-  const intervalArg = args.find((arg) => arg.startsWith("--interval="));
-  const rawInterval = Number(intervalArg?.slice("--interval=".length) ?? DEFAULT_INTERVAL);
-  const interval = Math.max(10, Number.isFinite(rawInterval) ? rawInterval : DEFAULT_INTERVAL);
-
+  const options = parseMonitorArgs(args);
   const script = resolveMonitorScript();
   const parts = [
     quoteArg(process.execPath),
-    quoteArg(script),
-    "--watch",
-    `--interval=${interval}`,
-    ...(health ? ["--health"] : []),
+    ...monitorCommandArgs(script, options).map((part) => quoteArg(part)),
   ];
   const command = process.platform === "win32" ? `& ${parts.join(" ")}` : parts.join(" ");
 

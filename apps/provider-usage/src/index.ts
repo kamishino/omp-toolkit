@@ -8,6 +8,7 @@ import {
 } from "@omp-toolkit/core";
 import { isLowBalance, renderProviderUsage } from "@omp-toolkit/tui";
 import { writeHeartbeat } from "./heartbeat";
+import { useAlternateScreen } from "./terminal";
 import { fetchUsage, readSnapshot } from "./usage";
 
 function sleep(ms: number): Promise<void> {
@@ -54,7 +55,13 @@ async function main(): Promise<void> {
     usd: threshold("DEEPSEEK_BALANCE_ALERT_USD", DEFAULT_BALANCE_ALERT.usd),
   };
 
-  const interactive = watch && process.stdout.isTTY === true && !json;
+  const interactive = useAlternateScreen({
+    watch,
+    isTTY: process.stdout.isTTY === true,
+    json,
+    term: process.env.TERM,
+    noAltScreen: process.argv.includes("--no-alt-screen"),
+  });
   let lastFrame = "";
   let alternateActive = false;
 
