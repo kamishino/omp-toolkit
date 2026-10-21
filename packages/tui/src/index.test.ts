@@ -4,9 +4,7 @@ import {
   ANSI,
   bar,
   colorFor,
-  healthAge,
-  isLowBalance,
-  money,
+  colorForLevel,
   padVisible,
   percent,
   renderProviderUsage,
@@ -60,20 +58,16 @@ describe("terminal formatting", () => {
     expect(padVisible(`${ANSI.red}x${ANSI.reset}`, 3)).toBe(`${ANSI.red}x${ANSI.reset}  `);
   });
 
-  test("maps usage to semantic colors and snapshot age", () => {
+  test("maps usage to semantic colors", () => {
     expect(colorFor(0.9)).toBe(ANSI.red);
     expect(colorFor(0.75)).toBe(ANSI.orange);
     expect(colorFor(0.5)).toBe(ANSI.yellow);
     expect(colorFor(0.1)).toBe(ANSI.green);
-    expect(healthAge(undefined)).toBe("no snapshot");
-    expect(healthAge(Date.now())).toMatch(/^\d+s ago$/);
-  });
-
-  test("formats money amounts with currency symbols", () => {
-    expect(money(110, "cny")).toBe("¥110.00");
-    expect(money(25.5, "usd")).toBe("$25.50");
-    expect(money(undefined, "cny")).toBe("—");
-    expect(money(Number.NaN, "cny")).toBe("—");
+    expect(colorForLevel("critical")).toBe(ANSI.red);
+    expect(colorForLevel("hot")).toBe(ANSI.orange);
+    expect(colorForLevel("warn")).toBe(ANSI.yellow);
+    expect(colorForLevel("ok")).toBe(ANSI.green);
+    expect(colorForLevel("unknown")).toBe(ANSI.muted);
   });
 });
 
@@ -150,25 +144,6 @@ describe("provider usage view", () => {
       showHealth: false,
     });
     expect(balanceOnlyView).toContain("no usage data");
-  });
-
-  test("marks DeepSeek balance low at or below the threshold", () => {
-    const report: UsageReport = {
-      provider: "deepseek",
-      metadata: { email: "user@example.com" },
-      limits: [
-        { id: "deepseek:balance", label: "Balance", amount: { remaining: 10, unit: "cny" } },
-        { id: "deepseek:granted", label: "Granted", amount: { remaining: 0, unit: "cny" } },
-      ],
-    };
-    expect(isLowBalance(report.limits?.[0], { cny: 10, usd: 10 })).toBe(true);
-    expect(
-      isLowBalance(
-        { id: "deepseek:balance", label: "Balance", amount: { remaining: 10.01, unit: "cny" } },
-        { cny: 10, usd: 10 },
-      ),
-    ).toBe(false);
-    expect(isLowBalance(report.limits?.[1], { cny: 10, usd: 10 })).toBe(false);
   });
 
   test("renders LOW for a low DeepSeek balance and keeps the frame width", () => {

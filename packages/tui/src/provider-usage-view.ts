@@ -1,16 +1,25 @@
 import {
   type BalanceAlertThresholds,
+  buildDashboard,
+  type DashboardLimit,
+  type DashboardRoute,
   DEFAULT_BALANCE_ALERT,
-  type HealthResult,
-  limitFor,
-  local,
+  formatAge,
+  money,
   type ProviderSection,
-  providerName,
-  shortProvider,
-  type UsageLimit,
-  usedPercent,
+  summaryText,
 } from "@omp-toolkit/core";
-import { ANSI, bar, colorFor, healthAge, padVisible, paint, percent, resetIn } from "./theme";
+import {
+  ANSI,
+  bar,
+  colorForLevel,
+  HEALTH_THRESHOLDS,
+  padVisible,
+  paint,
+  percent,
+  resetInAt,
+  USAGE_THRESHOLDS,
+} from "./theme";
 
 export interface ProviderUsageViewOptions {
   interval: number;
@@ -20,73 +29,45 @@ export interface ProviderUsageViewOptions {
   balanceAlert?: BalanceAlertThresholds;
 }
 
-function routeTag(health: HealthResult | undefined): string {
-  if (!health) return paint("  —  ", ANSI.muted);
-  switch (health.status) {
-    case "ok":
-      return paint(" OK  ", ANSI.green);
-    case "hang":
-      return paint("HANG ", ANSI.red);
-    case "auth":
-      return paint("AUTH ", ANSI.yellow);
-    case "model-error":
-      return paint("MODEL", ANSI.yellow);
-    default:
-      return paint(" ERR ", ANSI.red);
-  }
-}
+const ROUTE_SPACING: Record<string, string> = {
+  OK: " OK  ",
+  HANG: "HANG ",
+  AUTH: "AUTH ",
+  MODEL: "MODEL",
+  ERR: " ERR ",
+  "—": "  —  ",
+};
 
-export function money(value: number | undefined, unit: string | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return "—";
-  const symbol = unit === "cny" ? "¥" : unit === "usd" ? "$" : "";
-  const amount = value.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `${symbol}${amount}`;
+function routeTag(route: DashboardRoute): string {
+  const text = ROUTE_SPACING[route.text] ?? route.text;
+  return paint(text, colorForLevel(route.level));
 }
 
 function fit(text: string, width: number): string {
   return text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text;
 }
 
-export function isLowBalance(
-  limit: UsageLimit | undefined,
-  thresholds: BalanceAlertThresholds,
-): boolean {
-  if (!limit?.id?.endsWith(":balance")) return false;
-  const unit = limit.amount?.unit?.toLowerCase();
-  const threshold = unit === "cny" ? thresholds.cny : unit === "usd" ? thresholds.usd : undefined;
-  const remaining = limit.amount?.remaining;
-  return threshold !== undefined && remaining !== undefined && remaining <= threshold;
-}
-
-function columnBlock(
-  limit: UsageLimit | undefined,
-  width: number,
-  balanceAlert: BalanceAlertThresholds,
-): string {
-  const unit = limit?.amount?.unit?.toLowerCase();
+function columnBlock(limit: DashboardLimit, width: number): string {
+  const unit = limit.unit;
   if (unit === "cny" || unit === "usd") {
-    const low = isLowBalance(limit, balanceAlert);
-    const amount = money(limit?.amount?.remaining, unit);
-    const text = low ? (width >= 12 ? `${amount} LOW` : `!${amount}`) : amount;
-    return padVisible(paint(text, low ? ANSI.red : ANSI.green), width);
+    const amount = money(limit.remaining, unit);
+    const text = limit.low ? (width >= 12 ? `${amount} LOW` : `!${amount}`) : amount;
+    return padVisible(paint(text, colorForLevel(limit.level)), width);
   }
-  const value = usedPercent(limit);
+  const value = limit.usedFraction;
   if (width >= 15) {
     return padVisible(
-      `${paint(bar(value, Math.max(1, width - 14)), colorFor(value))} ${paint(percent(value), colorFor(value))} ${paint(resetIn(limit), ANSI.muted)}`,
+      `${paint(bar(value, Math.max(1, width - 14)), colorForLevel(limit.level))} ${paint(percent(value), colorForLevel(limit.level))} ${paint(resetInAt(limit.resetsAt), ANSI.muted)}`,
       width,
     );
   }
   if (width >= 13) {
     return padVisible(
-      `${paint(percent(value), colorFor(value))} ${paint(resetIn(limit), ANSI.muted)}`,
+      `${paint(percent(value), colorForLevel(limit.level))} ${paint(resetInAt(limit.resetsAt), ANSI.muted)}`,
       width,
     );
   }
-  return padVisible(paint(percent(value), colorFor(value)), width);
+  return padVisible(paint(percent(value), colorForLevel(limit.level)), width);
 }
 
 export function renderProviderUsage(
@@ -113,67 +94,39 @@ export function renderProviderUsage(
     paint(time, ANSI.muted) +
     border("─╮");
 
-  const allRows = sections.flatMap((section) => section.rows);
-  const above80 = allRows.filter((row) => row.max >= 0.8).length;
-  const exhausted = allRows.filter((row) => row.max >= 1).length;
-  const percentageRows = sections.flatMap((section) =>
-    section.rows.filter((row) =>
-      section.columns.some((column) => usedPercent(limitFor(row.report, column)) !== undefined),
-    ),
-  );
-  const tightest = percentageRows.reduce(
-    (best, row) => (!best || row.max > best.max ? row : best),
-    undefined as (typeof percentageRows)[number] | undefined,
-  );
-  const summary = [
-    `${sections.length} providers`,
-    `${allRows.length} accounts`,
-    `${above80} ≥80%`,
-    `${exhausted} maxed`,
-    tightest
-      ? `tightest ${shortProvider(tightest.report.provider)}:${local(tightest.account)} ${(tightest.max * 100).toFixed(0)}%`
-      : "no usage data",
-  ].join(" · ");
+  const now = Date.now();
+  const dashboard = buildDashboard(sections, {
+    fetchedAt: now,
+    now,
+    showHealth: options.showHealth,
+    checkedAt: options.checkedAt,
+    thresholds: USAGE_THRESHOLDS,
+    staleMinutes: HEALTH_THRESHOLDS.staleSnapshotMinutes,
+    balanceAlert: options.balanceAlert ?? DEFAULT_BALANCE_ALERT,
+  });
 
-  const balanceAlert = options.balanceAlert ?? DEFAULT_BALANCE_ALERT;
+  const summary = summaryText(dashboard.summary);
   const hasAnyRoute =
     options.showHealth &&
-    sections.some((section) => section.rows.some((row) => row.health !== undefined));
+    dashboard.providers.some((section) => section.rows.some((row) => row.health !== null));
+
   const contentWidth = width - 4;
   const accountWidth = 20;
   const routeWidth = 7;
   const gap = 3;
-  const maxColumns = Math.max(1, ...sections.map((section) => section.columns.length));
+  const maxColumns = Math.max(1, ...dashboard.providers.map((section) => section.columns.length));
   const base = accountWidth + 1 + (hasAnyRoute ? routeWidth : 0);
   const available = contentWidth - base - (maxColumns > 1 ? gap * (maxColumns - 1) : 0);
   const columnWidth = Math.max(8, Math.min(24, Math.floor(available / maxColumns)));
 
   const output: string[] = [top, line(paint(summary, ANSI.muted))];
 
-  for (const section of sections) {
-    output.push(border("├" + "─".repeat(inner) + "┤"));
-    const plans = [
-      ...new Set(
-        section.reports
-          .map((report) => report.metadata?.plan)
-          .filter((plan): plan is string => typeof plan === "string" && plan.length > 0),
-      ),
-    ];
-    const balanceCurrency = section.reports
-      .map((report) => report.metadata?.balance?.currency)
-      .find((currency): currency is string => typeof currency === "string" && currency.length > 0);
-    const suffix =
-      section.provider === "google-antigravity"
-        ? " · Gemini"
-        : balanceCurrency
-          ? ` · ${balanceCurrency}`
-          : plans.length === 1
-            ? ` · ${plans[0]}`
-            : "";
+  for (const section of dashboard.providers) {
+    output.push(border(`├${"─".repeat(inner)}┤`));
     output.push(
       line(
         paint(
-          `${providerName(section.provider)} · ${section.reports.length} ${section.reports.length === 1 ? "account" : "accounts"}${suffix}`,
+          `${section.name} · ${section.accounts} ${section.accounts === 1 ? "account" : "accounts"}${section.suffix}`,
           ANSI.bold + ANSI.cyan,
         ),
       ),
@@ -190,25 +143,20 @@ export function renderProviderUsage(
 
     for (const row of section.rows) {
       const account = paint(
-        fit(local(row.account), accountWidth).padEnd(accountWidth),
-        colorFor(row.max),
+        fit(row.displayAccount, accountWidth).padEnd(accountWidth),
+        colorForLevel(row.level),
       );
-      const route = hasRoute ? padVisible(routeTag(row.health), routeWidth) : "";
-      const blocks = section.columns
-        .map((column) => columnBlock(limitFor(row.report, column), columnWidth, balanceAlert))
+      const route = hasRoute ? padVisible(routeTag(row.route), routeWidth) : "";
+      const blocks = row.limits
+        .map((limit) => columnBlock(limit, columnWidth))
         .join(" ".repeat(gap));
       output.push(line(`${account} ${route}${blocks}`));
     }
   }
 
-  output.push(border("├" + "─".repeat(inner) + "┤"));
-  const stale =
-    options.showHealth &&
-    options.checkedAt !== undefined &&
-    options.checkedAt > 0 &&
-    Date.now() - options.checkedAt > 15 * 60_000;
+  output.push(border(`├${"─".repeat(inner)}┤`));
   const healthNote = options.showHealth
-    ? ` · health ${healthAge(options.checkedAt, options.watch)}${stale ? " (stale)" : ""}`
+    ? ` · health ${dashboard.health?.checkedAt ? formatAge(dashboard.health.checkedAt, now, options.watch) : "no snapshot"}${dashboard.health?.stale ? " (stale)" : ""}`
     : "";
   output.push(
     line(
@@ -220,6 +168,6 @@ export function renderProviderUsage(
       ),
     ),
   );
-  output.push(border("╰" + "─".repeat(inner) + "╯"));
+  output.push(border(`╰${"─".repeat(inner)}╯`));
   return output.join("\n");
 }
