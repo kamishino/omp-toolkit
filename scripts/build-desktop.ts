@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { buildTrayIcons } from "./build-tray-icons";
 
@@ -64,6 +65,20 @@ export async function buildDesktop(): Promise<void> {
 
   buildTrayIcons(assetsDir);
 
+  const require = createRequire(import.meta.url);
+  const interDir = path.dirname(require.resolve("@fontsource-variable/inter/package.json"));
+  const jbDir = path.dirname(require.resolve("@fontsource-variable/jetbrains-mono/package.json"));
+  const fontsDir = path.join(assetsDir, "fonts");
+  fs.mkdirSync(fontsDir, { recursive: true });
+  fs.copyFileSync(
+    path.join(interDir, "files", "inter-latin-wght-normal.woff2"),
+    path.join(fontsDir, "inter-latin-wght-normal.woff2"),
+  );
+  fs.copyFileSync(
+    path.join(jbDir, "files", "jetbrains-mono-latin-wght-normal.woff2"),
+    path.join(fontsDir, "jetbrains-mono-latin-wght-normal.woff2"),
+  );
+
   // Verification assertions
   const requiredFiles = [
     path.join(distDir, "main.cjs"),
@@ -76,6 +91,8 @@ export async function buildDesktop(): Promise<void> {
     path.join(assetsDir, "providers", "openai-light.svg"),
     path.join(assetsDir, "providers", "openai-dark.svg"),
     path.join(assetsDir, "providers", "deepseek.svg"),
+    path.join(fontsDir, "inter-latin-wght-normal.woff2"),
+    path.join(fontsDir, "jetbrains-mono-latin-wght-normal.woff2"),
   ];
 
   const modes = ["light", "dark"] as const;

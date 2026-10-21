@@ -61,16 +61,18 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
 
 ## Desktop panel
 
-- Window dimensions: 600×640 DIP, frameless, always-on-top, clamped to the display work area with 12px margin.
+- Window dimensions: 700×720 DIP, frameless, always-on-top, clamped to the display work area with 12px margin.
 - Theme: follows the OS light/dark appearance via `prefers-color-scheme` and updates live.
-- Tokens: defined in `design/tokens.json` under `desktop.color.light` and `desktop.color.dark`.
+- Tokens: defined in `design/tokens.json` under `desktop.color.light`, `desktop.color.dark`, `desktop.space`, `desktop.font`, and `desktop.size`.
+- Spacing scale: `xs: 4`, `sm: 8`, `md: 12`, `lg: 16`, `xl: 24`, `2xl: 32`.
+- Typography: Inter Variable (UI headings, labels, button text) + JetBrains Mono Variable (account, route, limits, numeric data), self-hosted as WOFF2. Scale: `xs: 12`, `sm: 13`, `md: 14`, `lg: 16`, `xl: 20`.
 - Contrast gate: all body, label, and status text meet APCA |Lc| >= 60 against both `surface` and `surfaceRaised`, checked via `scripts/check-tokens.ts`.
 - Layout:
   - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh (`mdiRefresh`) and Close (`mdiClose`) vector icon buttons from Material Design Icons (`@mdi/js`).
   - Summary: provider count, account count, >=80% count, maxed count, tightest provider:account.
   - Content: scrollable container holding cards per provider section.
-  - Provider cards: each card features a 20 px provider logo slot before the title. Google, OpenAI, and DeepSeek display vector marks from theSVG; OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays an empty slot to maintain vertical alignment.
-  - Table: `ACCOUNT` (30%), `ROUTE` (15%), and provider limit columns. Account cell colored by row severity.
+  - Provider cards: each card features a 24 px provider logo slot before the title. Google Antigravity (Gemini mark), OpenAI, and DeepSeek display vector marks from Dashboard-Icons; OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays an empty slot to maintain vertical alignment.
+  - Table: `ACCOUNT` (26%), `ROUTE` (12%), and provider limit columns. Account cell colored by row severity.
   - Route cell: text badge (`OK`, `HANG`, `AUTH`, `MODEL`, `ERR`, `—`) with semantic color.
   - Limits: progress bar (`<progress>` with `currentColor` value) + numeric percentage + reset countdown; DeepSeek displays currency amount with red `LOW` label.
   - Footer: data source line with health age (`(stale)` when > 15 minutes) and refresh interval.
