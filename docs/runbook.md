@@ -104,6 +104,12 @@ The header minimize and close buttons hide the panel to the tray; the tray menu
 shows Minimize to tray / Show panel. The panel follows the OS light/dark theme.
 `OMP_WIDGET_INTERVAL_SECONDS` overrides the 300 s refresh interval (minimum 30).
 `bun run widget` remains an alias for `bun run desktop`.
+From the repo root, `.\omp-widget.cmd` on Windows or `./omp-widget.sh` on
+macOS/Linux opens the panel immediately; the same launcher works by full path
+from any directory. Both call `bun run desktop:preview`. On Windows, run
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1`
+to create a desktop shortcut.
+
 
 Supported on Windows 10/11 and macOS; Linux is best-effort (requires StatusNotifierItem
 or an AppIndicator extension on GNOME). Diagnostics without the UI:

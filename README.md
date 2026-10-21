@@ -243,6 +243,17 @@ bun run desktop
 bun run desktop:preview
 bun run desktop:once
 ```
+From the repo root, `.\omp-widget.cmd` on Windows or `./omp-widget.sh` on
+macOS/Linux opens the panel immediately; the same launcher works by full path
+from any directory. Both call `bun run desktop:preview`.
+On Windows, run
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1`
+once to create `OMP Provider Usage.lnk` on the current user's Desktop; the
+shortcut targets `omp-widget.cmd` and opens the panel. Rerun it after moving the
+checkout. macOS/Linux use `omp-widget.sh`; no desktop shortcut is added.
+`apps/desktop/dist/main.cjs` is Electron's main bundle, not a standalone
+executable; launch it through these commands, not with Bun directly.
+
 
 Prerequisites: `bun install` installs Electron, and `bun run install:omp` installs
 the monitor CLI; `bun run widget` remains an alias for `bun run desktop`.
