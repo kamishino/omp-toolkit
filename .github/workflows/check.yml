@@ -13,6 +13,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
+      - name: Disable autocrlf
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
