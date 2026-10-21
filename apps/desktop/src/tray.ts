@@ -1,20 +1,18 @@
 import fs from "node:fs";
-import path from "node:path";
 import type { UsageLevel } from "@omp-toolkit/core";
 import { type NativeImage, nativeImage } from "electron";
+import { trayIconPath } from "./tray-path";
 
 export function trayImage(
   assetsDir: string,
   mode: "light" | "dark",
   level: UsageLevel,
 ): NativeImage {
-  const fileLevel = level;
-  const fileName = `tray-${mode}-${fileLevel}.png`;
-  const filePath = path.join(assetsDir, fileName);
+  const filePath = trayIconPath(assetsDir, mode, level);
 
   let img = nativeImage.createFromPath(filePath);
 
-  const retinaFile = path.join(assetsDir, `tray-${mode}-${fileLevel}@2x.png`);
+  const retinaFile = trayIconPath(assetsDir, mode, level, 2);
   if (fs.existsSync(retinaFile)) {
     try {
       const buffer = fs.readFileSync(retinaFile);
@@ -24,11 +22,11 @@ export function trayImage(
     }
   }
 
-  if (img.isEmpty() && fileLevel !== "unknown") {
+  if (img.isEmpty() && level !== "unknown") {
     // Fallback to unknown icon
-    const fallbackPath = path.join(assetsDir, `tray-${mode}-unknown.png`);
+    const fallbackPath = trayIconPath(assetsDir, mode, "unknown");
     img = nativeImage.createFromPath(fallbackPath);
-    const fallbackRetina = path.join(assetsDir, `tray-${mode}-unknown@2x.png`);
+    const fallbackRetina = trayIconPath(assetsDir, mode, "unknown", 2);
     if (fs.existsSync(fallbackRetina)) {
       try {
         const buffer = fs.readFileSync(fallbackRetina);
