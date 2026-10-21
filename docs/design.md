@@ -66,9 +66,10 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
 - Tokens: defined in `design/tokens.json` under `desktop.color.light` and `desktop.color.dark`.
 - Contrast gate: all body, label, and status text meet APCA |Lc| >= 60 against both `surface` and `surfaceRaised`, checked via `scripts/check-tokens.ts`.
 - Layout:
-  - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh and Close icon buttons.
+  - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh (`mdiRefresh`) and Close (`mdiClose`) vector icon buttons from Material Design Icons (`@mdi/js`).
   - Summary: provider count, account count, >=80% count, maxed count, tightest provider:account.
   - Content: scrollable container holding cards per provider section.
+  - Provider cards: each card features a 20 px provider logo slot before the title. Google, OpenAI, and DeepSeek display vector marks from theSVG; OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays an empty slot to maintain vertical alignment.
   - Table: `ACCOUNT` (30%), `ROUTE` (15%), and provider limit columns. Account cell colored by row severity.
   - Route cell: text badge (`OK`, `HANG`, `AUTH`, `MODEL`, `ERR`, `—`) with semantic color.
   - Limits: progress bar (`<progress>` with `currentColor` value) + numeric percentage + reset countdown; DeepSeek displays currency amount with red `LOW` label.
