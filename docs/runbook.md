@@ -92,6 +92,31 @@ GNOME Terminal, tmux, and screen.
 Recommended interval: **300 s**. `omp usage` is a quota read; the monitor spends
 zero model tokens. Use `600 s` to halve API traffic.
 
+### Desktop widget
+
+```bash
+bun run widget
+```
+
+Left-click toggles the compact panel; right-click offers Refresh, Show/Hide, Open
+terminal monitor, Open Orca tab, Start at login, and Exit. The panel follows the OS
+light/dark theme. `OMP_WIDGET_INTERVAL_SECONDS` overrides the 300 s refresh interval
+(minimum 30).
+
+Supported on Windows 10/11 and macOS; Linux is best-effort (requires StatusNotifierItem
+or an AppIndicator extension on GNOME). Diagnostics without the UI:
+
+```bash
+bun run widget -- --once
+```
+
+Start at login registers:
+- Windows: `HKCU:\Software\Microsoft\Windows\CurrentVersion\Run`
+- macOS: `~/Library/LaunchAgents/dev.omp-toolkit.desktop-widget.plist`
+- Linux: `~/.config/autostart/omp-toolkit-desktop-widget.desktop`
+
+If the checkout is moved, toggle Start at login off and on to update paths.
+
 ### Orca Floating Workspace (optional)
 
 Orca is the preferred host on Windows but is not required. One-command launcher:
@@ -158,6 +183,7 @@ The custom **OMP Provider Usage** tab is unaffected.
 | Action | Tokens |
 |---|---:|
 | `omp-provider-usage.js --watch` | 0 |
+| Desktop widget (`bun run widget`) | 0 (quota read) |
 | `omp usage --json` | 0 (quota read) |
 | Snapshot read | 0 |
 | Health sweep | ~66 per six accounts |
@@ -198,6 +224,22 @@ hand; inspect:
 omp config get auth.accountPolicies
 cat ~/.omp/agent/gemini-health-state.json
 ```
+
+**Desktop widget shows refresh failed or no tray**
+
+Check the error log:
+
+```bash
+cat ~/.omp/agent/desktop-widget-error.log
+```
+
+Run the data diagnostic:
+
+```bash
+bun run widget -- --once
+```
+
+On Linux without a system tray or graphical session, use `bun run monitor` in a terminal.
 
 **Update the installed toolkit**
 

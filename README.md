@@ -46,6 +46,10 @@ not require Orca.
   PowerShell, cmd, Git Bash, iTerm2, Terminal.app, GNOME Terminal, tmux, and
   screen. `--no-alt-screen` appends frames for terminals without alternate
   screen support.
+- **🖥️ Desktop widget (optional):** A tray icon and compact panel for the
+  same data on Windows and macOS; Linux is best-effort. Left-click toggles
+  the panel; right-click refreshes, opens the terminal monitor or Orca tab,
+  and opts into starting at login. The panel follows the OS light/dark theme.
 - **🪟 Orca Floating Workspace (optional):** One-command live monitor tab on
   Windows; `Ctrl+Alt+A` on Windows and `Cmd+Alt+A` on macOS.
 - **🔒 Local-first:** No server and no telemetry; state stays under
@@ -55,6 +59,8 @@ not require Orca.
 
 - **Bun 1.4.3** — runtime, workspace manager, bundler (`Bun.build`), and test
   runner.
+- **Electron** — cross-platform desktop widget host; vanilla TypeScript/CSS
+  renderer driven by OKLCH tokens from `design/tokens.json`.
 - **TypeScript** — domain and adapter code checked with `tsc --noEmit`.
 - **Biome** — formatter and lint gate.
 - **SQLite** — reliability history through `bun:sqlite`.
@@ -66,6 +72,9 @@ not require Orca.
 - **OMP CLI** — the only usage source (`omp usage --json`). Limits and account
   metadata come from the local OMP runtime; the toolkit does not scrape
   provider dashboards.
+- **Desktop widget** — local-first; spawns the installed monitor CLI and
+  renders its versioned JSON. Has no network access.
+
 - **DeepSeek balance API** — `https://api.deepseek.com/user/balance`, read by
   the `deepseek` usage provider that the extension registers with OMP, using
   `DEEPSEEK_API_KEY`.
@@ -137,17 +146,19 @@ bun scripts/install.ts --dry-run
 
 ```bash
 bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --health
+bun run widget -- --once
 ```
 
 Expected: the provider usage frame with `ROUTE`, `WEEKLY`, and `5 HOUR`
-columns. In OMP, run `/gemini-health` to probe all accounts and refresh the
-widget.
+columns, and a plain-text summary from the desktop widget `--once` diagnostic.
+In OMP, run `/gemini-health` to probe all accounts and refresh the widget.
 
 ## 📊 Status and platform support
 
 | Component | Status | Platforms |
 |---|---|---|
 | Provider usage monitor / TUI | Supported | Windows, macOS, Linux (any ANSI TTY) |
+| Desktop widget | Supported | Windows 10/11, macOS; Linux best-effort (StatusNotifier/AppIndicator) |
 | DeepSeek balance and alerts | Supported | Windows, macOS, Linux |
 | Reliability history and report | Supported | Windows, macOS, Linux |
 | Orca Floating Workspace launcher | Best-effort (optional) | Supported on Windows; resolves `orca-ide` or `ORCA_BIN` elsewhere |
@@ -180,8 +191,8 @@ bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --watch --interval=300 --he
 ```
 
 `--watch` redraws in place every `--interval` seconds (default 300). Press
-`Ctrl+C` to leave the alternate screen. `--json` prints the same sections for
-scripting. The monitor falls back to append-only frames when stdout is not a
+`Ctrl+C` to leave the alternate screen. `--json` prints a versioned
+dashboard object (schema 2); `--health` adds the raw snapshot. The
 TTY, `TERM=dumb`, or `--no-alt-screen` is passed.
 
 ```text
@@ -223,6 +234,28 @@ resolves `ORCA_BIN`, then `ORCA_CLI_COMMAND`, then `ORCA_DEV_REPO_ROOT`
 (`orca-dev`), then `orca-ide` on Linux, then `orca`. Orca integration outside
 Windows is best-effort.
 
+### 🖥️ Desktop widget
+
+```bash
+bun run widget
+```
+
+A tray icon appears; left-click toggles the compact panel; right-click offers Refresh,
+Show/Hide, Open terminal monitor, Open Orca tab, Start at login, and Exit. The panel
+follows the OS light/dark theme. `--preview` shows the panel immediately; `--once`
+prints a data-only summary without Electron:
+
+```bash
+bun run widget -- --preview
+bun run widget -- --once
+```
+
+Supported on Windows 10/11 and macOS. Linux is best-effort: Electron uses
+StatusNotifierItem; GNOME may need an AppIndicator extension, and activation
+semantics vary by desktop environment. The terminal monitor remains the fallback.
+The desktop widget is not a Windows 11 Widgets-board provider and is separate from
+the OMP `/gemini-health-widget` TUI toggle.
+
 ## ⚙️ Configuration
 
 | Variable | Purpose |
@@ -231,7 +264,9 @@ Windows is best-effort.
 | `DEEPSEEK_BALANCE_ALERT_CNY` | Low-balance threshold in CNY, default 10 |
 | `DEEPSEEK_BALANCE_ALERT_USD` | Low-balance threshold in USD, default 10 |
 | `OMP_BIN` | OMP executable, default `omp` |
-| `OMP_TOOLKIT_HOME` | Installer checkout path, default `~/.omp/omp-toolkit` |
+| `OMP_TOOLKIT_HOME` | Installer checkout path, default `~/.omp/omp-toolkit`; also used by desktop widget to locate `monitor:orca` |
+| `OMP_WIDGET_INTERVAL_SECONDS` | Desktop widget refresh interval, default 300; minimum 30 |
+| `BUN_BIN` | Bun executable override for desktop widget |
 | `PI_CODING_AGENT_DIR` | OMP agent directory override |
 | `GEMINI_HEALTH_RESTORE_STREAK` | Healthy checks before auto-restore |
 | `GEMINI_HEALTH_RESTORE_GAP_SECONDS` | Minimum spacing between checks |
@@ -243,6 +278,7 @@ Windows is best-effort.
 
 ```text
 apps/
+  desktop/              Desktop widget (Electron main, preload, renderer)
   omp-extension/        OMP adapter: hooks, commands, tool, health CLI
   provider-usage/       OMP Provider Usage CLI
 packages/
@@ -255,7 +291,7 @@ docs/
   roadmap.md
   runbook.md
 design/tokens.json      Design-token SSOT
-scripts/                Build, install, monitor launchers, reliability report
+scripts/                Build, install, monitor launchers, desktop widget, reliability report
 ```
 
 ## 🧑‍💻 Development

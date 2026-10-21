@@ -1,10 +1,10 @@
 # Contributing
 
 ## Project scope
-This is an unofficial, Windows-first toolkit for OMP + Orca. Contributions that
-improve the provider usage monitor, DeepSeek balance, reliability history,
-documentation, and Windows/Orca integration are welcome. Cross-platform support
-is best-effort and unsupported.
+This is an unofficial, Windows-first toolkit for OMP + Orca. The terminal
+monitor, DeepSeek balance, reliability history, and desktop widget are supported
+on Windows and macOS; Linux is best-effort. Orca integration outside Windows is
+best-effort.
 
 The Gemini route-health rotation is experimental. Changes to account exclusion,
 OMP config mutation, or recovery behavior require a focused issue first.
@@ -30,13 +30,14 @@ bun run build
 bun scripts/install.ts --dry-run
 ```
 
-`bun run check` runs Biome, `tsc --noEmit`, and the full unit suite. Tests must
-not require network access, real OMP credentials, or a running Orca instance.
+`bun run check` runs Biome, `tsc --noEmit` (including `apps/desktop`), the full unit
+suite, and token contrast validation. Tests must not require network access, real
+OMP credentials, a running Orca instance, or launching an Electron GUI.
 
 ## Pull requests
 - Keep each PR to one concern.
-- Add or update tests for behavior changes in `packages/core` or
-  `packages/tui`.
+- Add or update tests for behavior changes in `packages/core`,
+  `packages/tui`, or `apps/desktop`.
 - Update `README.md`, `docs/runbook.md`, or `docs/architecture.md` when the
   user-visible behavior changes.
 - Use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`).
