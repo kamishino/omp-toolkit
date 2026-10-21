@@ -36,6 +36,12 @@ Interpretation:
 `health ... (stale)` means the snapshot is older than 15 minutes. Run
 `/gemini-health` or the health CLI.
 
+## Balance alerts
+
+A DeepSeek `Balance` at or below `DEEPSEEK_BALANCE_ALERT_CNY` (default 10) or
+`DEEPSEEK_BALANCE_ALERT_USD` (default 10) renders red with `LOW`. The
+`Granted` column never alerts. Use the environment variable for the displayed
+currency; the preferred currency is still CNY when both are returned.
 ## Healing
 
 ```text

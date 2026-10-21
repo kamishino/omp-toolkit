@@ -1,5 +1,12 @@
-import { type HealthResult, limitFor, type ProviderSection, sectionsFor } from "@omp-toolkit/core";
-import { renderProviderUsage } from "@omp-toolkit/tui";
+import {
+  type BalanceAlertThresholds,
+  DEFAULT_BALANCE_ALERT,
+  type HealthResult,
+  limitFor,
+  type ProviderSection,
+  sectionsFor,
+} from "@omp-toolkit/core";
+import { isLowBalance, renderProviderUsage } from "@omp-toolkit/tui";
 import { writeHeartbeat } from "./heartbeat";
 import { fetchUsage, readSnapshot } from "./usage";
 
@@ -9,7 +16,7 @@ function sleep(ms: number): Promise<void> {
   return promise;
 }
 
-function jsonSections(sections: ProviderSection[]) {
+function jsonSections(sections: ProviderSection[], balanceAlert: BalanceAlertThresholds) {
   return sections.map((section) => ({
     provider: section.provider,
     accounts: section.reports.length,
@@ -18,10 +25,14 @@ function jsonSections(sections: ProviderSection[]) {
       account: row.account,
       maxUsed: row.max,
       health: row.health?.status ?? null,
-      limits: section.columns.map((column) => ({
-        label: column.label,
-        ...limitFor(row.report, column),
-      })),
+      limits: section.columns.map((column) => {
+        const limit = limitFor(row.report, column);
+        return {
+          label: column.label,
+          ...limit,
+          low: isLowBalance(limit, balanceAlert),
+        };
+      }),
     })),
   }));
 }
@@ -32,6 +43,36 @@ async function main(): Promise<void> {
   const showHealth = process.argv.includes("--health");
   const intervalArg = process.argv.find((arg) => arg.startsWith("--interval="));
   const interval = Math.max(10, Number(intervalArg?.slice("--interval=".length) ?? 300) || 300);
+
+  function threshold(name: string, fallback: number): number {
+    const value = Number(process.env[name]);
+    return Number.isFinite(value) && value >= 0 ? value : fallback;
+  }
+
+  const balanceAlert: BalanceAlertThresholds = {
+    cny: threshold("DEEPSEEK_BALANCE_ALERT_CNY", DEFAULT_BALANCE_ALERT.cny),
+    usd: threshold("DEEPSEEK_BALANCE_ALERT_USD", DEFAULT_BALANCE_ALERT.usd),
+  };
+
+  const interactive = watch && process.stdout.isTTY === true && !json;
+  let lastFrame = "";
+  let alternateActive = false;
+
+  const clearAlternate = (): void => {
+    if (!alternateActive) return;
+    alternateActive = false;
+    process.stdout.write("\x1b[?25h\x1b[?1049l");
+  };
+
+  if (interactive) {
+    alternateActive = true;
+    process.stdout.write("\x1b[?1049h\x1b[?25l");
+  }
+  process.on("exit", clearAlternate);
+  process.on("SIGINT", () => {
+    clearAlternate();
+    process.exit(0);
+  });
 
   const runOnce = async (): Promise<void> => {
     const reports = await fetchUsage();
@@ -51,7 +92,7 @@ async function main(): Promise<void> {
         JSON.stringify(
           {
             fetchedAt: Date.now(),
-            providers: jsonSections(sections),
+            providers: jsonSections(sections, balanceAlert),
             ...(showHealth ? { health: snapshot } : {}),
           },
           null,
@@ -61,16 +102,22 @@ async function main(): Promise<void> {
       return;
     }
 
-    if (watch && process.stdout.isTTY) console.clear();
-    console.log(
-      renderProviderUsage(sections, {
-        interval,
-        watch,
-        showHealth,
-        checkedAt: snapshot?.checkedAt,
-      }),
-    );
-    if (watch) console.log();
+    const frame = renderProviderUsage(sections, {
+      interval,
+      watch,
+      showHealth,
+      checkedAt: snapshot?.checkedAt,
+      balanceAlert,
+    });
+    if (interactive) {
+      if (frame !== lastFrame) {
+        process.stdout.write(`\x1b[H${frame}\x1b[J`);
+        lastFrame = frame;
+      }
+    } else {
+      console.log(frame);
+      if (watch) console.log();
+    }
   };
 
   if (!watch) {
@@ -78,7 +125,6 @@ async function main(): Promise<void> {
     return;
   }
 
-  process.on("SIGINT", () => process.exit(0));
   for (;;) {
     try {
       await runOnce();

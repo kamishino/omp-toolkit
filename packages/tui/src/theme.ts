@@ -82,9 +82,15 @@ export function resetIn(limit: { window?: { resetsAt?: number } } | undefined): 
   return `${mins}m`.padStart(6);
 }
 
-export function healthAge(checkedAt: number | undefined): string {
+export function healthAge(checkedAt: number | undefined, coarse = false): string {
   if (!checkedAt) return "no snapshot";
   const seconds = Math.max(0, Math.round((Date.now() - checkedAt) / 1000));
+  if (coarse) {
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 1) return "<1m ago";
+    if (minutes < 60) return `${minutes}m ago`;
+    return `${Math.floor(minutes / 60)}h ago`;
+  }
   if (seconds < 60) return `${seconds}s ago`;
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;

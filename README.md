@@ -121,6 +121,8 @@ Orca integration outside Windows is best-effort.
 | Variable | Purpose |
 |---|---|
 | `DEEPSEEK_API_KEY` | DeepSeek balance queries |
+| `DEEPSEEK_BALANCE_ALERT_CNY` | Low-balance threshold in CNY, default 10 |
+| `DEEPSEEK_BALANCE_ALERT_USD` | Low-balance threshold in USD, default 10 |
 | `OMP_BIN` | OMP executable, default `omp` |
 | `PI_CODING_AGENT_DIR` | OMP agent directory override |
 | `GEMINI_HEALTH_RESTORE_STREAK` | Healthy checks before auto-restore |

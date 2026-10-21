@@ -259,4 +259,17 @@ describe("deepseek balance domain", () => {
   test("resolves providerName for deepseek", () => {
     expect(providerName("deepseek")).toBe("DEEPSEEK");
   });
+
+  test("attaches route health to any provider by account email", () => {
+    const report: UsageReport = {
+      provider: "openai-codex",
+      metadata: { email: "codex@example.com" },
+      limits: [{ label: "30 days", amount: { usedFraction: 0.5 } }],
+    };
+    const health = new Map<string, HealthResult>([
+      ["codex@example.com", { email: "codex@example.com", status: "hang", ms: 15_000 }],
+    ]);
+    const sections = sectionsFor([report], health);
+    expect(sections[0]?.rows[0]?.health?.status).toBe("hang");
+  });
 });

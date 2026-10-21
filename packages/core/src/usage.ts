@@ -99,7 +99,6 @@ export function healthRank(row: ProviderRow): number {
 }
 
 export function rowsFor(
-  provider: string,
   reports: UsageReport[],
   columns: UsageColumn[],
   health: Map<string, HealthResult>,
@@ -115,7 +114,11 @@ export function rowsFor(
       return {
         report,
         account,
-        health: provider === "google-antigravity" ? health.get(account) : undefined,
+        health:
+          health.get(account) ??
+          (typeof report.metadata?.email === "string"
+            ? health.get(report.metadata.email)
+            : undefined),
         max,
       };
     })
@@ -145,7 +148,7 @@ export function sectionsFor(
       provider,
       reports: providerReports,
       columns,
-      rows: rowsFor(provider, providerReports, columns, health),
+      rows: rowsFor(providerReports, columns, health),
     };
   });
 }

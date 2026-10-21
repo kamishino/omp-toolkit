@@ -70,3 +70,11 @@ A platform covered by CI and documented installation, build, and CLI support.
 ## Best-effort platform
 A platform where installation and CLI are expected to work, but
 integration-specific behavior may be untested.
+
+## Balance alert
+A red `LOW` state shown when a provider balance is at or below the configured
+threshold for its currency.
+
+## Route column
+The per-account `ROUTE` cell. It is shown for every provider section when the
+snapshot contains route health for any account.

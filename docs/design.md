@@ -49,9 +49,15 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
   shown in this focused view.
 - DeepSeek balances use `BALANCE`/`GRANTED` columns with `¥` for CNY and `$` for
   USD; CNY is preferred when both are returned.
+- Column width is computed once from the widest section and shared by every
+  provider so headers and values align.
+- The `ROUTE` column is present for every provider section whenever any
+  account has route health; accounts without health show `—`.
+- DeepSeek `Balance` cells at or below the configured threshold render red
+  with `LOW` (or a red `!` prefix in very narrow columns).
 ## Accessibility
 
-- Every colored value has a text label (`HANG`, percentage, reset).
+- Every colored value has a text label (`HANG`, `LOW`, percentage, reset).
 - `NO_COLOR` is honored.
 - Bars use `█`/`░` with a numeric percentage, so the magnitude survives
   monochrome terminals.
