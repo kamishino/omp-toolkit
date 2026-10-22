@@ -74,6 +74,20 @@ export function resolveMonitorScript(
 
   return candidates.find(isRegularFile) ?? null;
 }
+export function resolveHealthScript(
+  env = process.env,
+  checkoutRoot: string,
+  home = os.homedir(),
+): string | null {
+  const dir = agentDir(env, home);
+  const candidates = [
+    path.join(dir, "extensions", "gemini-health.js"),
+    path.join(checkoutRoot, "apps", "omp-extension", "dist", "index.js"),
+    path.join(checkoutRoot, "apps", "omp-extension", "src", "index.ts"),
+  ];
+
+  return candidates.find(isRegularFile) ?? null;
+}
 
 export function resolveCheckout(
   env = process.env,

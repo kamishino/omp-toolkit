@@ -1,3 +1,4 @@
+import type { WarmUpRequest } from "@omp-toolkit/core";
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type OmpApi, type PanelState } from "./ipc";
 
@@ -24,6 +25,9 @@ const api: OmpApi = {
   },
   openOrca(): void {
     ipcRenderer.send(IPC.openOrca);
+  },
+  warmup(request: WarmUpRequest): void {
+    ipcRenderer.send(IPC.warmup, request);
   },
 };
 

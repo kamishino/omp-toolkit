@@ -1,4 +1,4 @@
-import { mdiClose, mdiRefresh, mdiWindowMinimize } from "@mdi/js";
+import { mdiClose, mdiFlash, mdiRefresh, mdiStethoscope, mdiWindowMinimize } from "@mdi/js";
 import {
   type DashboardLimit,
   type DashboardProvider,
@@ -7,6 +7,8 @@ import {
   formatResetCompact,
   money,
   summaryText,
+  supportsWarmUp,
+  warmUpEligibility,
 } from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
 import { providerLogo } from "./provider-logos";
@@ -87,7 +89,9 @@ function renderProviderCard(
   provider: DashboardProvider,
   hasAnyRoute: boolean,
   providerIndex: number,
+  state: PanelState,
 ): HTMLElement {
+  const hasWarmUp = supportsWarmUp(provider.id);
   const card = document.createElement("section");
   card.className = "provider-card";
   const headerDiv = document.createElement("div");
@@ -123,9 +127,31 @@ function renderProviderCard(
   h2.className = "provider-title";
   h2.textContent = `${provider.name}${provider.suffix} · ${provider.accounts} ${provider.accounts === 1 ? "account" : "accounts"}`;
   headerDiv.appendChild(h2);
+
+  if (hasWarmUp) {
+    const eligibleCount = provider.rows.filter(
+      (r) => warmUpEligibility(provider.id, r.health) === "warm",
+    ).length;
+    const skippedCount = provider.rows.length - eligibleCount;
+    const warmupAllBtn = document.createElement("button");
+    warmupAllBtn.type = "button";
+    warmupAllBtn.className = "provider-action";
+    warmupAllBtn.setAttribute("aria-label", `Warm up all ${provider.name} accounts`);
+    warmupAllBtn.title = `${eligibleCount} eligible; ${skippedCount} non-OK skipped`;
+    warmupAllBtn.appendChild(icon(mdiFlash));
+    warmupAllBtn.appendChild(document.createTextNode("Warm up all"));
+    if (state.warmup.running || eligibleCount === 0) {
+      warmupAllBtn.disabled = true;
+    }
+    warmupAllBtn.addEventListener("click", () => {
+      window.omp.warmup({ provider: provider.id, action: "warm", all: true });
+    });
+    headerDiv.appendChild(warmupAllBtn);
+  }
+
   card.appendChild(headerDiv);
   const table = document.createElement("table");
-  table.className = "table";
+  table.className = hasWarmUp ? "table has-actions" : "table";
   table.setAttribute("aria-labelledby", titleId);
 
   const thead = document.createElement("thead");
@@ -151,6 +177,13 @@ function renderProviderCard(
     thCol.className = "col-limit";
     thCol.textContent = col.label.toUpperCase();
     trHead.appendChild(thCol);
+  }
+  if (hasWarmUp) {
+    const thAction = document.createElement("th");
+    thAction.scope = "col";
+    thAction.className = "col-action";
+    thAction.setAttribute("aria-label", "Account actions");
+    trHead.appendChild(thAction);
   }
 
   thead.appendChild(trHead);
@@ -178,6 +211,32 @@ function renderProviderCard(
 
     for (const limit of row.limits) {
       tr.appendChild(renderLimitCell(limit));
+    }
+    if (hasWarmUp) {
+      const tdAction = document.createElement("td");
+      tdAction.className = "col-action";
+      const eligibility = warmUpEligibility(provider.id, row.health);
+      if (eligibility === "warm" || eligibility === "check") {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `row-action action-${eligibility}`;
+        const isWarm = eligibility === "warm";
+        btn.setAttribute("aria-label", `${isWarm ? "Warm up" : "Check"} ${row.displayAccount}`);
+        btn.title = `${isWarm ? "Warm up" : "Check (unhang)"} ${row.account}`;
+        btn.appendChild(icon(isWarm ? mdiFlash : mdiStethoscope));
+        if (state.warmup.running) {
+          btn.disabled = true;
+        }
+        btn.addEventListener("click", () => {
+          window.omp.warmup({
+            provider: provider.id,
+            action: isWarm ? "warm" : "check",
+            account: row.account,
+          });
+        });
+        tdAction.appendChild(btn);
+      }
+      tr.appendChild(tdAction);
     }
 
     tbody.appendChild(tr);
@@ -228,7 +287,7 @@ function buildPanel(state: PanelState): HTMLElement {
   refreshBtn.className = "icon-button";
   refreshBtn.setAttribute("aria-label", "Refresh");
   refreshBtn.appendChild(icon(mdiRefresh));
-  if (state.status === "loading") {
+  if (state.status === "loading" || state.warmup.running) {
     refreshBtn.disabled = true;
   }
   refreshBtn.addEventListener("click", () => {
@@ -269,6 +328,13 @@ function buildPanel(state: PanelState): HTMLElement {
     summaryP.textContent = "No usage data";
   }
   panel.appendChild(summaryP);
+  if (state.warmup.message) {
+    const warmupP = document.createElement("p");
+    warmupP.className = "warmup-message";
+    warmupP.setAttribute("role", "status");
+    warmupP.textContent = state.warmup.message;
+    panel.appendChild(warmupP);
+  }
 
   // Content
   const content = document.createElement("div");
@@ -288,7 +354,7 @@ function buildPanel(state: PanelState): HTMLElement {
 
     let idx = 0;
     for (const provider of state.data.providers) {
-      content.appendChild(renderProviderCard(provider, hasAnyRoute, idx++));
+      content.appendChild(renderProviderCard(provider, hasAnyRoute, idx++, state));
     }
   }
 
@@ -315,6 +381,7 @@ let currentState: PanelState = {
   status: "loading",
   data: null,
   intervalSeconds: 300,
+  warmup: { running: false, message: null },
 };
 
 function render(): void {
