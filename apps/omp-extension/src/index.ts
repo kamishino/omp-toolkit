@@ -40,6 +40,7 @@ import {
   type StreakState,
   type WarmUpRequest,
 } from "@omp-toolkit/core";
+import { registerGeminiNormalizer } from "./gemini-normalizer";
 import { closeHistory, type HistoryEventInput, recordEvents } from "./history";
 import { runWarmUp, type WarmUpAdapter, type WarmUpDependencies } from "./warmup";
 
@@ -674,6 +675,7 @@ const warmUpDeps: WarmUpDependencies = {
 };
 
 export default function geminiHealthExtension(pi: ExtensionAPI) {
+  registerGeminiNormalizer(pi);
   pi.registerProvider("deepseek", {
     apiKey: "DEEPSEEK_API_KEY",
     usage: {
