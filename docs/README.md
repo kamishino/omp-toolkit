@@ -13,3 +13,4 @@
 - [Planning vs execution model selection](research/model-selection-planning-vs-execution.md)
 - [Agent harness, model selection, and prompting](research/agent-harness-model-selection-prompting.md)
 - [Prompt engineering and extension boundaries](research/prompt-engineering-agent-skills.md)
+- [Gemini family prompt dynamics and wire protocols](research/gemini-family-prompt-and-wire.md)
