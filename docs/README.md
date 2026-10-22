@@ -8,3 +8,4 @@
 - [Glossary](../GLOSSARY.md)
 - [Contributing](../CONTRIBUTING.md)
 - [Security](../SECURITY.md)
+- [OMP brain score research](research/omp-brain-score.md)
