@@ -117,7 +117,7 @@ describe("paths helpers", () => {
       ),
     ).toBeNull();
   });
-  test("resolveHealthScript respects precedence: installed > dist > source", () => {
+  test("resolveHealthScript respects precedence: dist > installed > source", () => {
     const extensionsDir = path.join(tmpDir, ".omp", "agent", "extensions");
     fs.mkdirSync(extensionsDir, { recursive: true });
     const installed = path.join(extensionsDir, "gemini-health.js");
@@ -134,15 +134,7 @@ describe("paths helpers", () => {
     const srcFile = path.join(srcDir, "index.ts");
     fs.writeFileSync(srcFile, "// src\n");
 
-    expect(
-      resolveHealthScript(
-        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
-        checkoutRoot,
-        tmpDir,
-      ),
-    ).toBe(installed);
-
-    fs.unlinkSync(installed);
+    // All 3 exist -> dist wins
     expect(
       resolveHealthScript(
         { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
@@ -151,7 +143,18 @@ describe("paths helpers", () => {
       ),
     ).toBe(distFile);
 
+    // Remove dist -> installed wins
     fs.unlinkSync(distFile);
+    expect(
+      resolveHealthScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBe(installed);
+
+    // Remove installed -> src wins
+    fs.unlinkSync(installed);
     expect(
       resolveHealthScript(
         { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
@@ -160,6 +163,7 @@ describe("paths helpers", () => {
       ),
     ).toBe(srcFile);
 
+    // Remove src -> null
     fs.unlinkSync(srcFile);
     expect(
       resolveHealthScript(

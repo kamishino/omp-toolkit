@@ -80,9 +80,11 @@ export function resolveHealthScript(
   home = os.homedir(),
 ): string | null {
   const dir = agentDir(env, home);
+  // The desktop's warm-up/check CLI must match the checkout build; the
+  // installed extension is the fallback for environments with no local build.
   const candidates = [
-    path.join(dir, "extensions", "gemini-health.js"),
     path.join(checkoutRoot, "apps", "omp-extension", "dist", "index.js"),
+    path.join(dir, "extensions", "gemini-health.js"),
     path.join(checkoutRoot, "apps", "omp-extension", "src", "index.ts"),
   ];
 

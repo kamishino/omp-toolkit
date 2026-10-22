@@ -44,6 +44,44 @@ export function summarizeWarmUp(report: WarmUpReport): string {
 
   return parts.join(" · ");
 }
+export function warmUpFailureMessage(error: unknown): string {
+  let stderr = "";
+  let stdout = "";
+  let code: unknown;
+  let message = "";
+
+  if (error && typeof error === "object") {
+    if ("stderr" in error && typeof error.stderr === "string") {
+      stderr = error.stderr.trim();
+    }
+    if ("stdout" in error && typeof error.stdout === "string") {
+      stdout = error.stdout.trim();
+    }
+    if ("code" in error) {
+      code = error.code;
+    }
+    if ("message" in error && typeof error.message === "string") {
+      message = error.message;
+    }
+  }
+
+  if (stderr) return stderr;
+
+  if (stdout) {
+    try {
+      const parsed: unknown = JSON.parse(stdout);
+      if (!isWarmUpReport(parsed)) {
+        return 'The health script returned a non-warmup report. Run "bun run install:omp" to update it.';
+      }
+    } catch {
+      const codePart = code !== undefined ? `with code ${String(code)}: ` : "";
+      return `health script exited ${codePart}${stdout.slice(0, 300)}`;
+    }
+  }
+
+  const codePart = code !== undefined ? `with code ${String(code)}: ` : "";
+  return `health script exited ${codePart}${message || String(error)}`;
+}
 
 export async function fetchWarmUp(
   source: DataSource,
@@ -86,15 +124,24 @@ export async function fetchWarmUp(
       throw new Error(`warmup timed out after ${timeout / 1000}s`);
     }
 
-    const stderr = (error as { stderr?: string })?.stderr?.trim();
-    if (stderr) {
-      throw new Error(stderr);
+    let stdout = "";
+    if (
+      error &&
+      typeof error === "object" &&
+      "stdout" in error &&
+      typeof error.stdout === "string"
+    ) {
+      stdout = error.stdout.trim();
+    }
+    if (stdout) {
+      try {
+        const parsed: unknown = JSON.parse(stdout);
+        if (isWarmUpReport(parsed)) return parsed;
+      } catch {
+        // Fall through to the actionable message.
+      }
     }
 
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(String(error));
+    throw new Error(warmUpFailureMessage(error));
   }
 }
