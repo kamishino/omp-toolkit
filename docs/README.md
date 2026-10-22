@@ -10,3 +10,4 @@
 - [Security](../SECURITY.md)
 - [OMP brain score research](research/omp-brain-score.md)
 - [Model intelligence and planning](research/model-intelligence-planning-vs-execution.md)
+- [Planning vs execution model selection](research/model-selection-planning-vs-execution.md)
