@@ -9,3 +9,4 @@
 - [Contributing](../CONTRIBUTING.md)
 - [Security](../SECURITY.md)
 - [OMP brain score research](research/omp-brain-score.md)
+- [Model intelligence and planning](research/model-intelligence-planning-vs-execution.md)
