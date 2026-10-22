@@ -17,6 +17,7 @@ export interface HealthResult {
   status: Status;
   ms: number;
   detail?: string;
+  checkedAt?: number;
 }
 
 export interface HealthSnapshot {
