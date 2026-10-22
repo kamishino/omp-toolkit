@@ -1,4 +1,12 @@
-import type { HealthState, Policy, ProbeResult, Status, StreakEntry, StreakState } from "./types";
+import type {
+  HealthResult,
+  HealthState,
+  Policy,
+  ProbeResult,
+  Status,
+  StreakEntry,
+  StreakState,
+} from "./types";
 
 export function isFailure(status: Status): boolean {
   return status === "hang" || status === "error";
@@ -48,4 +56,16 @@ export function excludedEmails(policies: Policy[]): Set<string> {
     }
   }
   return emails;
+}
+
+export function mergeHealthResults(
+  previous: readonly HealthResult[],
+  results: readonly ProbeResult[],
+  checkedAt: number,
+): HealthResult[] {
+  const byEmail = new Map(previous.map((result) => [result.email, result]));
+  for (const result of results) {
+    byEmail.set(result.email, { ...result, checkedAt });
+  }
+  return [...byEmail.values()];
 }
