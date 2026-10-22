@@ -7,3 +7,4 @@
 | [0003](0003-public-release-scope.md) | Public release scope and support boundary | Accepted; platform clause superseded by 0004 |
 | [0004](0004-cross-platform-support.md) | Cross-platform installation and support boundary | Accepted |
 | [0005](0005-cross-platform-desktop-widget.md) | Cross-platform desktop widget host | Accepted |
+| [0006](0006-manual-account-warmup.md) | Manual account warm-up and unhang check | Accepted |

@@ -95,3 +95,17 @@ threshold for its currency.
 ## Route column
 The per-account `ROUTE` cell. It is shown for every provider section when the
 snapshot contains route health for any account.
+
+## Warm-up
+A deliberate minimal model request to one provider account that establishes or
+verifies the account's model route before use. Warm-up does not change the OMP
+account pin, policy, or exclusion state.
+
+## Warm-up eligible
+An account whose latest route status is OK or unknown. Known non-OK accounts are
+skipped by provider-wide warm-up and require an Unhang check.
+
+## Unhang check
+A single-account route probe for a known non-OK account, used to see whether the
+account has recovered. It updates route health but does not immediately restore
+an exclusion.
