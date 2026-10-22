@@ -1,7 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { type Dashboard, truncate } from "@omp-toolkit/core";
+import {
+  type Dashboard,
+  supportsWarmUp,
+  truncate,
+  type WarmUpRequest,
+  warmUpEligibility,
+} from "@omp-toolkit/core";
 import {
   app,
   type BrowserWindow,
@@ -21,8 +27,16 @@ import { createLoginItem, type LoginItem } from "./login-item";
 import { openOrca, openTerminal } from "./open";
 import { createPanel } from "./panel";
 import { placePanel } from "./panel-position";
-import { errorLogPath, findBun, panelPaths, resolveCheckout, resolveMonitorScript } from "./paths";
+import {
+  errorLogPath,
+  findBun,
+  panelPaths,
+  resolveCheckout,
+  resolveHealthScript,
+  resolveMonitorScript,
+} from "./paths";
 import { trayImage } from "./tray";
+import { fetchWarmUp, summarizeWarmUp } from "./warmup";
 
 app.setName("OMP Provider Usage");
 if (process.platform === "win32") {
@@ -45,6 +59,8 @@ let lastError: string | null = null;
 let refreshing = false;
 let quitting = false;
 let lastHiddenAt = 0;
+let warmupRunning = false;
+let warmupMessage: string | null = null;
 
 const desktopTokens = tokens.desktop;
 const panelWidth = desktopTokens.size.panelWidth.$value;
@@ -83,11 +99,13 @@ process.on("SIGINT", () => {
 });
 
 function currentState(intervalSeconds: number): PanelState {
+  const warmup = { running: warmupRunning, message: warmupMessage };
   if (refreshing) {
     return {
       status: "loading",
       data: lastDashboard,
       intervalSeconds,
+      warmup,
     };
   }
 
@@ -97,6 +115,7 @@ function currentState(intervalSeconds: number): PanelState {
       data: lastDashboard,
       message: lastError,
       intervalSeconds,
+      warmup,
     };
   }
 
@@ -105,6 +124,7 @@ function currentState(intervalSeconds: number): PanelState {
       status: "ready",
       data: lastDashboard,
       intervalSeconds,
+      warmup,
     };
   }
 
@@ -112,6 +132,7 @@ function currentState(intervalSeconds: number): PanelState {
     status: "loading",
     data: null,
     intervalSeconds,
+    warmup,
   };
 }
 
@@ -382,6 +403,131 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on(IPC.ready, () => {
     sendState();
+  });
+  ipcMain.on(IPC.warmup, async (_event, request: WarmUpRequest) => {
+    if (warmupRunning || quitting) return;
+    if (!lastDashboard) {
+      dialog.showErrorBox(
+        "OMP Provider Usage",
+        "No usage data loaded yet. Please wait for initial refresh.",
+      );
+      return;
+    }
+
+    const provider = lastDashboard.providers.find((p) => p.id === request.provider);
+    if (!provider || !supportsWarmUp(provider.id)) {
+      dialog.showErrorBox(
+        "OMP Provider Usage",
+        `Warm-up is not supported for provider "${request.provider}".`,
+      );
+      return;
+    }
+
+    if ("all" in request) {
+      if (request.action !== "warm") return;
+      const eligibleCount = provider.rows.filter(
+        (r) => warmUpEligibility(provider.id, r.health) === "warm",
+      ).length;
+      const skippedNonOk = provider.rows.length - eligibleCount;
+
+      if (eligibleCount === 0) {
+        if (panel) {
+          await dialog.showMessageBox(panel, {
+            type: "info",
+            title: "Warm up all",
+            message: "No eligible accounts to warm up.",
+            detail: `${skippedNonOk} non-OK account(s) skipped; use Check per account to verify recovery.`,
+          });
+        }
+        return;
+      }
+
+      const staleNote =
+        lastDashboard.health?.stale === true || !lastDashboard.health?.checkedAt
+          ? " Health data is stale or missing; known non-OK accounts are still skipped."
+          : "";
+
+      const boxOpts: Electron.MessageBoxOptions = {
+        type: "question",
+        buttons: ["Cancel", "Warm up"],
+        defaultId: 1,
+        cancelId: 0,
+        title: "Warm up all",
+        message: `Warm up ${eligibleCount} account(s) in ${provider.name}?`,
+        detail: `${skippedNonOk} non-OK account(s) will be skipped.${staleNote} Each account receives one minimal model request.`,
+      };
+
+      const { response } = panel
+        ? await dialog.showMessageBox(panel, boxOpts)
+        : await dialog.showMessageBox(boxOpts);
+
+      if (response !== 1) return;
+    } else {
+      const row = provider.rows.find((r) => r.account === request.account);
+      if (!row) {
+        dialog.showErrorBox(
+          "OMP Provider Usage",
+          `Account "${request.account}" not found in current dashboard.`,
+        );
+        return;
+      }
+      const eligibility = warmUpEligibility(provider.id, row.health);
+      if (request.action === "warm" && eligibility !== "warm") {
+        dialog.showErrorBox(
+          "OMP Provider Usage",
+          `Account "${row.displayAccount}" is ${row.route.text}; use Check instead.`,
+        );
+        return;
+      }
+      if (request.action === "check" && eligibility !== "check") {
+        dialog.showErrorBox(
+          "OMP Provider Usage",
+          `Account "${row.displayAccount}" is already OK; use Warm up instead.`,
+        );
+        return;
+      }
+    }
+
+    const bun = findBun();
+    const healthScript = resolveHealthScript(process.env, checkoutRoot);
+    if (!bun) {
+      dialog.showErrorBox("OMP Provider Usage", "Bun not found. Install Bun or set BUN_BIN.");
+      return;
+    }
+    if (!healthScript) {
+      dialog.showErrorBox(
+        "OMP Provider Usage",
+        'gemini-health.js was not found. Run "bun run install:omp".',
+      );
+      return;
+    }
+
+    warmupRunning = true;
+    warmupMessage = "Warming up...";
+    sendState();
+
+    try {
+      const report = await fetchWarmUp({ bun, script: healthScript }, request);
+      warmupMessage = summarizeWarmUp(report);
+      await refresh();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      warmupMessage = `Warm-up failed: ${msg}`;
+      logError(error);
+      if (panel) {
+        await dialog.showMessageBox(panel, {
+          type: "error",
+          title: "OMP Provider Usage",
+          message: "Warm-up failed",
+          detail: msg,
+        });
+      } else {
+        dialog.showErrorBox("OMP Provider Usage", msg);
+      }
+    } finally {
+      warmupRunning = false;
+      sendState();
+    }
   });
 
   panel.webContents.on("did-finish-load", () => {

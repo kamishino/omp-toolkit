@@ -127,6 +127,12 @@ body {
   padding-top: var(--space-xs);
   color: var(--color-muted);
 }
+.warmup-message {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  color: var(--color-accent);
+}
 
 .content {
   display: grid;
@@ -149,9 +155,40 @@ body {
 
 .provider-header {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--space-sm);
+}
+
+.provider-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--size-border) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.provider-action:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.provider-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.provider-action svg {
+  inline-size: var(--font-size-sm);
+  block-size: var(--font-size-sm);
+  fill: currentColor;
 }
 
 .provider-title {
@@ -205,6 +242,51 @@ body {
 
 .col-route {
   width: 12%;
+}
+
+.table.has-actions .col-account {
+  width: 22%;
+}
+
+.table.has-actions .col-route {
+  width: 10%;
+}
+
+.col-action {
+  width: 8%;
+  text-align: center;
+  padding-inline: var(--space-xs);
+}
+
+.row-action {
+  inline-size: var(--size-action-button);
+  block-size: var(--size-action-button);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  color: var(--color-text);
+  border: var(--size-border) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.row-action:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background-color: var(--color-surface);
+}
+
+.row-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.row-action svg {
+  inline-size: calc(var(--size-action-button) - var(--space-sm));
+  block-size: calc(var(--size-action-button) - var(--space-sm));
+  fill: currentColor;
 }
 
 .col-limit {

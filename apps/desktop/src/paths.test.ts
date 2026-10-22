@@ -2,7 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { errorLogPath, findBun, panelPaths, resolveCheckout, resolveMonitorScript } from "./paths";
+import {
+  errorLogPath,
+  findBun,
+  panelPaths,
+  resolveCheckout,
+  resolveHealthScript,
+  resolveMonitorScript,
+} from "./paths";
 
 describe("paths helpers", () => {
   let tmpDir: string;
@@ -104,6 +111,58 @@ describe("paths helpers", () => {
     fs.unlinkSync(srcFile);
     expect(
       resolveMonitorScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBeNull();
+  });
+  test("resolveHealthScript respects precedence: installed > dist > source", () => {
+    const extensionsDir = path.join(tmpDir, ".omp", "agent", "extensions");
+    fs.mkdirSync(extensionsDir, { recursive: true });
+    const installed = path.join(extensionsDir, "gemini-health.js");
+    fs.writeFileSync(installed, "// installed\n");
+
+    const checkoutRoot = path.join(tmpDir, "checkout");
+    const distDir = path.join(checkoutRoot, "apps", "omp-extension", "dist");
+    fs.mkdirSync(distDir, { recursive: true });
+    const distFile = path.join(distDir, "index.js");
+    fs.writeFileSync(distFile, "// dist\n");
+
+    const srcDir = path.join(checkoutRoot, "apps", "omp-extension", "src");
+    fs.mkdirSync(srcDir, { recursive: true });
+    const srcFile = path.join(srcDir, "index.ts");
+    fs.writeFileSync(srcFile, "// src\n");
+
+    expect(
+      resolveHealthScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBe(installed);
+
+    fs.unlinkSync(installed);
+    expect(
+      resolveHealthScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBe(distFile);
+
+    fs.unlinkSync(distFile);
+    expect(
+      resolveHealthScript(
+        { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+        checkoutRoot,
+        tmpDir,
+      ),
+    ).toBe(srcFile);
+
+    fs.unlinkSync(srcFile);
+    expect(
+      resolveHealthScript(
         { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
         checkoutRoot,
         tmpDir,
