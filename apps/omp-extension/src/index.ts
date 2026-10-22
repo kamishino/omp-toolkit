@@ -29,15 +29,19 @@ import {
   deepSeekUsageReport,
   excludedEmails,
   type HealAction,
+  type HealthResult,
   type HealthState,
+  mergeHealthResults,
   nextStreaks,
   type Policy,
   type ProbeResult as Result,
   restorableEmails,
   type Status,
   type StreakState,
+  type WarmUpRequest,
 } from "@omp-toolkit/core";
 import { closeHistory, type HistoryEventInput, recordEvents } from "./history";
+import { runWarmUp, type WarmUpAdapter, type WarmUpDependencies } from "./warmup";
 
 const execFileAsync = promisify(execFile);
 
@@ -209,11 +213,24 @@ function recordHistory(events: HistoryEventInput[]): void {
   }
 }
 
-export function recordHealth(results: Result[]): void {
+export function recordHealth(
+  results: Result[],
+  options: { merge?: boolean; source?: "warmup" | "check" } = {},
+): void {
   const at = Date.now();
   const streaks = nextStreaks(readStreaksForWrite(), results, at, RESTORE_GAP_MS);
   writeStreaks(streaks);
-  writeFileAtomic(SNAPSHOT_PATH, JSON.stringify({ checkedAt: at, results }, null, 2) + "\n");
+
+  const snapshotResults = options.merge
+    ? mergeHealthResults(readSnapshot()?.results ?? [], results, at)
+    : results.map((result) => ({ ...result, checkedAt: at }));
+
+  writeFileAtomic(
+    SNAPSHOT_PATH,
+    JSON.stringify({ checkedAt: at, results: snapshotResults }, null, 2) + "\n",
+  );
+
+  const prefix = options.source ? `${options.source} ` : "";
   recordHistory(
     results.map((result) => ({
       at,
@@ -221,7 +238,7 @@ export function recordHealth(results: Result[]): void {
       provider: PROVIDER,
       account: result.email,
       status: result.status,
-      detail: `${result.ms}ms${result.detail ? ` ${result.detail}` : ""}`,
+      detail: `${prefix}${result.ms}ms${result.detail ? ` ${result.detail}` : ""}`,
     })),
   );
 }
@@ -586,7 +603,7 @@ export async function restoreManaged(): Promise<string[]> {
   return [...managed];
 }
 
-function statusTag(result: Result): string {
+function statusTag(result: HealthResult): string {
   switch (result.status) {
     case "ok":
       return "OK  ";
@@ -601,13 +618,13 @@ function statusTag(result: Result): string {
   }
 }
 
-function summary(results: Result[]): string {
+function summary(results: HealthResult[]): string {
   const ok = results.filter((result) => result.status === "ok").length;
   const hangs = results.filter((result) => result.status === "hang").length;
   return `Gemini 3.8: ${ok}/${results.length} ok${hangs > 0 ? ` · ${hangs} hang` : ""}`;
 }
 
-function healthLines(results: Result[], policies: Policy[]): string[] {
+function healthLines(results: HealthResult[], policies: Policy[]): string[] {
   if (results.length === 0) return ["Gemini health: no Antigravity accounts found"];
   const excluded = excludedEmails(policies);
   const streaks = readStreaks();
@@ -627,11 +644,11 @@ function healthLines(results: Result[], policies: Policy[]): string[] {
   return lines;
 }
 
-function table(results: Result[], policies: Policy[]): string {
+function table(results: HealthResult[], policies: Policy[]): string {
   return healthLines(results, policies).join("\n");
 }
 
-function publish(ctx: WidgetContext, results: Result[], policies: Policy[]): void {
+function publish(ctx: WidgetContext, results: HealthResult[], policies: Policy[]): void {
   if (!ctx.hasUI || ctx.mode !== "tui" || !widgetEnabled()) return;
   try {
     ctx.ui.setStatus("gemini-health", summary(results));
@@ -642,6 +659,19 @@ function publish(ctx: WidgetContext, results: Result[], policies: Policy[]): voi
     // UI failure must not fail the health check or healing path.
   }
 }
+
+const antigravityAdapter: WarmUpAdapter = {
+  provider: PROVIDER,
+  loadAccounts,
+  probe,
+};
+const warmUpAdapters = new Map<string, WarmUpAdapter>([[PROVIDER, antigravityAdapter]]);
+const warmUpDeps: WarmUpDependencies = {
+  agentDir: AGENT_DIR,
+  adapters: warmUpAdapters,
+  readSnapshot,
+  recordHealth,
+};
 
 export default function geminiHealthExtension(pi: ExtensionAPI) {
   pi.registerProvider("deepseek", {
@@ -849,6 +879,155 @@ export default function geminiHealthExtension(pi: ExtensionAPI) {
         );
       } catch (error) {
         ctx.ui.notify(`Gemini health check failed: ${short(error)}`, "error");
+      } finally {
+        running = false;
+      }
+    },
+  });
+  pi.registerCommand("gemini-warmup", {
+    description:
+      "Warm up eligible Antigravity accounts with a minimal model request; skips non-OK accounts",
+    handler: async (args, ctx) => {
+      const all = /--all\b/.test(args);
+      const needle = args
+        .replace(/--all\b/g, "")
+        .trim()
+        .toLowerCase();
+      if (!all && !needle) {
+        ctx.ui.notify(
+          "Usage: /gemini-warmup <email-or-local-part> or /gemini-warmup --all",
+          "info",
+        );
+        return;
+      }
+      if (all && needle) {
+        ctx.ui.notify(
+          "Cannot combine --all with an account name. Use one or the other.",
+          "warning",
+        );
+        return;
+      }
+      if (running) {
+        ctx.ui.notify("A health check or warm-up is already running", "info");
+        return;
+      }
+      running = true;
+      try {
+        let request: WarmUpRequest;
+        if (all) {
+          request = { provider: PROVIDER, action: "warm", all: true };
+        } else {
+          const accounts = await loadAccounts();
+          const matches = accounts.filter(
+            (a) =>
+              a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
+          );
+          if (matches.length === 0) {
+            ctx.ui.notify(`No Antigravity account found for "${needle}"`, "warning");
+            return;
+          }
+          if (matches.length > 1) {
+            ctx.ui.notify(
+              `Multiple accounts match "${needle}": ${matches.map((a) => a.email).join(", ")}. Use full email.`,
+              "warning",
+            );
+            return;
+          }
+          request = { provider: PROVIDER, action: "warm", account: matches[0].email };
+        }
+
+        const run = await runWarmUp(warmUpDeps, request);
+        const policies = await readPolicies();
+        const snapshotResults = readSnapshot()?.results ?? run.results;
+        publish(ctx, snapshotResults, policies);
+
+        if ("all" in request) {
+          const nonOkSkipped = run.report.skipped.filter((s) => s.reason === "non-ok").length;
+          const cooldownSkipped = run.report.skipped.filter((s) => s.reason === "cooldown").length;
+          const skipDetails = [
+            nonOkSkipped > 0 ? `${nonOkSkipped} non-OK` : null,
+            cooldownSkipped > 0 ? `${cooldownSkipped} cooldown` : null,
+          ]
+            .filter(Boolean)
+            .join(", ");
+          const note = skipDetails ? ` · skipped ${skipDetails}` : "";
+          ctx.ui.notify(`Warmed ${run.report.results.length} account(s)${note}.`, "info");
+        } else {
+          if (run.report.results.length > 0) {
+            const res = run.report.results[0];
+            ctx.ui.notify(
+              `Warmed ${res.account} (${res.status.toUpperCase()}, ${res.ms}ms).`,
+              "info",
+            );
+          } else if (run.report.skipped.length > 0) {
+            const skip = run.report.skipped[0];
+            if (skip.reason === "non-ok") {
+              ctx.ui.notify(
+                `Not warmed: ${skip.account} is ${String(skip.status).toUpperCase()}; use /gemini-check.`,
+                "warning",
+              );
+            } else {
+              ctx.ui.notify(
+                `Not warmed: ${skip.account} was warmed recently (cooldown active).`,
+                "info",
+              );
+            }
+          }
+        }
+      } catch (error) {
+        ctx.ui.notify(`Gemini warm-up failed: ${short(error)}`, "error");
+      } finally {
+        running = false;
+      }
+    },
+  });
+
+  pi.registerCommand("gemini-check", {
+    description: "Probe one Antigravity account to check if its route has recovered (unhang check)",
+    handler: async (args, ctx) => {
+      const needle = args.trim().toLowerCase();
+      if (!needle) {
+        ctx.ui.notify("Usage: /gemini-check <email-or-local-part>", "info");
+        return;
+      }
+      if (running) {
+        ctx.ui.notify("A health check or warm-up is already running", "info");
+        return;
+      }
+      running = true;
+      try {
+        const accounts = await loadAccounts();
+        const matches = accounts.filter(
+          (a) => a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
+        );
+        if (matches.length === 0) {
+          ctx.ui.notify(`No Antigravity account found for "${needle}"`, "warning");
+          return;
+        }
+        if (matches.length > 1) {
+          ctx.ui.notify(
+            `Multiple accounts match "${needle}": ${matches.map((a) => a.email).join(", ")}. Use full email.`,
+            "warning",
+          );
+          return;
+        }
+
+        const run = await runWarmUp(warmUpDeps, {
+          provider: PROVIDER,
+          action: "check",
+          account: matches[0].email,
+        });
+
+        const policies = await readPolicies();
+        const snapshotResults = readSnapshot()?.results ?? run.results;
+        publish(ctx, snapshotResults, policies);
+
+        const res = run.report.results[0];
+        const statusText = res ? res.status.toUpperCase() : "UNKNOWN";
+        const message = `Checked ${matches[0].email}: ${statusText}${res ? ` (${res.ms}ms)` : ""}.`;
+        ctx.ui.notify(message, res?.status === "ok" ? "info" : "warning");
+      } catch (error) {
+        ctx.ui.notify(`Gemini check failed: ${short(error)}`, "error");
       } finally {
         running = false;
       }
@@ -1103,6 +1282,75 @@ if (import.meta.main) {
   const json = process.argv.includes("--json");
   const watch = process.argv.includes("--watch");
   const confirm = process.argv.includes("--confirm");
+  const warmup = process.argv.includes("--warmup");
+  const check = process.argv.includes("--check");
+
+  if (warmup || check) {
+    if (warmup && check) {
+      console.error("error: --warmup and --check are mutually exclusive");
+      process.exit(1);
+    }
+    if (watch) {
+      console.error("error: --watch cannot be used with --warmup or --check");
+      process.exit(1);
+    }
+
+    const providerArg =
+      process.argv.find((a) => a.startsWith("--provider="))?.slice("--provider=".length) ??
+      PROVIDER;
+    const accountArg = process.argv
+      .find((a) => a.startsWith("--account="))
+      ?.slice("--account=".length);
+    const all = process.argv.includes("--all");
+
+    if (warmup && !all && !accountArg) {
+      console.error("error: --warmup requires either --account=<email> or --all");
+      process.exit(1);
+    }
+    if (warmup && all && accountArg) {
+      console.error("error: --all cannot be combined with --account");
+      process.exit(1);
+    }
+    if (check && !accountArg) {
+      console.error("error: --check requires --account=<email>");
+      process.exit(1);
+    }
+    if (check && all) {
+      console.error("error: --check does not support --all");
+      process.exit(1);
+    }
+
+    const request: WarmUpRequest = check
+      ? { provider: providerArg, action: "check", account: accountArg ?? "" }
+      : all
+        ? { provider: providerArg, action: "warm", all: true }
+        : { provider: providerArg, action: "warm", account: accountArg ?? "" };
+
+    try {
+      const run = await runWarmUp(warmUpDeps, request);
+      if (json) {
+        console.log(JSON.stringify(run.report, null, 2));
+      } else {
+        const warmedCount = run.report.results.length;
+        const skippedCount = run.report.skipped.length;
+        const verb = run.report.action === "warm" ? "Warmed" : "Checked";
+        console.log(
+          `${verb} ${warmedCount} account(s)${skippedCount > 0 ? ` · skipped ${skippedCount}` : ""}`,
+        );
+        for (const res of run.report.results) {
+          console.log(`  ${res.status.toUpperCase().padEnd(5)} ${res.account} (${res.ms}ms)`);
+        }
+        for (const skip of run.report.skipped) {
+          console.log(`  SKIP  ${skip.account} (${skip.reason})`);
+        }
+      }
+      process.exit(0);
+    } catch (error) {
+      console.error(`error: ${short(error)}`);
+      process.exit(1);
+    }
+  }
+
   const intervalArg = process.argv.find((arg) => arg.startsWith("--interval="));
   const interval = Math.max(10, Number(intervalArg?.slice("--interval=".length) ?? 60) || 60);
 
