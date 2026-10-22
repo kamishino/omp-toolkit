@@ -72,6 +72,20 @@ GEMINI_HEALTH_RESTORE_GAP_SECONDS=60
 A managed exclusion restores after three healthy checks that are at least 60 s
 apart. Checks occur only on an event/manual probe; there is no idle polling.
 
+## Manual warm-up and unhang check
+
+```text
+/gemini-warmup <email-or-local-part>   # warm an eligible (OK/unknown) account
+/gemini-warmup --all                   # sequentially warm all eligible accounts in Google Antigravity
+/gemini-check <email-or-local-part>    # unhang check: probe a non-OK account without bulk spam
+```
+
+- Warm-up sends a minimal model request (`Reply with exactly: OK`, max 8 tokens).
+- Provider-wide warm-up skips known non-OK accounts (`hang`, `error`, `auth`, `model-error`).
+- Use `/gemini-check` to verify whether a hung or failed account has recovered.
+- Warm-up enforces a 60-second cooldown per account and a cross-process lock (`gemini-warmup.lock`).
+- Warm-up and Check update route health and healthy streaks, but do not change OMP routing policies.
+
 ## Monitor
 
 ### Any terminal

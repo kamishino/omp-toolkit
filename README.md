@@ -222,6 +222,9 @@ TTY, `TERM=dumb`, or `--no-alt-screen` is passed.
 /gemini-restore
 /gemini-enable <email-or-local-part> [--force]
 /gemini-health-widget [on|off]
+/gemini-warmup <email-or-local-part>
+/gemini-warmup --all
+/gemini-check <email-or-local-part>
 ```
 
 ### 🪟 Orca Floating Workspace (optional)
@@ -254,10 +257,16 @@ checkout. macOS/Linux use `omp-widget.sh`; no desktop shortcut is added.
 `apps/desktop/dist/main.cjs` is Electron's main bundle, not a standalone
 executable; launch it through these commands, not with Bun directly.
 
-
 Prerequisites: `bun install` installs Electron, and `bun run install:omp` installs
 the monitor CLI; `bun run widget` remains an alias for `bun run desktop`.
 
+The desktop panel provides a `Warm up all` header action for Google Antigravity
+and per-row `Warm up` (`mdiFlash`) and `Check` (`mdiStethoscope`) buttons. Warm-up
+sends a minimal model request to eligible (OK/unknown) accounts and skips known
+non-OK accounts (`hang`, `error`, `auth`, `model-error`). Non-OK rows expose an
+unhang Check action to verify route recovery without bulk spam. Warm-up enforces
+a 60-second per-account cooldown and cross-process single-flight locking; it updates
+route health and healthy streaks, but does not mutate OMP account routing policies.
 Supported on Windows 10/11 and macOS. Linux is best-effort: Electron uses
 StatusNotifierItem; GNOME may need an AppIndicator extension, and activation
 semantics vary by desktop environment. The terminal monitor remains the fallback.
