@@ -8,25 +8,14 @@ import {
   type WarmUpRequest,
   warmUpEligibility,
 } from "@omp-toolkit/core";
-import {
-  app,
-  type BrowserWindow,
-  dialog,
-  ipcMain,
-  Menu,
-  nativeTheme,
-  powerMonitor,
-  screen,
-  Tray,
-} from "electron";
+import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor, Tray } from "electron";
 import tokens from "../../../design/tokens.json";
 import { fetchDashboard } from "./data";
 import { parseInterval } from "./interval";
 import { IPC, type PanelState } from "./ipc";
 import { createLoginItem, type LoginItem } from "./login-item";
 import { openOrca, openTerminal } from "./open";
-import { createPanel } from "./panel";
-import { placePanel } from "./panel-position";
+import { DesktopPanel } from "./panel";
 import {
   errorLogPath,
   findBun,
@@ -48,7 +37,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 }
 
-let panel: BrowserWindow | null = null;
+let panel: DesktopPanel | null = null;
 let tray: Tray | null = null;
 let menu: Menu | null = null;
 let loginItem: LoginItem | null = null;
@@ -58,7 +47,6 @@ let lastDashboard: Dashboard | null = null;
 let lastError: string | null = null;
 let refreshing = false;
 let quitting = false;
-let lastHiddenAt = 0;
 let warmupRunning = false;
 let warmupMessage: string | null = null;
 
@@ -153,9 +141,7 @@ void app.whenReady().then(async () => {
   const preview = process.argv.includes("--preview");
 
   function sendState(): void {
-    if (panel && !panel.isDestroyed()) {
-      panel.webContents.send(IPC.state, currentState(intervalSeconds));
-    }
+    panel?.sendState(currentState(intervalSeconds));
   }
 
   function updateTray(): void {
@@ -174,44 +160,18 @@ void app.whenReady().then(async () => {
   }
 
   function showPanel(): void {
-    if (!panel) return;
-    const trayBounds = tray?.getBounds() ?? null;
-    const cursor = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(
-      trayBounds && trayBounds.width > 0
-        ? {
-            x: trayBounds.x + trayBounds.width / 2,
-            y: trayBounds.y + trayBounds.height / 2,
-          }
-        : cursor,
-    );
-
-    const pos = placePanel({
-      tray: trayBounds,
-      cursor,
-      workArea: display.workArea,
-      panel: { width: panelWidth, height: panelHeight },
-      platform: process.platform,
-      margin,
-    });
-
-    panel.setBounds(pos);
-    panel.show();
-    panel.focus();
+    panel?.show(tray?.getBounds() ?? null);
     sendState();
   }
 
   function hidePanel(): void {
-    if (!panel?.isVisible()) return;
-    panel.hide();
+    panel?.hide();
   }
 
   function togglePanel(): void {
-    if (Date.now() - lastHiddenAt < 300) return;
+    panel?.toggle(tray?.getBounds() ?? null);
     if (panel?.isVisible()) {
-      hidePanel();
-    } else {
-      showPanel();
+      sendState();
     }
   }
 
@@ -247,8 +207,8 @@ void app.whenReady().then(async () => {
         message: "Terminal monitor command copied to clipboard.",
         detail: command.join(" "),
       };
-      if (panel) {
-        await dialog.showMessageBox(panel, boxOpts);
+      if (panel?.window) {
+        await dialog.showMessageBox(panel.window, boxOpts);
       } else {
         await dialog.showMessageBox(boxOpts);
       }
@@ -329,38 +289,30 @@ void app.whenReady().then(async () => {
       tray?.setContextMenu(menu);
     }
   }
-
-  panel = createPanel({
+  panel = new DesktopPanel({
     preloadPath,
     htmlPath,
     width: panelWidth,
     height: panelHeight,
+    margin,
     onEscape: hidePanel,
+    onHide: () => {
+      rebuildMenu();
+    },
   });
 
-  panel.on("close", (event) => {
+  panel.window.on("close", (event) => {
     if (!quitting) {
       event.preventDefault();
       hidePanel();
     }
   });
 
-  panel.on("blur", () => {
-    if (!quitting) {
-      hidePanel();
-    }
-  });
-
-  panel.on("show", () => {
+  panel.window.on("show", () => {
     rebuildMenu();
   });
 
-  panel.on("hide", () => {
-    lastHiddenAt = Date.now();
-    rebuildMenu();
-  });
-
-  panel.once("ready-to-show", () => {
+  panel.window.once("ready-to-show", () => {
     if (preview) {
       showPanel();
     }
@@ -431,8 +383,8 @@ void app.whenReady().then(async () => {
       const skippedNonOk = provider.rows.length - eligibleCount;
 
       if (eligibleCount === 0) {
-        if (panel) {
-          await dialog.showMessageBox(panel, {
+        if (panel?.window) {
+          await dialog.showMessageBox(panel.window, {
             type: "info",
             title: "Warm up all",
             message: "No eligible accounts to warm up.",
@@ -457,8 +409,8 @@ void app.whenReady().then(async () => {
         detail: `${skippedNonOk} non-OK account(s) will be skipped.${staleNote} Each account receives one minimal model request.`,
       };
 
-      const { response } = panel
-        ? await dialog.showMessageBox(panel, boxOpts)
+      const { response } = panel?.window
+        ? await dialog.showMessageBox(panel.window, boxOpts)
         : await dialog.showMessageBox(boxOpts);
 
       if (response !== 1) return;
@@ -513,8 +465,8 @@ void app.whenReady().then(async () => {
         await refresh();
       } else {
         warmupMessage = `Warm-up failed: ${result.message}`;
-        if (panel) {
-          await dialog.showMessageBox(panel, {
+        if (panel?.window) {
+          await dialog.showMessageBox(panel.window, {
             type: "error",
             title: "OMP Provider Usage",
             message: "Warm-up failed",
@@ -529,8 +481,7 @@ void app.whenReady().then(async () => {
       sendState();
     }
   });
-
-  panel.webContents.on("did-finish-load", () => {
+  panel.window.webContents.on("did-finish-load", () => {
     sendState();
   });
 
