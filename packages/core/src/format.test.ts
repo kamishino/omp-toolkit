@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { formatAge, formatPercent, formatResetCompact, money, truncate } from "./format";
+import {
+  formatAge,
+  formatPercent,
+  formatResetCompact,
+  money,
+  padPercent,
+  padResetCompact,
+  truncate,
+} from "./format";
 
 describe("format helpers", () => {
   test("formats money amounts with currency symbols", () => {
@@ -29,6 +37,16 @@ describe("format helpers", () => {
     expect(formatPercent(0.1234)).toBe("12.3%");
   });
 
+  test("pads percentage and compact reset values", () => {
+    expect(padPercent(0.5)).toBe(" 50.0%");
+    expect(padPercent(undefined)).toBe("     —");
+    expect(padPercent(0.5, 8)).toBe("   50.0%");
+
+    const now = 1_000_000;
+    expect(padResetCompact(now + 120_000, now)).toBe("    2m");
+    expect(padResetCompact(undefined, now)).toBe("     —");
+    expect(padResetCompact(now + 120_000, now, 4)).toBe("  2m");
+  });
   test("formats compact reset relative countdown", () => {
     const now = 1_000_000;
     expect(formatResetCompact(undefined, now)).toBe("—");

@@ -1,4 +1,4 @@
-import { formatPercent, formatResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
+import { padPercent, padResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
 import {
   createStyle,
   indexedColor,
@@ -126,9 +126,9 @@ export function bar(value: number | undefined, width = 10): string {
 }
 
 export function percent(value: number | undefined): string {
-  return formatPercent(value).padStart(6);
+  return padPercent(value);
 }
 
 export function resetInAt(resetsAt: number | undefined): string {
-  return formatResetCompact(resetsAt, Date.now()).padStart(6);
+  return padResetCompact(resetsAt);
 }

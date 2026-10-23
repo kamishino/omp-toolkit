@@ -27,6 +27,10 @@ export function formatPercent(value: number | undefined): string {
   return value === undefined ? "—" : `${(value * 100).toFixed(1)}%`;
 }
 
+export function padPercent(value: number | undefined, width = 6): string {
+  return formatPercent(value).padStart(width);
+}
+
 export function formatResetCompact(resetsAt: number | undefined, now: number): string {
   if (typeof resetsAt !== "number" || !Number.isFinite(resetsAt)) return "—";
   const delta = resetsAt - now;
@@ -38,6 +42,14 @@ export function formatResetCompact(resetsAt: number | undefined, now: number): s
   if (days > 0) return `${days}d${hours}h`;
   if (hours > 0) return `${hours}h${mins}m`;
   return `${mins}m`;
+}
+
+export function padResetCompact(
+  resetsAt: number | undefined,
+  now: number = Date.now(),
+  width = 6,
+): string {
+  return formatResetCompact(resetsAt, now).padStart(width);
 }
 
 export function truncate(text: string, max: number): string {
