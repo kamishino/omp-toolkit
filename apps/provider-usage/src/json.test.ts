@@ -69,4 +69,32 @@ describe("jsonPayload contract", () => {
     expect(payload.dashboard.health).toBeNull();
     expect(payload.snapshot).toBeUndefined();
   });
+
+  test("includes timeWindow metadata for providers with registered policies in JSON payload", () => {
+    const dsReport: UsageReport = {
+      provider: "deepseek",
+      metadata: { email: "ds@example.com" },
+      limits: [
+        {
+          id: "deepseek:balance",
+          label: "Balance",
+          amount: { remaining: 50, unit: "cny" },
+        },
+      ],
+    };
+    const sections = sectionsFor([dsReport], new Map());
+    const payload = jsonPayload(sections, {
+      fetchedAt: Date.now(),
+      showHealth: false,
+      snapshot: null,
+      balanceAlert: { cny: 10, usd: 10 },
+    });
+
+    const dsProvider = payload.dashboard.providers.find((p) => p.id === "deepseek");
+    expect(dsProvider).toBeDefined();
+    expect(dsProvider?.timeWindow).toBeDefined();
+    expect(typeof dsProvider?.timeWindow?.isPeak).toBe("boolean");
+    expect(typeof dsProvider?.timeWindow?.rateMultiplier).toBe("number");
+    expect(dsProvider?.timeWindow?.provider).toBe("deepseek");
+  });
 });
