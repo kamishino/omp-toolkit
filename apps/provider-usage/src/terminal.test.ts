@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { useAlternateScreen } from "./terminal";
+import { isInteractiveTui, useAlternateScreen } from "./terminal";
 
 const base = {
   watch: true,
@@ -12,6 +12,7 @@ const base = {
 describe("alternate-screen selection", () => {
   test("uses the alternate screen for an interactive watch", () => {
     expect(useAlternateScreen(base)).toBe(true);
+    expect(isInteractiveTui(base)).toBe(true);
   });
 
   test("falls back for non-TTY, dumb terminals, json, one-shot, and --no-alt-screen", () => {
