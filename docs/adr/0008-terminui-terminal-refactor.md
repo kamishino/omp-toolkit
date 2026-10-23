@@ -1,4 +1,4 @@
-# ADR-0006: TerminUI terminal UI refactoring
+# ADR-0008: TerminUI terminal UI refactoring
 
 - Status: Accepted
 - Date: 2026-10-23
