@@ -109,3 +109,27 @@ skipped by provider-wide warm-up and require an Unhang check.
 A single-account route probe for a known non-OK account, used to see whether the
 account has recovered. It updates route health but does not immediately restore
 an exclusion.
+
+## Time window policy
+An authoritative specification of recurring peak and off-peak intervals, reference
+timezone, and token rate multipliers for an upstream model provider.
+
+## Peak window
+A recurring time interval during which standard (full-price) rates apply for a
+provider's model usage.
+
+## Off-peak window
+A recurring time interval during which a discounted rate (e.g. 50% discount)
+applies for a provider's model usage.
+
+## Reference timezone
+The canonical IANA timezone used by a provider's pricing specification (such as
+UTC or China Standard Time) against which recurring hours are evaluated.
+
+## Window evaluation
+A point-in-time calculation determining the current pricing window, active rate
+multiplier, discount percentage, and duration until the next schedule transition.
+
+## Context-aware advisory
+A non-blocking visibility cue (such as a dashboard badge or countdown timer)
+informing the operator of the active pricing window and cost implications.
