@@ -153,7 +153,10 @@ describe("buildDashboard", () => {
     expect(ds?.suffix).toBe(" · CNY");
     expect(ds?.rows[0].limits[0].low).toBe(true);
     expect(ds?.rows[0].limits[0].level).toBe("critical");
-
+    expect(ds?.timeWindow).toBeDefined();
+    expect(typeof ds?.timeWindow?.isPeak).toBe("boolean");
+    expect(ds?.timeWindow?.provider).toBe("deepseek");
+    expect(ds?.timeWindow?.badgeText).toContain(ds?.timeWindow?.isPeak ? "PEAK" : "OFF-PEAK");
     expect(dashboard.summary.providers).toBe(2);
     expect(dashboard.summary.accounts).toBe(3);
     expect(dashboard.summary.above80).toBe(1);
