@@ -1,10 +1,11 @@
 import {
   type BalanceAlertThresholds,
   DEFAULT_BALANCE_ALERT,
+  getAllTimeWindowPolicies,
   type HealthResult,
   sectionsFor,
 } from "@omp-toolkit/core";
-import { renderProviderUsage } from "@omp-toolkit/tui";
+import { renderProviderUsage, renderScheduleView } from "@omp-toolkit/tui";
 import { writeHeartbeat } from "./heartbeat";
 import { jsonPayload } from "./json";
 import { useAlternateScreen } from "./terminal";
@@ -17,12 +18,17 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  if (process.argv.includes("--schedule")) {
+    const policies = getAllTimeWindowPolicies();
+    console.log(renderScheduleView(policies));
+    return;
+  }
+
   const json = process.argv.includes("--json");
   const watch = process.argv.includes("--watch");
   const showHealth = process.argv.includes("--health");
   const intervalArg = process.argv.find((arg) => arg.startsWith("--interval="));
   const interval = Math.max(10, Number(intervalArg?.slice("--interval=".length) ?? 300) || 300);
-
   function threshold(name: string, fallback: number): number {
     const value = Number(process.env[name]);
     return Number.isFinite(value) && value >= 0 ? value : fallback;
