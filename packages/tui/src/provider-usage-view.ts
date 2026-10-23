@@ -123,12 +123,16 @@ export function renderProviderUsage(
 
   for (const section of dashboard.providers) {
     output.push(border(`├${"─".repeat(inner)}┤`));
+    const badge = section.timeWindow
+      ? ` ${paint(section.timeWindow.badgeText, section.timeWindow.isPeak ? ANSI.yellow : ANSI.green)}`
+      : "";
+
     output.push(
       line(
         paint(
           `${section.name} · ${section.accounts} ${section.accounts === 1 ? "account" : "accounts"}${section.suffix}`,
           ANSI.bold + ANSI.cyan,
-        ),
+        ) + badge,
       ),
     );
 
