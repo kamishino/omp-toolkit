@@ -1,23 +1,21 @@
 import {
+  assembleDashboard,
   type BalanceAlertThresholds,
-  buildDashboard,
   DEFAULT_BALANCE_ALERT,
   getAllTimeWindowPolicies,
   type HealthResult,
   type HealthSnapshot,
-  type ProviderSection,
   sectionsFor,
+  type UsageReport,
 } from "@omp-toolkit/core";
 import {
   createStdoutBackend,
   createTerminal,
   drawProviderUsage,
   drawScheduleView,
-  HEALTH_THRESHOLDS,
   renderProviderUsage,
   renderScheduleView,
   terminalDraw,
-  USAGE_THRESHOLDS,
 } from "@omp-toolkit/tui";
 import { writeHeartbeat } from "./heartbeat";
 import { jsonPayload } from "./json";
@@ -115,7 +113,7 @@ async function main(): Promise<void> {
       }
     }
 
-    let currentSections: ProviderSection[] = [];
+    let currentReports: UsageReport[] = [];
     let currentSnapshot: HealthSnapshot | null = null;
 
     const drawCurrent = (): void => {
@@ -125,13 +123,9 @@ async function main(): Promise<void> {
           drawScheduleView(frame, policies);
         } else {
           const now = Date.now();
-          const dashboard = buildDashboard(currentSections, {
-            fetchedAt: now,
+          const dashboard = assembleDashboard(currentReports, currentSnapshot, {
             now,
             showHealth,
-            checkedAt: currentSnapshot?.checkedAt,
-            thresholds: USAGE_THRESHOLDS,
-            staleMinutes: HEALTH_THRESHOLDS.staleSnapshotMinutes,
             balanceAlert,
           });
           drawProviderUsage(frame, dashboard, {
@@ -146,17 +140,13 @@ async function main(): Promise<void> {
     };
 
     const refresh = async (): Promise<void> => {
-      const reports = await fetchUsage();
+      currentReports = await fetchUsage();
       try {
         writeHeartbeat();
       } catch {
         // The monitor stays usable; the report shows a stale heartbeat.
       }
       currentSnapshot = showHealth ? readSnapshot() : null;
-      const health = new Map<string, HealthResult>(
-        (currentSnapshot?.results ?? []).map((result) => [result.email, result]),
-      );
-      currentSections = sectionsFor(reports, health);
       drawCurrent();
     };
 
