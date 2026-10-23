@@ -6,7 +6,13 @@ import { buildDesktop } from "./build-desktop";
 
 const root = path.resolve(import.meta.dir, "..");
 const appDir = path.join(root, "apps", "desktop");
-const distMain = path.join(appDir, "dist", "main.cjs");
+const distDir = path.join(appDir, "dist");
+const distMain = path.join(distDir, "main.cjs");
+const distHtml = path.join(distDir, "index.html");
+const distPreload = path.join(distDir, "preload.cjs");
+const distRenderer = path.join(distDir, "renderer.js");
+const distStyles = path.join(distDir, "styles.css");
+const requiredArtifacts = [distMain, distHtml, distPreload, distRenderer, distStyles];
 
 function getNewestMtime(entry: string): number {
   if (!fs.existsSync(entry)) return 0;
@@ -36,7 +42,8 @@ async function buildIfNeeded(): Promise<void> {
     if (mtime > newest) newest = mtime;
   }
 
-  if (!fs.existsSync(distMain) || fs.statSync(distMain).mtimeMs < newest) {
+  const allArtifactsExist = requiredArtifacts.every((file) => fs.existsSync(file));
+  if (!allArtifactsExist || fs.statSync(distMain).mtimeMs < newest) {
     await buildDesktop();
   }
 }
