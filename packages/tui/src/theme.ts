@@ -1,22 +1,70 @@
 import { formatPercent, formatResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
+import {
+  createStyle,
+  indexedColor,
+  Modifier,
+  type Style,
+  styleAddModifier,
+  styleFg,
+} from "terminui";
 import tokens from "../../../design/tokens.json";
 
-function ansiColor(value: string): string {
+function ansiIndex(value: string): number {
   const match = /^ansi:(\d+)$/.exec(value);
   if (!match) throw new Error(`unsupported color token: ${value}`);
-  return `\x1b[38;5;${match[1]}m`;
+  return Number.parseInt(match[1], 10);
+}
+
+export const COLOR_INDICES = {
+  border: ansiIndex(tokens.color.border.$value),
+  muted: ansiIndex(tokens.color.muted.$value),
+  accent: ansiIndex(tokens.color.accent.$value),
+  ok: ansiIndex(tokens.color.ok.$value),
+  warn: ansiIndex(tokens.color.warn.$value),
+  hot: ansiIndex(tokens.color.hot.$value),
+  danger: ansiIndex(tokens.color.danger.$value),
+} as const;
+
+export const TERMINUI_STYLES = {
+  border: styleFg(createStyle(), indexedColor(COLOR_INDICES.border)),
+  muted: styleFg(createStyle(), indexedColor(COLOR_INDICES.muted)),
+  accent: styleFg(createStyle(), indexedColor(COLOR_INDICES.accent)),
+  accentBold: styleAddModifier(
+    styleFg(createStyle(), indexedColor(COLOR_INDICES.accent)),
+    Modifier.BOLD,
+  ),
+  bold: styleAddModifier(createStyle(), Modifier.BOLD),
+  ok: styleFg(createStyle(), indexedColor(COLOR_INDICES.ok)),
+  warn: styleFg(createStyle(), indexedColor(COLOR_INDICES.warn)),
+  hot: styleFg(createStyle(), indexedColor(COLOR_INDICES.hot)),
+  danger: styleFg(createStyle(), indexedColor(COLOR_INDICES.danger)),
+};
+
+export function styleForLevel(level: UsageLevel): Style {
+  switch (level) {
+    case "ok":
+      return TERMINUI_STYLES.ok;
+    case "warn":
+      return TERMINUI_STYLES.warn;
+    case "hot":
+      return TERMINUI_STYLES.hot;
+    case "critical":
+      return TERMINUI_STYLES.danger;
+    case "unknown":
+      return TERMINUI_STYLES.muted;
+  }
 }
 
 export const ANSI = {
   reset: "\x1b[0m",
   bold: "\x1b[1m",
-  border: ansiColor(tokens.color.border.$value),
-  muted: ansiColor(tokens.color.muted.$value),
-  cyan: ansiColor(tokens.color.accent.$value),
-  green: ansiColor(tokens.color.ok.$value),
-  yellow: ansiColor(tokens.color.warn.$value),
-  orange: ansiColor(tokens.color.hot.$value),
-  red: ansiColor(tokens.color.danger.$value),
+  border: `\x1b[38;5;${COLOR_INDICES.border}m`,
+  muted: `\x1b[38;5;${COLOR_INDICES.muted}m`,
+  cyan: `\x1b[38;5;${COLOR_INDICES.accent}m`,
+  green: `\x1b[38;5;${COLOR_INDICES.ok}m`,
+  yellow: `\x1b[38;5;${COLOR_INDICES.warn}m`,
+  orange: `\x1b[38;5;${COLOR_INDICES.hot}m`,
+  red: `\x1b[38;5;${COLOR_INDICES.danger}m`,
 } as const;
 
 export const USAGE_THRESHOLDS = {

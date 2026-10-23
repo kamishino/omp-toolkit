@@ -1,6 +1,7 @@
 import {
   type BalanceAlertThresholds,
   buildDashboard,
+  type Dashboard,
   type DashboardLimit,
   type DashboardRoute,
   DEFAULT_BALANCE_ALERT,
@@ -9,6 +10,7 @@ import {
   type ProviderSection,
   summaryText,
 } from "@omp-toolkit/core";
+import { createParagraph, type Frame, frameRenderWidget, renderParagraph } from "terminui";
 import {
   ANSI,
   bar,
@@ -70,8 +72,8 @@ function columnBlock(limit: DashboardLimit, width: number): string {
   return padVisible(paint(percent(value), colorForLevel(limit.level)), width);
 }
 
-export function renderProviderUsage(
-  sections: ProviderSection[],
+export function renderProviderUsageFromDashboard(
+  dashboard: Dashboard,
   options: ProviderUsageViewOptions,
 ): string {
   const width = 86;
@@ -95,15 +97,6 @@ export function renderProviderUsage(
     border("─╮");
 
   const now = Date.now();
-  const dashboard = buildDashboard(sections, {
-    fetchedAt: now,
-    now,
-    showHealth: options.showHealth,
-    checkedAt: options.checkedAt,
-    thresholds: USAGE_THRESHOLDS,
-    staleMinutes: HEALTH_THRESHOLDS.staleSnapshotMinutes,
-    balanceAlert: options.balanceAlert ?? DEFAULT_BALANCE_ALERT,
-  });
 
   const summary = summaryText(dashboard.summary);
   const hasAnyRoute =
@@ -174,4 +167,31 @@ export function renderProviderUsage(
   );
   output.push(border(`╰${"─".repeat(inner)}╯`));
   return output.join("\n");
+}
+
+export function renderProviderUsage(
+  sections: ProviderSection[],
+  options: ProviderUsageViewOptions,
+): string {
+  const now = Date.now();
+  const dashboard = buildDashboard(sections, {
+    fetchedAt: now,
+    now,
+    showHealth: options.showHealth,
+    checkedAt: options.checkedAt,
+    thresholds: USAGE_THRESHOLDS,
+    staleMinutes: HEALTH_THRESHOLDS.staleSnapshotMinutes,
+    balanceAlert: options.balanceAlert ?? DEFAULT_BALANCE_ALERT,
+  });
+  return renderProviderUsageFromDashboard(dashboard, options);
+}
+
+export function drawProviderUsage(
+  frame: Frame,
+  dashboard: Dashboard,
+  options: ProviderUsageViewOptions,
+): void {
+  const rendered = renderProviderUsageFromDashboard(dashboard, options);
+  const p = createParagraph(rendered);
+  frameRenderWidget(frame, renderParagraph(p), frame.area);
 }
