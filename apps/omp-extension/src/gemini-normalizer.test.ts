@@ -106,6 +106,19 @@ describe("gemini-normalizer", () => {
       const normalized = normalizeMessagesArray(messages);
       expect(normalized[0].content).toBe("Executing.");
     });
+    test("safely ignores null, undefined, or non-object entries without throwing TypeError", () => {
+      const malformed = [
+        null,
+        undefined,
+        "not an object",
+        { role: "user", content: "Valid message" },
+      ] as unknown as WireMessage[];
+
+      expect(() => normalizeMessagesArray(malformed)).not.toThrow();
+      const normalized = normalizeMessagesArray(malformed);
+      expect(normalized.length).toBe(1);
+      expect(normalized[0].content).toBe("Valid message");
+    });
   });
 
   describe("normalizeContentsArray", () => {
@@ -145,6 +158,19 @@ describe("gemini-normalizer", () => {
 
       const normalized = normalizeContentsArray(contents);
       expect(normalized[0].parts[0].text).toBe("Plan created.");
+    });
+    test("safely ignores null, undefined, or malformed entries without throwing TypeError", () => {
+      const malformed = [
+        null,
+        undefined,
+        { role: "user", parts: null },
+        { role: "user", parts: [{ text: "Valid content" }] },
+      ] as unknown as WireContent[];
+
+      expect(() => normalizeContentsArray(malformed)).not.toThrow();
+      const normalized = normalizeContentsArray(malformed);
+      expect(normalized.length).toBe(1);
+      expect(normalized[0].parts[0].text).toBe("Valid content");
     });
   });
 

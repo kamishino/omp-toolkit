@@ -63,10 +63,15 @@ export function stripPreToolChatter(text: string): string {
  * 3. Cleans pre-tool conversational chatter when tool calls exist.
  */
 export function normalizeMessagesArray(messages: WireMessage[]): WireMessage[] {
-  if (messages.length === 0) return messages;
+  if (!Array.isArray(messages) || messages.length === 0) return messages;
 
-  const cleaned: WireMessage[] = messages.map((msg, index) => {
-    const isHistorical = index < messages.length - 1;
+  const validMessages = messages.filter((m): m is WireMessage =>
+    Boolean(m && typeof m === "object" && typeof m.role === "string"),
+  );
+  if (validMessages.length === 0) return validMessages;
+
+  const cleaned: WireMessage[] = validMessages.map((msg, index) => {
+    const isHistorical = index < validMessages.length - 1;
     let content = msg.content;
 
     if (msg.role === "assistant" && typeof content === "string") {
@@ -99,13 +104,18 @@ export function normalizeMessagesArray(messages: WireMessage[]): WireMessage[] {
  * reflective text from prior model turns.
  */
 export function normalizeContentsArray(contents: WireContent[]): WireContent[] {
-  if (contents.length === 0) return contents;
+  if (!Array.isArray(contents) || contents.length === 0) return contents;
 
-  const cleaned: WireContent[] = contents.map((entry, index) => {
-    const isHistorical = index < contents.length - 1;
+  const validContents = contents.filter((c): c is WireContent =>
+    Boolean(c && typeof c === "object" && typeof c.role === "string" && Array.isArray(c.parts)),
+  );
+  if (validContents.length === 0) return validContents;
+
+  const cleaned: WireContent[] = validContents.map((entry, index) => {
+    const isHistorical = index < validContents.length - 1;
     if (entry.role === "model" && isHistorical) {
       const parts = entry.parts.map((part) => {
-        if (typeof part.text === "string") {
+        if (part && typeof part === "object" && typeof part.text === "string") {
           return { ...part, text: scrubReflectiveMonologue(part.text) };
         }
         return part;
