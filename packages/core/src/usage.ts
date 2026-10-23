@@ -6,10 +6,13 @@ import type {
   UsageLimit,
   UsageReport,
 } from "./types";
+import { getUsageProviderAdapter } from "./usage-providers";
 
 const WINDOW_ORDER = ["weekly", "5 hour", "5 hours", "30 days", "daily", "monthly", "300m", "1w"];
 
 export function providerName(provider: string): string {
+  const adapter = getUsageProviderAdapter(provider);
+  if (adapter?.displayName) return adapter.displayName;
   const names: Record<string, string> = {
     "google-antigravity": "GOOGLE ANTIGRAVITY",
     "openai-codex": "OPENAI CODEX",
@@ -20,6 +23,8 @@ export function providerName(provider: string): string {
 }
 
 export function shortProvider(provider: string): string {
+  const adapter = getUsageProviderAdapter(provider);
+  if (adapter?.shortName) return adapter.shortName;
   const names: Record<string, string> = {
     "google-antigravity": "antigravity",
     "openai-codex": "codex",
@@ -50,14 +55,11 @@ export function limitKey(limit: UsageLimit): string {
 }
 
 export function columnsFor(provider: string, reports: UsageReport[]): UsageColumn[] {
+  const adapter = getUsageProviderAdapter(provider);
   const columns = new Map<string, UsageColumn>();
   for (const report of reports) {
     for (const limit of report.limits ?? []) {
-      if (
-        provider === "google-antigravity" &&
-        !/gemini/i.test(limit.label ?? "") &&
-        !/gemini/i.test(limit.id ?? "")
-      ) {
+      if (adapter?.filterLimit && !adapter.filterLimit(limit)) {
         continue;
       }
       const key = limitKey(limit);
