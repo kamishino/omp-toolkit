@@ -28,6 +28,7 @@ import {
   type StreakState,
 } from "@omp-toolkit/core";
 import { type HistoryEventInput, recordEvents } from "./history";
+import { RoutingPolicyStore } from "./policy-store";
 
 const execFileAsync = promisify(execFile);
 
@@ -211,37 +212,18 @@ export function recordHealth(
   );
 }
 
+const sharedPolicyStore = new RoutingPolicyStore({ configKey: "models.routing.policy" });
+
 export async function readPolicies(): Promise<Policy[]> {
-  try {
-    const { stdout } = await execFileAsync(
-      ompBin(),
-      ["config", "get", "models.routing.policy", "--json"],
-      EXEC_OPTS,
-    );
-    const parsed = JSON.parse(String(stdout));
-    return Array.isArray(parsed) ? (parsed as Policy[]) : [];
-  } catch {
-    return [];
-  }
+  return sharedPolicyStore.readPolicies();
 }
 
 export async function readPoliciesForWrite(): Promise<Policy[]> {
-  const { stdout } = await execFileAsync(
-    ompBin(),
-    ["config", "get", "models.routing.policy", "--json"],
-    EXEC_OPTS,
-  );
-  const parsed = JSON.parse(String(stdout));
-  if (!Array.isArray(parsed)) throw new Error("invalid routing policy output from omp config");
-  return parsed as Policy[];
+  return sharedPolicyStore.readPolicies();
 }
 
 export async function writePolicies(policies: Policy[]): Promise<void> {
-  await execFileAsync(
-    ompBin(),
-    ["config", "set", "models.routing.policy", JSON.stringify(policies)],
-    EXEC_OPTS,
-  );
+  return sharedPolicyStore.writePolicies(policies);
 }
 
 export async function tokenList(): Promise<Map<string, number>> {

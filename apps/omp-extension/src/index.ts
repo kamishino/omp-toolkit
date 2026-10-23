@@ -18,11 +18,9 @@
  * changes the model id or client version gate, update MODEL_WIRE / UA_VERSION.
  */
 
-import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import {
   type Account,
@@ -41,10 +39,9 @@ import {
 } from "@omp-toolkit/core";
 import { registerGeminiNormalizer } from "./gemini-normalizer";
 import { closeHistory, type HistoryEventInput, recordEvents } from "./history";
+import { RoutingPolicyStore } from "./policy-store";
 import { AntigravityProbeClient } from "./probe-client";
 import { runWarmUp, type WarmUpAdapter, type WarmUpDependencies } from "./warmup";
-
-const execFileAsync = promisify(execFile);
 
 const PROVIDER = "google-antigravity";
 const AUTO_HEAL_COOLDOWN_MS = 120_000;
@@ -60,13 +57,6 @@ const RESTORE_GAP_MS = Math.max(
   (Number(process.env.GEMINI_HEALTH_RESTORE_GAP_SECONDS ?? 60) || 60) * 1000,
 );
 
-const EXEC_OPTS = {
-  encoding: "utf8" as const,
-  timeout: 25_000,
-  windowsHide: true,
-  maxBuffer: 2 * 1024 * 1024,
-};
-
 interface WidgetContext {
   hasUI: boolean;
   mode: string;
@@ -78,10 +68,6 @@ interface WidgetContext {
       options?: { placement?: "aboveEditor" | "belowEditor" },
     ): void;
   };
-}
-
-function ompBin(): string {
-  return process.env.OMP_BIN || "omp";
 }
 
 function short(error: unknown): string {
@@ -304,33 +290,18 @@ export async function checkAll(confirm = false): Promise<Result[]> {
   return probeClient.checkAll(confirm);
 }
 
+export const policyStore = new RoutingPolicyStore();
+
 async function readPolicies(): Promise<Policy[]> {
-  try {
-    return await readPoliciesForWrite();
-  } catch {
-    return [];
-  }
+  return policyStore.readPolicies();
 }
 
 async function readPoliciesForWrite(): Promise<Policy[]> {
-  const { stdout } = await execFileAsync(
-    ompBin(),
-    ["config", "get", "auth.accountPolicies"],
-    EXEC_OPTS,
-  );
-  const parsed = JSON.parse(String(stdout).trim() || "[]");
-  if (!Array.isArray(parsed)) {
-    throw new Error("auth.accountPolicies is not an array");
-  }
-  return parsed;
+  return policyStore.readPolicies();
 }
 
 async function writePolicies(policies: Policy[]): Promise<void> {
-  await execFileAsync(
-    ompBin(),
-    ["config", "set", "auth.accountPolicies", JSON.stringify(policies)],
-    EXEC_OPTS,
-  );
+  return policyStore.writePolicies(policies);
 }
 
 export async function applyHeal(
