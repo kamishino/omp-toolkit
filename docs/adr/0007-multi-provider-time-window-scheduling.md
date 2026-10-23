@@ -1,4 +1,4 @@
-# ADR-0005: Multi-provider time-window scheduling and context-aware monitoring
+# ADR-0007: Multi-provider time-window scheduling and context-aware monitoring
 
 - Status: Accepted
 - Date: 2026-10-23
