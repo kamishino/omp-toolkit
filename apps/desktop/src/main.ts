@@ -4,11 +4,10 @@ import path from "node:path";
 import {
   type Dashboard,
   supportsWarmUp,
-  truncate,
   type WarmUpRequest,
   warmUpEligibility,
 } from "@omp-toolkit/core";
-import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor, Tray } from "electron";
+import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { fetchDashboard } from "./data";
 import { parseInterval } from "./interval";
@@ -24,7 +23,7 @@ import {
   resolveHealthScript,
   resolveMonitorScript,
 } from "./paths";
-import { trayImage } from "./tray";
+import { DesktopTray } from "./tray";
 import { executeWarmUp } from "./warmup";
 
 app.setName("OMP Provider Usage");
@@ -38,8 +37,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let panel: DesktopPanel | null = null;
-let tray: Tray | null = null;
-let menu: Menu | null = null;
+let desktopTray: DesktopTray | null = null;
 let loginItem: LoginItem | null = null;
 let refreshTimer: NodeJS.Timeout | null = null;
 
@@ -145,22 +143,11 @@ void app.whenReady().then(async () => {
   }
 
   function updateTray(): void {
-    if (!tray) return;
-    const mode = nativeTheme.shouldUseDarkColors ? "dark" : "light";
-    const level = lastDashboard?.iconLevel ?? "unknown";
-    tray.setImage(trayImage(assetsDir, mode, level));
-
-    let tooltip = "OMP: loading...";
-    if (lastError && !lastDashboard) {
-      tooltip = "OMP: refresh failed";
-    } else if (lastDashboard) {
-      tooltip = truncate(lastDashboard.tooltip, 63);
-    }
-    tray.setToolTip(tooltip);
+    desktopTray?.update(lastDashboard, refreshing, lastError);
   }
 
   function showPanel(): void {
-    panel?.show(tray?.getBounds() ?? null);
+    panel?.show(desktopTray?.getBounds() ?? null);
     sendState();
   }
 
@@ -169,7 +156,7 @@ void app.whenReady().then(async () => {
   }
 
   function togglePanel(): void {
-    panel?.toggle(tray?.getBounds() ?? null);
+    panel?.toggle(desktopTray?.getBounds() ?? null);
     if (panel?.isVisible()) {
       sendState();
     }
@@ -229,65 +216,7 @@ void app.whenReady().then(async () => {
   }
 
   function rebuildMenu(): void {
-    const isVisible = Boolean(panel?.isVisible());
-    const isAutostart = Boolean(loginItem?.isEnabled());
-
-    menu = Menu.buildFromTemplate([
-      {
-        label: "Refresh now",
-        click: () => {
-          void refresh();
-        },
-      },
-      {
-        label: isVisible ? "Minimize to tray" : "Show panel",
-        click: () => {
-          togglePanel();
-        },
-      },
-      { type: "separator" },
-      {
-        label: "Open terminal monitor",
-        click: () => {
-          void openTerminalMonitor();
-        },
-      },
-      {
-        label: "Open Orca tab",
-        click: () => {
-          openOrcaTab();
-        },
-      },
-      { type: "separator" },
-      {
-        label: "Start at login",
-        type: "checkbox",
-        checked: isAutostart,
-        click: (item) => {
-          try {
-            loginItem?.setEnabled(item.checked);
-          } catch (error) {
-            logError(error);
-            dialog.showErrorBox(
-              "OMP Provider Usage",
-              `Could not update login item: ${error instanceof Error ? error.message : String(error)}`,
-            );
-          }
-          rebuildMenu();
-        },
-      },
-      { type: "separator" },
-      {
-        label: "Exit",
-        click: () => {
-          app.quit();
-        },
-      },
-    ]);
-
-    if (process.platform === "linux") {
-      tray?.setContextMenu(menu);
-    }
+    desktopTray?.rebuildMenu();
   }
   panel = new DesktopPanel({
     preloadPath,
@@ -318,28 +247,27 @@ void app.whenReady().then(async () => {
     }
   });
 
-  tray = new Tray(
-    trayImage(assetsDir, nativeTheme.shouldUseDarkColors ? "dark" : "light", "unknown"),
-  );
-  tray.setToolTip("OMP: loading...");
-
-  rebuildMenu();
-
-  if (process.platform === "darwin") {
-    tray.setIgnoreDoubleClickEvents(true);
-  }
-
-  tray.on("click", () => {
-    togglePanel();
+  desktopTray = new DesktopTray({
+    assetsDir,
+    loginItem,
+    isPanelVisible: () => Boolean(panel?.isVisible()),
+    onTogglePanel: togglePanel,
+    onRefreshNow: refresh,
+    onOpenTerminal: () => {
+      void openTerminalMonitor();
+    },
+    onOpenOrca: openOrcaTab,
+    onQuit: () => {
+      app.quit();
+    },
+    onError: (error) => {
+      logError(error);
+      dialog.showErrorBox(
+        "OMP Provider Usage",
+        `Could not update login item: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    },
   });
-
-  if (process.platform !== "linux") {
-    tray.on("right-click", () => {
-      if (menu) {
-        tray?.popUpContextMenu(menu);
-      }
-    });
-  }
 
   ipcMain.on(IPC.refresh, () => {
     void refresh();
@@ -555,8 +483,8 @@ app.on("before-quit", () => {
     clearInterval(refreshTimer);
     refreshTimer = null;
   }
-  if (tray) {
-    tray.destroy();
-    tray = null;
+  if (desktopTray) {
+    desktopTray.destroy();
+    desktopTray = null;
   }
 });
