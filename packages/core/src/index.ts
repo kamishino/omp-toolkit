@@ -8,4 +8,5 @@ export * from "./schedule";
 export * from "./settings";
 export * from "./types";
 export * from "./usage";
+export * from "./usage-providers";
 export * from "./warmup";
