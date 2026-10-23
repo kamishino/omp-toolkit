@@ -20,6 +20,7 @@ import {
   paint,
   percent,
   resetInAt,
+  stripAnsi,
   USAGE_THRESHOLDS,
 } from "./theme";
 
@@ -192,6 +193,6 @@ export function drawProviderUsage(
   options: ProviderUsageViewOptions,
 ): void {
   const rendered = renderProviderUsageFromDashboard(dashboard, options);
-  const p = createParagraph(rendered);
+  const p = createParagraph(stripAnsi(rendered));
   frameRenderWidget(frame, renderParagraph(p), frame.area);
 }
