@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import { DEFAULT_MONITOR_INTERVAL, parseMonitorCliConfig } from "../apps/provider-usage/src/config";
 import { resolveMonitorScriptCandidates } from "../packages/core/src/environment";
-export const DEFAULT_INTERVAL = 300;
+
+export const DEFAULT_INTERVAL = DEFAULT_MONITOR_INTERVAL;
 
 export interface MonitorOptions {
   interval: number;
@@ -11,17 +13,12 @@ export interface MonitorOptions {
 }
 
 export function parseMonitorArgs(args: string[]): MonitorOptions {
-  const intervalArg = args.find((arg) => arg.startsWith("--interval="));
-  const rawInterval = Number(intervalArg?.slice("--interval=".length) ?? DEFAULT_INTERVAL);
-  const known = new Set(["--no-health", "--no-alt-screen"]);
-  const unknown = args.filter(
-    (arg) => arg.startsWith("--") && !arg.startsWith("--interval=") && !known.has(arg),
-  );
+  const config = parseMonitorCliConfig(args);
   return {
-    interval: Math.max(10, Number.isFinite(rawInterval) ? rawInterval : DEFAULT_INTERVAL),
+    interval: config.interval,
     health: !args.includes("--no-health"),
-    altScreen: !args.includes("--no-alt-screen"),
-    unknown,
+    altScreen: config.altScreen,
+    unknown: config.unknown,
   };
 }
 
