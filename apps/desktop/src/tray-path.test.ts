@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import { trayIconPath } from "./tray-path";
+import { generateTrayManifest, trayIconPath } from "./tray-path";
 
 describe("trayIconPath", () => {
   const assetsDir = path.join("apps", "desktop", "dist", "assets");
@@ -27,6 +27,13 @@ describe("trayIconPath", () => {
           path.join(assetsDir, "tray", `tray-${mode}-${level}@2x.png`),
         );
       }
+    }
+  });
+  test("generateTrayManifest returns all 20 unique combinations", () => {
+    const manifest = generateTrayManifest();
+    expect(manifest.length).toBe(20);
+    for (const item of manifest) {
+      expect(item.fileName).toContain(`tray-${item.mode}-${item.level}`);
     }
   });
 });
