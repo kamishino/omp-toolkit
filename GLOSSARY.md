@@ -169,3 +169,15 @@ filtering rules, balance extractors, and currency formatting handlers.
 ## Autostart manager
 A deep platform module that manages operating-system startup registration across
 Windows Registry, macOS LaunchAgent plists, and Linux XDG desktop entries.
+## Desktop panel
+A deep lifecycle coordinator module that encapsulates BrowserWindow creation,
+screen geometry detection, tray edge clamping, visibility transitions, and IPC
+state synchronization.
+
+## Reliability history store
+A repository subsystem encapsulating SQLite database access, schema migrations,
+event persistence, and analytical reporting queries.
+
+## Monitor config
+A configuration module encapsulating CLI argument parsing, environment variable
+fallbacks, interval bounding, and flag validation into a unified type.

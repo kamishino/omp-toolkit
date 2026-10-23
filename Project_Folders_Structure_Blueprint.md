@@ -125,7 +125,7 @@ omp-toolkit/
 │   │       ├── ipc.ts                     # Main-side IPC registration and handlers
 │   │       ├── tray.ts                    # System tray icon management
 │   │       ├── tray-path.ts               # Dynamic platform tray icon asset resolver
-│   │       ├── panel.ts                   # Floating window creation and lifecycle
+│   │       ├── panel.ts                   # DesktopPanel lifecycle coordinator (geometry, bounds, tray, visibility)
 │   │       ├── panel-position.ts          # Tray-relative window coordinate calculation
 │   │       ├── data.ts                    # Monitor process spawn and snapshot consumer
 │   │       ├── interval.ts                # Auto-refresh timer loop
@@ -149,7 +149,9 @@ omp-toolkit/
 │   │       ├── circuit-breaker.ts         # Autonomous account circuit breaker and probe scheduler
 │   │       ├── gemini-normalizer.ts       # SSE and tool-call wire protocol normalizer
 │   │       ├── gemini-normalizer.test.ts  # Normalizer regression unit tests
-│   │       ├── history.ts                 # 30-day SQLite / JSON reliability history writer
+│   │       ├── history.ts                 # 30-day reliability history writer and process exit cleanup
+│   │       ├── history-store.ts           # ReliabilityHistoryStore SQLite database and analytical queries
+│   │       ├── history-store.test.ts      # History store unit tests
 │   │       ├── warmup.ts                  # Background route verification logic
 │   │       └── omp-types.d.ts             # OMP plugin API type declarations
 │   │
@@ -157,6 +159,8 @@ omp-toolkit/
 │       ├── package.json
 │       └── src/
 │           ├── index.ts                   # CLI entry, flag dispatch, and terminui watch loop
+│           ├── config.ts                  # MonitorCliConfig parser, environment fallbacks, and validation
+│           ├── config.test.ts             # Monitor config unit tests
 │           ├── usage.ts                   # `omp usage` CLI reader and parser
 │           ├── json.ts                    # JSON serialization adapter
 │           ├── json.test.ts               # JSON schema unit tests
