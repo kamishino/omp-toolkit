@@ -10,6 +10,14 @@ describe("open-commands helpers", () => {
   test("appleScriptString escapes quotes and backslashes in double-quoted strings", () => {
     expect(appleScriptString('echo "hello\\world"')).toBe('"echo \\"hello\\\\world\\""');
   });
+  test("appleScriptString escapes newlines and carriage returns to prevent AppleScript injection", () => {
+    const payload = 'echo "hello\ntell application \\"Finder\\" to activate\r"';
+    const escaped = appleScriptString(payload);
+    expect(escaped).not.toContain("\n");
+    expect(escaped).not.toContain("\r");
+    expect(escaped).toContain("\\n");
+    expect(escaped).toContain("\\r");
+  });
 
   test("commandLine quotes arguments with spaces on Windows and POSIX-quotes elsewhere", () => {
     const cmd = ["C:\\Program Files\\bun.exe", "run", "--flag"];
