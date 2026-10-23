@@ -1,8 +1,8 @@
 import { money } from "./format";
+import { evaluateWindow, getTimeWindowPolicy, type WindowEvaluation } from "./schedule";
 import type { BalanceAlertThresholds } from "./settings";
 import type { HealthResult, ProviderSection, Status, UsageLimit } from "./types";
 import { limitFor, local, providerName, shortProvider, usedPercent } from "./usage";
-
 export type UsageLevel = "ok" | "warn" | "hot" | "critical" | "unknown";
 export type RouteText = "OK" | "HANG" | "AUTH" | "MODEL" | "ERR" | "—";
 export const DASHBOARD_SCHEMA_VERSION = 2 as const;
@@ -40,6 +40,7 @@ export interface DashboardProvider {
   accounts: number;
   columns: Array<{ key: string; label: string }>;
   rows: DashboardRow[];
+  timeWindow?: WindowEvaluation | null;
 }
 
 export interface DashboardSummary {
@@ -81,8 +82,8 @@ export interface BuildDashboardOptions {
   thresholds: { warm: number; hot: number; critical: number; above: number };
   staleMinutes: number;
   balanceAlert: BalanceAlertThresholds;
+  userTimeZone?: string;
 }
-
 export function usageLevel(
   value: number | undefined,
   thresholds: BuildDashboardOptions["thresholds"],
@@ -188,6 +189,9 @@ export function buildDashboard(
       };
     });
 
+    const policy = getTimeWindowPolicy(section.provider);
+    const timeWindow = policy ? evaluateWindow(policy, options.now, options.userTimeZone) : null;
+
     return {
       id: section.provider,
       name: providerName(section.provider),
@@ -195,9 +199,9 @@ export function buildDashboard(
       accounts: section.reports.length,
       columns: section.columns.map((col) => ({ key: col.key, label: col.label })),
       rows,
+      timeWindow,
     };
   });
-
   const allRows = providers.flatMap((provider) => provider.rows);
   const above80 = allRows.filter((row) => row.maxUsed >= options.thresholds.above).length;
   const maxed = allRows.filter((row) => row.maxUsed >= 1).length;
@@ -331,6 +335,15 @@ export function isDashboard(value: unknown): value is Dashboard {
       return false;
     }
     if (typeof p.accounts !== "number" || !Number.isFinite(p.accounts)) return false;
+    if (
+      p.timeWindow !== undefined &&
+      p.timeWindow !== null &&
+      (typeof p.timeWindow !== "object" ||
+        typeof (p.timeWindow as WindowEvaluation).isPeak !== "boolean" ||
+        typeof (p.timeWindow as WindowEvaluation).rateMultiplier !== "number")
+    ) {
+      return false;
+    }
     if (!Array.isArray(p.columns) || !Array.isArray(p.rows)) return false;
 
     for (const c of p.columns) {
