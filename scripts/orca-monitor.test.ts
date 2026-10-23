@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { floatingShortcut, quoteArg, resolveOrcaBin } from "./orca-monitor";
+import {
+  buildMonitorCommand,
+  floatingShortcut,
+  isOrcaAvailable,
+  quoteArg,
+  resolveOrcaBin,
+} from "./orca-monitor";
 
 describe("cross-platform Orca launcher", () => {
   test("resolves ORCA_BIN first", () => {
@@ -32,5 +38,36 @@ describe("cross-platform Orca launcher", () => {
     expect(floatingShortcut("darwin")).toBe("Cmd+Alt+A");
     expect(floatingShortcut("win32")).toBe("Ctrl+Alt+A");
     expect(floatingShortcut("linux")).toBe("Ctrl+Alt+A");
+  });
+
+  test("builds monitor command with platform specific syntax", () => {
+    const winCmd = buildMonitorCommand(
+      "monitor.ts",
+      { interval: 5, health: true, altScreen: false, unknown: [] },
+      "win32",
+      "bun.exe",
+    );
+    expect(winCmd.startsWith("& ")).toBe(true);
+    expect(winCmd).toContain('"bun.exe"');
+    expect(winCmd).toContain('"--interval=5"');
+    expect(winCmd).toContain('"--health"');
+
+    const posixCmd = buildMonitorCommand(
+      "monitor.ts",
+      { interval: 10, health: false, altScreen: true, unknown: [] },
+      "linux",
+      "/usr/bin/bun",
+    );
+    expect(posixCmd.startsWith("& ")).toBe(false);
+    expect(posixCmd).toContain("'/usr/bin/bun'");
+    expect(posixCmd).toContain("'--interval=10'");
+  });
+
+  test("isOrcaAvailable returns false cleanly when binary missing", async () => {
+    const available = await isOrcaAvailable(
+      { ORCA_BIN: "definitely-nonexistent-orca-binary-12345" },
+      "linux",
+    );
+    expect(available).toBe(false);
   });
 });

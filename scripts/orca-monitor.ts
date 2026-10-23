@@ -1,6 +1,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { monitorCommandArgs, parseMonitorArgs, resolveMonitorScript } from "./monitor-target";
+import {
+  type MonitorOptions,
+  monitorCommandArgs,
+  parseMonitorArgs,
+  resolveMonitorScript,
+} from "./monitor-target";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,6 +33,36 @@ export function quoteArg(value: string, platform: NodeJS.Platform = process.plat
 
 export function floatingShortcut(platform: NodeJS.Platform = process.platform): string {
   return platform === "darwin" ? "Cmd+Alt+A" : "Ctrl+Alt+A";
+}
+
+export function buildMonitorCommand(
+  script: string,
+  options: MonitorOptions,
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+): string {
+  const parts = [
+    quoteArg(execPath, platform),
+    ...monitorCommandArgs(script, options).map((part) => quoteArg(part, platform)),
+  ];
+  return platform === "win32" ? `& ${parts.join(" ")}` : parts.join(" ");
+}
+
+export async function isOrcaAvailable(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Promise<boolean> {
+  const bin = resolveOrcaBin(env, platform);
+  try {
+    const { stdout } = await execFileAsync(bin, ["--version"], {
+      encoding: "utf8",
+      timeout: 3_000,
+      windowsHide: true,
+    });
+    return String(stdout).trim().length > 0;
+  } catch {
+    return false;
+  }
 }
 
 const ORCA = resolveOrcaBin();
@@ -66,12 +101,7 @@ export async function launchOrFocusMonitor(): Promise<void> {
   const restart = args.includes("--restart");
   const options = parseMonitorArgs(args);
   const script = resolveMonitorScript();
-  const parts = [
-    quoteArg(process.execPath),
-    ...monitorCommandArgs(script, options).map((part) => quoteArg(part)),
-  ];
-  const command = process.platform === "win32" ? `& ${parts.join(" ")}` : parts.join(" ");
-
+  const command = buildMonitorCommand(script, options, process.platform, process.execPath);
   try {
     const listed = await orca<{
       terminals?: OrcaTerminalEntry[];
