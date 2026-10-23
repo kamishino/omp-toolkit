@@ -1,10 +1,86 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { clipboard } from "electron";
-import { commandLine, orcaInvocation, terminalInvocations } from "./open-commands";
+import { quote } from "shell-quote";
 
-function findInPath(file: string): boolean {
+function copyToClipboard(text: string): void {
+  try {
+    // biome-ignore lint/suspicious/noExplicitAny: electron runtime detection
+    const electron = (globalThis as any).require?.("electron");
+    if (electron && typeof electron.clipboard?.writeText === "function") {
+      electron.clipboard.writeText(text);
+    }
+  } catch {
+    // Ignore when running outside Electron runtime (e.g. in unit tests)
+  }
+}
+
+export interface Command {
+  file: string;
+  args: string[];
+  cwd?: string;
+}
+
+export function appleScriptString(value: string): string {
+  return `"${value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")}"`;
+}
+
+export function commandLine(platform: NodeJS.Platform, command: string[]): string {
+  if (platform === "win32") {
+    return command
+      .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
+      .join(" ");
+  }
+  return quote(command);
+}
+
+export function terminalInvocations(platform: NodeJS.Platform, command: string[]): Command[] {
+  if (platform === "win32") {
+    return [
+      {
+        file: "cmd.exe",
+        args: ["/c", "start", "", ...command],
+      },
+    ];
+  }
+
+  if (platform === "darwin") {
+    const shellCmd = quote(command);
+    return [
+      {
+        file: "osascript",
+        args: [
+          "-e",
+          'tell application "Terminal" to activate',
+          "-e",
+          `tell application "Terminal" to do script ${appleScriptString(shellCmd)}`,
+        ],
+      },
+    ];
+  }
+
+  // Linux candidates
+  return [
+    { file: "x-terminal-emulator", args: ["-e", ...command] },
+    { file: "gnome-terminal", args: ["--", ...command] },
+    { file: "konsole", args: ["-e", ...command] },
+    { file: "xterm", args: ["-e", ...command] },
+  ];
+}
+
+export function orcaInvocation(checkout: string, bun: string): Command {
+  return {
+    file: bun,
+    args: ["run", "monitor:orca", "--restart"],
+    cwd: checkout,
+  };
+}
+
+export function findInPath(file: string): boolean {
   if (path.isAbsolute(file)) {
     return fs.existsSync(file);
   }
@@ -40,7 +116,7 @@ export function openTerminal(platform: NodeJS.Platform, command: string[]): "ope
   }
 
   const str = commandLine(platform, command);
-  clipboard.writeText(str);
+  copyToClipboard(str);
   return "copied";
 }
 

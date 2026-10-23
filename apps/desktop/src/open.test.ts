@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  appleScriptString,
-  commandLine,
-  orcaInvocation,
-  terminalInvocations,
-} from "./open-commands";
+import { appleScriptString, commandLine, orcaInvocation, terminalInvocations } from "./open";
 
 describe("open-commands helpers", () => {
   test("appleScriptString escapes quotes and backslashes in double-quoted strings", () => {
