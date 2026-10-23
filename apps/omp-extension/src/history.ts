@@ -1,13 +1,11 @@
-import { Database } from "bun:sqlite";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { HistoryEvent } from "@omp-toolkit/core";
+import { ReliabilityHistoryStore } from "./history-store";
 
 export type HistoryEventInput = Omit<HistoryEvent, "machineId">;
-
-const RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
 export interface MachineIdentity {
   id: string;
@@ -88,46 +86,16 @@ function machine(): MachineIdentity {
     return created;
   }
 }
-let databaseHandle: Database | null = null;
-let databasePath: string | null = null;
+let sharedStore: ReliabilityHistoryStore | null = null;
 
-function database(): Database {
+function getStore(): ReliabilityHistoryStore {
   const file = historyPath();
-  if (databaseHandle && databasePath === file) return databaseHandle;
-  if (databaseHandle) {
-    databaseHandle.close();
-    databaseHandle = null;
-    databasePath = null;
+  if (sharedStore && sharedStore.dbPath === file) return sharedStore;
+  if (sharedStore) {
+    sharedStore.close();
   }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const db = new Database(file, { create: true });
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA busy_timeout = 5000");
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY,
-      at INTEGER NOT NULL,
-      machine_id TEXT NOT NULL,
-      kind TEXT NOT NULL,
-      provider TEXT,
-      account TEXT,
-      status TEXT,
-      incident_id TEXT,
-      detail TEXT
-    );
-    CREATE INDEX IF NOT EXISTS events_at ON events(at);
-    CREATE INDEX IF NOT EXISTS events_kind_at ON events(kind, at);
-    CREATE INDEX IF NOT EXISTS events_incident ON events(incident_id);
-    CREATE TABLE IF NOT EXISTS meta (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-    INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '1');
-  `);
-  db.query("DELETE FROM events WHERE at < ?").run(Date.now() - RETENTION_MS);
-  databaseHandle = db;
-  databasePath = file;
-  return db;
+  sharedStore = new ReliabilityHistoryStore(file);
+  return sharedStore;
 }
 
 export function recordEvent(event: HistoryEventInput): void {
@@ -136,35 +104,13 @@ export function recordEvent(event: HistoryEventInput): void {
 
 export function recordEvents(events: HistoryEventInput[]): void {
   if (events.length === 0) return;
-  const db = database();
-  const insert = db.query(`
-    INSERT INTO events
-      (at, machine_id, kind, provider, account, status, incident_id, detail)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  const id = machineId();
-  const write = db.transaction((rows: HistoryEventInput[]) => {
-    for (const row of rows) {
-      insert.run(
-        row.at,
-        id,
-        row.kind,
-        row.provider ?? null,
-        row.account ?? null,
-        row.status ?? null,
-        row.incidentId ?? null,
-        row.detail ?? null,
-      );
-    }
-  });
-  write(events);
+  getStore().recordEvents(events, machineId());
 }
 
 export function closeHistory(): void {
-  if (databaseHandle) {
-    databaseHandle.close();
-    databaseHandle = null;
-    databasePath = null;
+  if (sharedStore) {
+    sharedStore.close();
+    sharedStore = null;
   }
 }
 
