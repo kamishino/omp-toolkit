@@ -36,26 +36,18 @@ import {
   type Policy,
   type ProbeResult as Result,
   restorableEmails,
-  type Status,
   type StreakState,
   type WarmUpRequest,
 } from "@omp-toolkit/core";
 import { registerGeminiNormalizer } from "./gemini-normalizer";
 import { closeHistory, type HistoryEventInput, recordEvents } from "./history";
+import { AntigravityProbeClient } from "./probe-client";
 import { runWarmUp, type WarmUpAdapter, type WarmUpDependencies } from "./warmup";
 
 const execFileAsync = promisify(execFile);
 
 const PROVIDER = "google-antigravity";
-const MODEL_WIRE = "gemini-3.8-flash-high";
-const PROBE_TIMEOUT_MS = 15_000;
-const PROBE_PROMPT = "Reply with exactly: OK";
-const CONFIRM_DELAY_MS = 1_000;
 const AUTO_HEAL_COOLDOWN_MS = 120_000;
-const ENDPOINT =
-  "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
-const UA_VERSION = process.env.PI_AI_ANTIGRAVITY_VERSION ?? "2.24.0";
-const USER_AGENT = `antigravity/hub/${UA_VERSION} (aidev_client; os_type=darwin; arch=arm64; cl=963137146)`;
 
 const AGENT_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
 const STATE_PATH = path.join(AGENT_DIR, "gemini-health-state.json");
@@ -87,8 +79,6 @@ interface WidgetContext {
     ): void;
   };
 }
-
-const tokenCache = new Map<number, { token: string; at: number }>();
 
 function ompBin(): string {
   return process.env.OMP_BIN || "omp";
@@ -300,175 +290,18 @@ function reloadIfAvailable(ctx: ExtensionContext): Promise<void> | undefined {
   return reload?.();
 }
 
-async function tokenList(): Promise<Map<string, number>> {
-  const { stdout } = await execFileAsync(ompBin(), ["token", PROVIDER, "--list"], EXEC_OPTS);
-  const map = new Map<string, number>();
-  for (const line of String(stdout).split(/\r?\n/)) {
-    const match = /^(\d+)\.\s+(\S+@\S+)\s*$/.exec(line.trim());
-    if (match) map.set(match[2], Number(match[1]));
-  }
-  return map;
-}
+export const probeClient = new AntigravityProbeClient();
 
 export async function loadAccounts(): Promise<Account[]> {
-  const [{ stdout }, indexByEmail] = await Promise.all([
-    execFileAsync(ompBin(), ["usage", "--provider", PROVIDER, "--json"], EXEC_OPTS),
-    tokenList(),
-  ]);
-  const parsed = JSON.parse(String(stdout));
-  const reports = Array.isArray(parsed?.reports) ? parsed.reports : [];
-  const accounts: Account[] = [];
-  for (const report of reports) {
-    const email = report?.metadata?.email;
-    const project = report?.metadata?.projectId;
-    const index = typeof email === "string" ? indexByEmail.get(email) : undefined;
-    if (typeof email === "string" && typeof project === "string" && index) {
-      accounts.push({ index, email, project });
-    }
-  }
-  return accounts.sort((a, b) => a.index - b.index);
-}
-
-async function getToken(index: number): Promise<string> {
-  const cached = tokenCache.get(index);
-  if (cached && Date.now() - cached.at < 30 * 60_000) return cached.token;
-  const { stdout } = await execFileAsync(
-    ompBin(),
-    ["token", PROVIDER, "-a", String(index), "--raw"],
-    EXEC_OPTS,
-  );
-  const token = String(stdout).trim();
-  if (!token) throw new Error(`empty token for account ${index}`);
-  tokenCache.set(index, { token, at: Date.now() });
-  return token;
+  return probeClient.loadAccounts();
 }
 
 export async function probe(account: Account): Promise<Result> {
-  const started = performance.now();
-  let token: string;
-  try {
-    token = await getToken(account.index);
-  } catch (error) {
-    return { ...account, status: "auth", ms: 0, detail: short(error) };
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  try {
-    const response = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        "User-Agent": USER_AGENT,
-      },
-      body: JSON.stringify({
-        project: account.project,
-        requestId: `agent/${crypto.randomUUID()}/${Date.now()}/${crypto.randomUUID()}/0`,
-        userAgent: "antigravity",
-        model: MODEL_WIRE,
-        request: {
-          contents: [{ role: "user", parts: [{ text: PROBE_PROMPT }] }],
-          generationConfig: { maxOutputTokens: 8 },
-          sessionId: crypto.randomUUID(),
-        },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      if (response.status === 401 || response.status === 403) {
-        tokenCache.delete(account.index);
-      }
-      const status: Status =
-        response.status === 401 || response.status === 403
-          ? "auth"
-          : response.status === 404
-            ? "model-error"
-            : "error";
-      return {
-        ...account,
-        status,
-        ms: Math.round(performance.now() - started),
-        detail: `${response.status} ${body.replace(/\s+/g, " ").slice(0, 150)}`.trim(),
-      };
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      return {
-        ...account,
-        status: "error",
-        ms: Math.round(performance.now() - started),
-        detail: "empty response body",
-      };
-    }
-
-    try {
-      const decoder = new TextDecoder();
-      for (let i = 0; i < 4; i += 1) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        if (text.includes("data:")) {
-          return {
-            ...account,
-            status: "ok",
-            ms: Math.round(performance.now() - started),
-          };
-        }
-      }
-      return {
-        ...account,
-        status: "error",
-        ms: Math.round(performance.now() - started),
-        detail: "stream closed without data",
-      };
-    } finally {
-      await reader.cancel().catch(() => {});
-    }
-  } catch (error) {
-    const name = (error as { name?: string })?.name ?? "";
-    const timeout =
-      name === "AbortError" ||
-      name === "TimeoutError" ||
-      /abort|timeout|timed out/i.test(String(error));
-    return {
-      ...account,
-      status: timeout ? "hang" : "error",
-      ms: Math.round(performance.now() - started),
-      detail: timeout ? `no first event in ${PROBE_TIMEOUT_MS / 1000}s` : short(error),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+  return probeClient.probe(account);
 }
 
 export async function checkAll(confirm = false): Promise<Result[]> {
-  const accounts = await loadAccounts();
-  if (accounts.length === 0) return [];
-  const results = await Promise.all(accounts.map(probe));
-  if (!confirm) return results;
-
-  const suspects = results.filter(
-    (result) => result.status === "hang" || result.status === "error",
-  );
-  await Promise.all(
-    suspects.map(async (result) => {
-      await sleep(CONFIRM_DELAY_MS);
-      const again = await probe(result);
-      if (again.status === "ok") {
-        result.status = "ok";
-        result.ms = again.ms;
-        result.detail = "recovered on retry";
-      } else {
-        result.detail = `${result.detail ?? ""}${result.detail ? " · " : ""}confirmed`;
-      }
-    }),
-  );
-  return results;
+  return probeClient.checkAll(confirm);
 }
 
 async function readPolicies(): Promise<Policy[]> {
