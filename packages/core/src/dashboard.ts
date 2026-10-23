@@ -268,6 +268,10 @@ export function buildDashboard(
   if (balance) {
     parts.push(money(balance.remaining, balance.unit));
   }
+  const activePricing = providers.find((p) => p.timeWindow)?.timeWindow;
+  if (activePricing) {
+    parts.push(activePricing.isPeak ? "Peak" : "Off-Peak");
+  }
   const tooltip = parts.length > 0 ? `OMP: ${parts.join(" · ")}` : "OMP: no usage data";
 
   const rank: Record<UsageLevel, number> = {
