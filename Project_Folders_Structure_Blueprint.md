@@ -129,15 +129,14 @@ omp-toolkit/
 │   │       ├── panel-position.ts          # Tray-relative window coordinate calculation
 │   │       ├── data.ts                    # Monitor process spawn and snapshot consumer
 │   │       ├── interval.ts                # Auto-refresh timer loop
-│   │       ├── login-item.ts              # OS login item configuration
-│   │       ├── login-item-files.ts        # Linux autostart desktop file generator
-│   │       ├── open.ts                    # External URL / file opening dispatch
-│   │       ├── open-commands.ts           # Cross-platform command shell launchers
+│   │       ├── login-item.ts              # Unified autostart manager (Windows, macOS, Linux)
+│   │       ├── open.ts                    # Deep terminal launcher (platform quoting, shell spawning)
 │   │       ├── paths.ts                   # Application data and cache directory paths
-│   │       ├── warmup.ts                  # Account warmup trigger
+│   │       ├── warmup.ts                  # Account warmup execution and error formatting
 │   │       └── renderer/                  # Webview presentation layer
 │   │           ├── index.html             # Shell HTML document
-│   │           ├── renderer.ts            # DOM rendering and IPC listener logic
+│   │           ├── renderer.ts            # Reactive state subscription and panel layout
+│   │           ├── card.ts                # Pure functional card and row DOM builders
 │   │           ├── styles.css             # OKLCH design-token styles
 │   │           ├── tokens.ts              # TypeScript token accessors
 │   │           ├── provider-logos.ts      # Provider SVG logo component mapper
@@ -147,6 +146,7 @@ omp-toolkit/
 │   │   ├── package.json
 │   │   └── src/
 │   │       ├── index.ts                   # Extension entry point, hooks, and tool registration
+│   │       ├── circuit-breaker.ts         # Autonomous account circuit breaker and probe scheduler
 │   │       ├── gemini-normalizer.ts       # SSE and tool-call wire protocol normalizer
 │   │       ├── gemini-normalizer.test.ts  # Normalizer regression unit tests
 │   │       ├── history.ts                 # 30-day SQLite / JSON reliability history writer
@@ -174,12 +174,14 @@ omp-toolkit/
 │   │       ├── dashboard.ts               # Usage grouping, sorting, and summary metrics
 │   │       ├── dashboard.test.ts          # Dashboard grouping unit tests
 │   │       ├── deepseek.ts                # DeepSeek balance payload parser & limits
+│   │       ├── environment.ts             # Centralized agent environment and path resolver
 │   │       ├── format.ts                  # Currency formatting, percentages, and reset times
 │   │       ├── format.test.ts             # Formatting unit tests
 │   │       ├── health.ts                  # Route health status transitions and predicates
 │   │       ├── history.ts                 # Health history data structures
 │   │       ├── settings.ts                # Balance alert thresholds and defaults
 │   │       ├── usage.ts                   # Usage report row and column normalization
+│   │       ├── usage-providers.ts         # Extensible UsageProviderRegistry adapter engine
 │   │       ├── warmup.ts                  # Warmup candidate filtering logic
 │   │       ├── warmup.test.ts             # Warmup filtering unit tests
 │   │       └── schedule/                  # Multi-provider peak/off-peak scheduling
