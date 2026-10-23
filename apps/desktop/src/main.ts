@@ -36,7 +36,7 @@ import {
   resolveMonitorScript,
 } from "./paths";
 import { trayImage } from "./tray";
-import { fetchWarmUp, summarizeWarmUp } from "./warmup";
+import { executeWarmUp } from "./warmup";
 
 app.setName("OMP Provider Usage");
 if (process.platform === "win32") {
@@ -507,22 +507,22 @@ void app.whenReady().then(async () => {
     sendState();
 
     try {
-      const report = await fetchWarmUp({ bun, script: healthScript }, request);
-      warmupMessage = summarizeWarmUp(report);
-      await refresh();
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      warmupMessage = `Warm-up failed: ${msg}`;
-      logError(error);
-      if (panel) {
-        await dialog.showMessageBox(panel, {
-          type: "error",
-          title: "OMP Provider Usage",
-          message: "Warm-up failed",
-          detail: msg,
-        });
+      const result = await executeWarmUp({ bun, script: healthScript }, request);
+      if (result.success) {
+        warmupMessage = result.message;
+        await refresh();
       } else {
-        dialog.showErrorBox("OMP Provider Usage", msg);
+        warmupMessage = `Warm-up failed: ${result.message}`;
+        if (panel) {
+          await dialog.showMessageBox(panel, {
+            type: "error",
+            title: "OMP Provider Usage",
+            message: "Warm-up failed",
+            detail: result.message,
+          });
+        } else {
+          dialog.showErrorBox("OMP Provider Usage", result.message);
+        }
       }
     } finally {
       warmupRunning = false;
