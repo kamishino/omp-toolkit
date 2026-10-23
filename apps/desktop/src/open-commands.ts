@@ -7,7 +7,11 @@ export interface Command {
 }
 
 export function appleScriptString(value: string): string {
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  return `"${value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n")}"`;
 }
 
 export function commandLine(platform: NodeJS.Platform, command: string[]): string {
