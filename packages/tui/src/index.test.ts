@@ -1,14 +1,28 @@
 import { describe, expect, test } from "bun:test";
-import { type HealthResult, sectionsFor, type UsageReport } from "@omp-toolkit/core";
+import {
+  buildDashboard,
+  DEEPSEEK_POLICY,
+  type HealthResult,
+  sectionsFor,
+  type UsageReport,
+} from "@omp-toolkit/core";
 import {
   ANSI,
   bar,
   colorFor,
   colorForLevel,
+  createStdoutBackend,
+  createTerminal,
+  createTestBackend,
+  createTestBackendState,
+  drawProviderUsage,
+  drawScheduleView,
   padVisible,
   percent,
   renderProviderUsage,
   stripAnsi,
+  terminalDraw,
+  testBackendToString,
 } from ".";
 
 process.env.NO_COLOR = "1";
@@ -195,5 +209,63 @@ describe("provider usage view", () => {
     for (const line of view.split("\n")) {
       expect(stripAnsi(line).length).toBeLessThanOrEqual(86);
     }
+  });
+  test("drawProviderUsage draws onto terminui terminal buffer via test backend", () => {
+    const state = createTestBackendState(86, 20);
+    const terminal = createTerminal(createTestBackend(state));
+    const dashboard = buildDashboard(sectionsFor(reports, new Map()), {
+      fetchedAt: Date.now(),
+      now: Date.now(),
+      showHealth: false,
+      thresholds: { warm: 0.4, hot: 0.7, critical: 0.85, above: 0.8 },
+      staleMinutes: 15,
+      balanceAlert: { cny: 10, usd: 10 },
+    });
+
+    terminalDraw(terminal, (frame) => {
+      drawProviderUsage(frame, dashboard, {
+        interval: 300,
+        watch: false,
+        showHealth: false,
+      });
+    });
+
+    const output = testBackendToString(state);
+    expect(output).toContain("OMP Provider Usage");
+    expect(output).toContain("GOOGLE ANTIGRAVITY");
+    expect(output).toContain("MUSE CODE");
+  });
+
+  test("drawScheduleView draws onto terminui terminal buffer via test backend", () => {
+    const state = createTestBackendState(86, 30);
+    const terminal = createTerminal(createTestBackend(state));
+
+    terminalDraw(terminal, (frame) => {
+      drawScheduleView(frame, [DEEPSEEK_POLICY]);
+    });
+
+    const output = testBackendToString(state);
+    expect(output).toContain("Provider Pricing Schedules");
+    expect(output).toContain("DeepSeek API Time-of-Day Pricing");
+    expect(output).toContain("Monday");
+  });
+
+  test("createStdoutBackend adheres to terminui backend contract", () => {
+    const writes: string[] = [];
+    const mockStream = {
+      columns: 86,
+      rows: 30,
+      write: (data: string) => {
+        writes.push(data);
+        return true;
+      },
+    } as unknown as NodeJS.WriteStream;
+
+    const backend = createStdoutBackend(mockStream);
+    expect(backend.size()).toEqual({ width: 86, height: 30 });
+    backend.hideCursor();
+    expect(writes).toContain("\x1b[?25l");
+    backend.showCursor();
+    expect(writes).toContain("\x1b[?25h");
   });
 });

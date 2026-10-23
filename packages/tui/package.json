@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@omp-toolkit/core": "workspace:*"
+    "@omp-toolkit/core": "workspace:*",
+    "terminui": "^0.3.1"
   }
 }

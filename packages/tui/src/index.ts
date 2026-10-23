@@ -1,3 +1,37 @@
+export {
+  type Backend,
+  blockBordered,
+  createBlock,
+  createLayout,
+  createLine,
+  createParagraph,
+  createRow,
+  createSpan,
+  createTable,
+  createTableCell,
+  createTerminal,
+  createTestBackend,
+  createTestBackendState,
+  createText,
+  createTitle,
+  type Direction,
+  type Frame,
+  fillConstraint,
+  frameRenderWidget,
+  lengthConstraint,
+  maxConstraint,
+  minConstraint,
+  percentageConstraint,
+  type Rect,
+  renderParagraph,
+  renderTable,
+  splitLayout,
+  type Terminal,
+  terminalClear,
+  terminalDraw,
+  testBackendToString,
+} from "terminui";
+export * from "./backend";
 export * from "./provider-usage-view";
 export * from "./schedule-view";
 export * from "./theme";
