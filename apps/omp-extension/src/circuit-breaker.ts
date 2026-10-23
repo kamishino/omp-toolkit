@@ -7,7 +7,6 @@
 
 import { execFile } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import {
@@ -20,6 +19,10 @@ import {
   nextStreaks,
   type Policy,
   type ProbeResult as Result,
+  resolveAgentDir,
+  resolveSnapshotPath,
+  resolveStatePath,
+  resolveStreakPath,
   restorableEmails,
   type Status,
   type StreakState,
@@ -62,19 +65,19 @@ export function ompBin(): string {
 }
 
 export function agentDir(): string {
-  return process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
+  return resolveAgentDir();
 }
 
 export function statePath(): string {
-  return path.join(agentDir(), "gemini-health-state.json");
+  return resolveStatePath();
 }
 
 export function snapshotPath(): string {
-  return path.join(agentDir(), "gemini-health-latest.json");
+  return resolveSnapshotPath();
 }
 
 export function streakPath(): string {
-  return path.join(agentDir(), "gemini-health-streaks.json");
+  return resolveStreakPath();
 }
 
 export function short(error: unknown): string {

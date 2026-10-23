@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {
+  resolveAgentDir,
+  resolveHealthScriptCandidates,
+  resolveMonitorScriptCandidates,
+} from "@omp-toolkit/core";
 import which from "which";
 
 function isRegularFile(filePath: string): boolean {
@@ -27,7 +32,7 @@ export function panelPaths(appPath: string): PanelPaths {
 }
 
 export function agentDir(env = process.env, home = os.homedir()): string {
-  return env.PI_CODING_AGENT_DIR ?? path.join(home, ".omp", "agent");
+  return resolveAgentDir(env, home);
 }
 
 export function findBun(
@@ -65,30 +70,15 @@ export function resolveMonitorScript(
   checkoutRoot: string,
   home = os.homedir(),
 ): string | null {
-  const dir = agentDir(env, home);
-  const candidates = [
-    path.join(dir, "scripts", "omp-provider-usage.js"),
-    path.join(checkoutRoot, "apps", "provider-usage", "dist", "index.js"),
-    path.join(checkoutRoot, "apps", "provider-usage", "src", "index.ts"),
-  ];
-
-  return candidates.find(isRegularFile) ?? null;
+  return resolveMonitorScriptCandidates(checkoutRoot, env, home).find(isRegularFile) ?? null;
 }
+
 export function resolveHealthScript(
   env = process.env,
   checkoutRoot: string,
   home = os.homedir(),
 ): string | null {
-  const dir = agentDir(env, home);
-  // The desktop's warm-up/check CLI must match the checkout build; the
-  // installed extension is the fallback for environments with no local build.
-  const candidates = [
-    path.join(checkoutRoot, "apps", "omp-extension", "dist", "index.js"),
-    path.join(dir, "extensions", "gemini-health.js"),
-    path.join(checkoutRoot, "apps", "omp-extension", "src", "index.ts"),
-  ];
-
-  return candidates.find(isRegularFile) ?? null;
+  return resolveHealthScriptCandidates(checkoutRoot, env, home).find(isRegularFile) ?? null;
 }
 
 export function resolveCheckout(

@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { resolveAgentDir } from "../packages/core/src/environment";
 
 const root = path.resolve(import.meta.dir, "..");
-const agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
+const agentDir = resolveAgentDir();
 const extensionsDir = path.join(agentDir, "extensions");
 const scriptsDir = path.join(agentDir, "scripts");
 const backupDir = path.join(agentDir, "backups", new Date().toISOString().replace(/[:.]/g, "-"));

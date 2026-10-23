@@ -1,13 +1,10 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { promisify } from "node:util";
-import type { HealthSnapshot, UsageReport } from "@omp-toolkit/core";
+import { type HealthSnapshot, resolveSnapshotPath, type UsageReport } from "@omp-toolkit/core";
 
 const execFileAsync = promisify(execFile);
-const AGENT_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
-const SNAPSHOT_PATH = path.join(AGENT_DIR, "gemini-health-latest.json");
+const SNAPSHOT_PATH = resolveSnapshotPath();
 const EXEC_OPTS = {
   encoding: "utf8" as const,
   timeout: 25_000,

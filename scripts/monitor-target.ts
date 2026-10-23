@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-
+import { resolveMonitorScriptCandidates } from "../packages/core/src/environment";
 export const DEFAULT_INTERVAL = 300;
 
 export interface MonitorOptions {
@@ -37,12 +36,10 @@ export function monitorCommandArgs(script: string, options: MonitorOptions): str
 }
 
 export function resolveMonitorScript(
-  agentDir = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent"),
+  agentDir?: string,
   root = path.resolve(import.meta.dir, ".."),
 ): string {
-  const installed = path.join(agentDir, "scripts", "omp-provider-usage.js");
-  const dist = path.resolve(root, "apps/provider-usage/dist/index.js");
-  const source = path.resolve(root, "apps/provider-usage/src/index.ts");
-  const candidates = [installed, dist, source];
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? installed;
+  const env = agentDir ? { PI_CODING_AGENT_DIR: agentDir } : process.env;
+  const candidates = resolveMonitorScriptCandidates(root, env);
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
 }
