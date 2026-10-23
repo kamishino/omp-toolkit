@@ -183,7 +183,7 @@ describe("buildDashboard", () => {
     expect(dashboard.tooltip).toContain("alpha 85%");
     expect(dashboard.tooltip).toContain("1 HANG");
     expect(dashboard.tooltip).toContain("¥8.00");
-
+    expect(dashboard.tooltip).toMatch(/(Off-Peak|Peak)/);
     expect(summaryText(dashboard.summary)).toBe(
       "2 providers · 3 accounts · 1 ≥80% · 0 maxed · tightest antigravity:alpha 85%",
     );
