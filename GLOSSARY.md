@@ -133,3 +133,15 @@ multiplier, discount percentage, and duration until the next schedule transition
 ## Context-aware advisory
 A non-blocking visibility cue (such as a dashboard badge or countdown timer)
 informing the operator of the active pricing window and cost implications.
+
+## Double-buffered cell diffing
+An in-memory grid comparison that emits ANSI escapes only for modified terminal
+cells between consecutive frames, eliminating screen flicker.
+
+## Terminal backend
+The stream or buffer adapter (such as Node stdout, a crossterm bridge, or an
+in-memory test buffer) that receives cell writes from a terminal instance.
+
+## Frame buffer
+A two-dimensional grid of cell structs (character, foreground, background, and
+modifiers) representing a single render pass before flushing.
