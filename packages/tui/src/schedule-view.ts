@@ -1,6 +1,6 @@
 import { buildScheduleTable, evaluateWindow, type TimeWindowPolicy } from "@omp-toolkit/core";
 import { createParagraph, type Frame, frameRenderWidget, renderParagraph } from "terminui";
-import { ANSI, padVisible, paint } from "./theme";
+import { ANSI, padVisible, paint, stripAnsi } from "./theme";
 
 export interface ScheduleViewOptions {
   userTimeZone?: string;
@@ -72,6 +72,6 @@ export function drawScheduleView(
   options: ScheduleViewOptions = {},
 ): void {
   const rendered = renderScheduleView(policies, options);
-  const p = createParagraph(rendered);
+  const p = createParagraph(stripAnsi(rendered));
   frameRenderWidget(frame, renderParagraph(p), frame.area);
 }

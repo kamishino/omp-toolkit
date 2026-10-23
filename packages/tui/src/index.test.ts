@@ -268,4 +268,74 @@ describe("provider usage view", () => {
     backend.showCursor();
     expect(writes).toContain("\x1b[?25h");
   });
+  test("createStdoutBackend batches contiguous horizontal cells and emits sync markers", () => {
+    const writes: string[] = [];
+    const mockStream = {
+      columns: 86,
+      rows: 30,
+      write: (data: string) => {
+        writes.push(data);
+        return true;
+      },
+    } as unknown as NodeJS.WriteStream;
+
+    const backend = createStdoutBackend(mockStream);
+    backend.draw([
+      {
+        x: 0,
+        y: 0,
+        cell: { symbol: "A", fg: { type: "reset" }, bg: { type: "reset" }, modifier: 0 },
+      },
+      {
+        x: 1,
+        y: 0,
+        cell: { symbol: "B", fg: { type: "reset" }, bg: { type: "reset" }, modifier: 0 },
+      },
+      {
+        x: 2,
+        y: 0,
+        cell: { symbol: "C", fg: { type: "reset" }, bg: { type: "reset" }, modifier: 0 },
+      },
+    ]);
+    backend.flush();
+
+    const output = writes.join("");
+    expect(output).toContain("\x1b[?2026h");
+    expect(output).toContain("\x1b[?2026l");
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI cursor jump sequences
+    const cursorJumps = output.match(/\x1b\[\d+;\d+H/g) ?? [];
+    expect(cursorJumps.length).toBe(1);
+    expect(cursorJumps[0]).toBe("\x1b[1;1H");
+    expect(output).toContain("ABC");
+  });
+
+  test("drawProviderUsage ensures zero raw ANSI escape sequences inside terminui cells", () => {
+    process.env.FORCE_COLOR = "1";
+    const state = createTestBackendState(86, 25);
+    const terminal = createTerminal(createTestBackend(state));
+    const dashboard = buildDashboard(sectionsFor(reports, new Map()), {
+      fetchedAt: Date.now(),
+      now: Date.now(),
+      showHealth: true,
+      thresholds: { warm: 0.4, hot: 0.7, critical: 0.85, above: 0.8 },
+      staleMinutes: 15,
+      balanceAlert: { cny: 10, usd: 10 },
+    });
+
+    terminalDraw(terminal, (frame) => {
+      drawProviderUsage(frame, dashboard, {
+        interval: 300,
+        watch: true,
+        showHealth: true,
+      });
+    });
+
+    let rawEscapeCount = 0;
+    for (const row of state.buffer) {
+      for (const cell of row) {
+        if (cell.symbol.includes("\x1b")) rawEscapeCount++;
+      }
+    }
+    expect(rawEscapeCount).toBe(0);
+  });
 });
