@@ -33,7 +33,9 @@ if (process.platform === "win32") {
 
 if (!app.requestSingleInstanceLock()) {
   console.log("OMP Provider Usage is already running.");
-  app.quit();
+  const code = process.argv.includes("--selftest") ? 2 : 0;
+  app.exit(code);
+  process.exit(code);
 }
 
 let panel: DesktopPanel | null = null;
@@ -247,27 +249,48 @@ void app.whenReady().then(async () => {
     }
   });
 
-  desktopTray = new DesktopTray({
-    assetsDir,
-    loginItem,
-    isPanelVisible: () => Boolean(panel?.isVisible()),
-    onTogglePanel: togglePanel,
-    onRefreshNow: refresh,
-    onOpenTerminal: () => {
-      void openTerminalMonitor();
-    },
-    onOpenOrca: openOrcaTab,
-    onQuit: () => {
-      app.quit();
-    },
-    onError: (error) => {
-      logError(error);
-      dialog.showErrorBox(
-        "OMP Provider Usage",
-        `Could not update login item: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    },
-  });
+  try {
+    desktopTray = new DesktopTray({
+      assetsDir,
+      loginItem,
+      isPanelVisible: () => Boolean(panel?.isVisible()),
+      onTogglePanel: togglePanel,
+      onRefreshNow: refresh,
+      onOpenTerminal: () => {
+        void openTerminalMonitor();
+      },
+      onOpenOrca: openOrcaTab,
+      onQuit: () => {
+        app.quit();
+      },
+      onError: (error) => {
+        logError(error);
+        dialog.showErrorBox(
+          "OMP Provider Usage",
+          `Could not update login item: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      },
+    });
+  } catch (error) {
+    logError(error);
+    const message = error instanceof Error ? error.message : String(error);
+    const text = `OMP Provider Usage: system tray unavailable: ${message}\n`;
+    if (!process.argv.includes("--selftest")) {
+      dialog.showErrorBox("OMP Provider Usage", `System tray unavailable: ${message}`);
+    }
+    process.stderr.write(text, () => {
+      app.exit(1);
+    });
+    return;
+  }
+
+  if (process.argv.includes("--selftest")) {
+    const created = Boolean(desktopTray?.tray);
+    process.stdout.write(`tray: ${created ? "created" : "missing"}\n`, () => {
+      app.exit(created ? 0 : 1);
+    });
+    return;
+  }
 
   ipcMain.on(IPC.refresh, () => {
     void refresh();

@@ -1,29 +1,16 @@
 import fs from "node:fs";
 import { type Dashboard, truncate, type UsageLevel } from "@omp-toolkit/core";
-import type { Menu as ElectronMenu, Tray as ElectronTray, NativeImage, Rectangle } from "electron";
+import { Menu, type NativeImage, nativeImage, nativeTheme, type Rectangle, Tray } from "electron";
 import type { LoginItem } from "./login-item";
 import { trayIconPath } from "./tray-path";
-
-// Electron runtime is lazily accessed so unit tests can run outside Electron runtime
-function getElectron() {
-  try {
-    // biome-ignore lint/suspicious/noExplicitAny: electron runtime detection
-    return (globalThis as any).require?.("electron") ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export function trayImage(
   assetsDir: string,
   mode: "light" | "dark",
   level: UsageLevel,
-): NativeImage | null {
-  const electron = getElectron();
-  if (!electron?.nativeImage) return null;
-
+): NativeImage {
   const filePath = trayIconPath(assetsDir, mode, level);
-  let img = electron.nativeImage.createFromPath(filePath);
+  let img = nativeImage.createFromPath(filePath);
 
   const retinaFile = trayIconPath(assetsDir, mode, level, 2);
   if (fs.existsSync(retinaFile)) {
@@ -37,7 +24,7 @@ export function trayImage(
 
   if (img.isEmpty() && level !== "unknown") {
     const fallbackPath = trayIconPath(assetsDir, mode, "unknown");
-    img = electron.nativeImage.createFromPath(fallbackPath);
+    img = nativeImage.createFromPath(fallbackPath);
     const fallbackRetina = trayIconPath(assetsDir, mode, "unknown", 2);
     if (fs.existsSync(fallbackRetina)) {
       try {
@@ -69,54 +56,44 @@ export interface DesktopTrayOptions {
  * tooltip truncation, click events, and OS theme event listeners.
  */
 export class DesktopTray {
-  readonly tray: ElectronTray | null = null;
+  readonly tray: Tray;
   private readonly options: DesktopTrayOptions;
   private lastDashboard: Dashboard | null = null;
   private lastError: string | null = null;
   private isRefreshing = false;
-  private readonly themeListener?: () => void;
+  private readonly themeListener: () => void;
 
   constructor(options: DesktopTrayOptions) {
     this.options = options;
-    const electron = getElectron();
-    if (!electron?.Tray) {
-      return;
-    }
 
-    const initialMode = electron.nativeTheme?.shouldUseDarkColors ? "dark" : "light";
+    const initialMode = nativeTheme.shouldUseDarkColors ? "dark" : "light";
     const initialImg = trayImage(options.assetsDir, initialMode, "unknown");
-    if (initialImg) {
-      const trayInstance = new electron.Tray(initialImg);
-      trayInstance.setToolTip("OMP: loading...");
+    this.tray = new Tray(initialImg);
+    this.tray.setToolTip("OMP: loading...");
 
-      trayInstance.on("click", () => {
-        this.options.onTogglePanel();
-      });
+    this.tray.on("click", () => {
+      this.options.onTogglePanel();
+    });
 
-      trayInstance.on("double-click", () => {
-        this.options.onTogglePanel();
-      });
+    this.tray.on("double-click", () => {
+      this.options.onTogglePanel();
+    });
 
-      trayInstance.on("right-click", () => {
-        const menu = this.rebuildMenu();
-        if (menu) {
-          trayInstance.popUpContextMenu(menu);
-        }
-      });
-      this.tray = trayInstance;
-    }
-    if (electron.nativeTheme) {
-      this.themeListener = () => {
-        this.updateIconAndTooltip();
-      };
-      electron.nativeTheme.on("updated", this.themeListener);
-    }
+    this.tray.on("right-click", () => {
+      const menu = this.rebuildMenu();
+      this.tray.popUpContextMenu(menu);
+    });
+
+    this.themeListener = () => {
+      this.updateIconAndTooltip();
+    };
+    nativeTheme.on("updated", this.themeListener);
 
     this.rebuildMenu();
   }
 
   getBounds(): Rectangle | null {
-    if (!this.tray || this.tray.isDestroyed()) return null;
+    if (this.tray.isDestroyed()) return null;
     return this.tray.getBounds();
   }
 
@@ -129,14 +106,11 @@ export class DesktopTray {
   }
 
   private updateIconAndTooltip(): void {
-    if (!this.tray || this.tray.isDestroyed()) return;
-    const electron = getElectron();
-    const mode = electron?.nativeTheme?.shouldUseDarkColors ? "dark" : "light";
+    if (this.tray.isDestroyed()) return;
+    const mode = nativeTheme.shouldUseDarkColors ? "dark" : "light";
     const level = this.lastDashboard?.iconLevel ?? "unknown";
     const img = trayImage(this.options.assetsDir, mode, level);
-    if (img) {
-      this.tray.setImage(img);
-    }
+    this.tray.setImage(img);
 
     let tooltip = "OMP: loading...";
     if (this.lastError && !this.lastDashboard) {
@@ -147,14 +121,11 @@ export class DesktopTray {
     this.tray.setToolTip(tooltip);
   }
 
-  rebuildMenu(): ElectronMenu | null {
-    const electron = getElectron();
-    if (!electron?.Menu) return null;
-
+  rebuildMenu(): Menu {
     const isVisible = Boolean(this.options.isPanelVisible?.());
     const isAutostart = Boolean(this.options.loginItem?.isEnabled());
 
-    const menu = electron.Menu.buildFromTemplate([
+    const menu = Menu.buildFromTemplate([
       {
         label: this.isRefreshing ? "Refreshing..." : "Refresh now",
         enabled: !this.isRefreshing,
@@ -204,18 +175,15 @@ export class DesktopTray {
       },
     ]);
 
-    if (process.platform === "linux" && this.tray) {
+    if (process.platform === "linux") {
       this.tray.setContextMenu(menu);
     }
     return menu;
   }
 
   destroy(): void {
-    const electron = getElectron();
-    if (this.themeListener && electron?.nativeTheme) {
-      electron.nativeTheme.off("updated", this.themeListener);
-    }
-    if (this.tray && !this.tray.isDestroyed()) {
+    nativeTheme.off("updated", this.themeListener);
+    if (!this.tray.isDestroyed()) {
       this.tray.destroy();
     }
   }
