@@ -1,6 +1,7 @@
 # Documentation
 
 - [Architecture](architecture.md)
+- [Folder Structure Blueprint](../Project_Folders_Structure_Blueprint.md)
 - [Design](design.md)
 - [Runbook](runbook.md)
 - [Roadmap](roadmap.md)

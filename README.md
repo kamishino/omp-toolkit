@@ -331,6 +331,7 @@ bun run build
 ## 📚 Documentation
 
 - [Architecture](docs/architecture.md)
+- [Folder Structure Blueprint](Project_Folders_Structure_Blueprint.md)
 - [Design](docs/design.md)
 - [Runbook](docs/runbook.md)
 - [Roadmap](docs/roadmap.md)
