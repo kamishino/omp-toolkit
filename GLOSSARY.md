@@ -145,3 +145,15 @@ in-memory test buffer) that receives cell writes from a terminal instance.
 ## Frame buffer
 A two-dimensional grid of cell structs (character, foreground, background, and
 modifiers) representing a single render pass before flushing.
+
+## Dashboard engine
+A unified domain subsystem that accepts raw provider reports and route health
+snapshots and constructs a fully hydrated, thresholded view model in one step.
+
+## Circuit breaker module
+An autonomous subsystem that monitors route stalls, tracks healthy check streaks,
+and applies temporary routing exclusions to protect session pins from hanging.
+
+## Terminal launcher
+A deep platform adapter that encapsulates shell command construction, PATH
+executable discovery, child process spawning, and clipboard fallback.
