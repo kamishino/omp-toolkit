@@ -163,6 +163,7 @@ describe("provider usage view", () => {
     });
     expect(view).toContain("LOW");
     expect(view).toContain("¥9.50");
+    expect(view).toMatch(/\[(OFF-PEAK|PEAK):/);
     for (const line of view.split("\n")) {
       expect(stripAnsi(line).length).toBeLessThanOrEqual(86);
     }
