@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   BENCHMARK_TASKS,
+  calculateModelCost,
   calculateSummary,
+  estimateTokenCount,
   formatScorecard,
   mockMetricsForDryRun,
   PAIR_CONFIGS,
@@ -35,11 +37,13 @@ describe("eval-model-roles harness", () => {
     const empty = parseCliArgs([]);
     expect(empty.list).toBe(false);
     expect(empty.dryRun).toBe(false);
+    expect(empty.live).toBe(false);
     expect(empty.pair).toBeUndefined();
 
     const custom = parseCliArgs([
       "--list",
       "--dry-run",
+      "--live",
       "--json",
       "--report",
       "--pair=b",
@@ -47,10 +51,33 @@ describe("eval-model-roles harness", () => {
     ]);
     expect(custom.list).toBe(true);
     expect(custom.dryRun).toBe(true);
+    expect(custom.live).toBe(true);
     expect(custom.json).toBe(true);
     expect(custom.report).toBe(true);
     expect(custom.pair).toBe("B");
     expect(custom.task).toBe("T3");
+    const pairsCustom = parseCliArgs(["--pairs=a,b"]);
+    expect(pairsCustom.pairs).toEqual(["A", "B"]);
+  });
+
+  test("estimateTokenCount returns expected character ratio", () => {
+    expect(estimateTokenCount("1234")).toBe(1);
+    expect(estimateTokenCount("12345678")).toBe(2);
+    expect(estimateTokenCount("")).toBe(1);
+  });
+
+  test("calculateModelCost uses published rates for DeepSeek and Gemini", () => {
+    // DeepSeek: $0.30 in / $1.20 out per 1M tokens
+    const deepSeekCost = calculateModelCost("deepseek/deepseek-flash", 1_000_000, 1_000_000);
+    expect(deepSeekCost).toBeCloseTo(1.5, 3);
+
+    // Gemini: $0.75 in / $3.75 out per 1M tokens
+    const geminiCost = calculateModelCost(
+      "google-antigravity/gemini-3.8-flash:high",
+      1_000_000,
+      1_000_000,
+    );
+    expect(geminiCost).toBeCloseTo(4.5, 3);
   });
 
   test("calculateSummary accurately computes summary statistics", () => {
