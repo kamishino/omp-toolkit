@@ -3,7 +3,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { WarmUpReport } from "@omp-toolkit/core";
-import { fetchWarmUp, parseWarmUpReport, summarizeWarmUp, warmUpFailureMessage } from "./warmup";
+import {
+  executeWarmUp,
+  fetchWarmUp,
+  parseWarmUpReport,
+  summarizeWarmUp,
+  warmUpFailureMessage,
+} from "./warmup";
 
 describe("warmup desktop helpers", () => {
   const validReport: WarmUpReport = {
@@ -92,5 +98,36 @@ describe("warmup desktop helpers", () => {
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+  test("executeWarmUp returns success and formatted summary on valid report", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-exec-warmup-"));
+    const scriptFile = path.join(tmpDir, "dummy-warmup.ts");
+    fs.writeFileSync(
+      scriptFile,
+      `console.log(${JSON.stringify(JSON.stringify(validReport))}); process.exit(0);`,
+      "utf8",
+    );
+
+    try {
+      const res = await executeWarmUp(
+        { bun: process.execPath, script: scriptFile },
+        { provider: "google-antigravity", action: "warm", all: true },
+      );
+      expect(res.success).toBe(true);
+      expect(res.message).toBe("Warmed 1 account(s) · skipped 1 non-OK");
+      expect(res.report).toEqual(validReport);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("executeWarmUp returns failure and actionable error on script failure", async () => {
+    const res = await executeWarmUp(
+      { bun: process.execPath, script: "non-existent-script.ts" },
+      { provider: "google-antigravity", action: "warm", all: true },
+    );
+    expect(res.success).toBe(false);
+    expect(typeof res.message).toBe("string");
+    expect(res.message.length).toBeGreaterThan(0);
   });
 });

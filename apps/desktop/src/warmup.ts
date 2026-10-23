@@ -145,3 +145,22 @@ export async function fetchWarmUp(
     throw new Error(warmUpFailureMessage(error));
   }
 }
+export async function executeWarmUp(
+  source: DataSource,
+  request: WarmUpRequest,
+  options?: { timeoutMs?: number; signal?: AbortSignal },
+): Promise<{ success: boolean; message: string; report?: WarmUpReport }> {
+  try {
+    const report = await fetchWarmUp(source, request, options);
+    return {
+      success: true,
+      message: summarizeWarmUp(report),
+      report,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: warmUpFailureMessage(error),
+    };
+  }
+}
