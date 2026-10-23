@@ -128,6 +128,16 @@ function renderProviderCard(
   h2.textContent = `${provider.name}${provider.suffix} · ${provider.accounts} ${provider.accounts === 1 ? "account" : "accounts"}`;
   headerDiv.appendChild(h2);
 
+  if (provider.timeWindow) {
+    const badge = document.createElement("span");
+    const isPeak = provider.timeWindow.isPeak;
+    badge.className = `time-window-badge ${isPeak ? "badge-peak" : "badge-off-peak"}`;
+    badge.textContent = `${provider.timeWindow.label} · ${provider.timeWindow.formattedTimeUntilNext}`;
+    badge.title = `${provider.timeWindow.badgeText} (reference clock: ${provider.timeWindow.referenceTimeZone})`;
+    badge.setAttribute("aria-label", provider.timeWindow.badgeText);
+    headerDiv.appendChild(badge);
+  }
+
   if (hasWarmUp) {
     const eligibleCount = provider.rows.filter(
       (r) => warmUpEligibility(provider.id, r.health) === "warm",
