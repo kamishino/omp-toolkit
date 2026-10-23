@@ -1,7 +1,5 @@
 import {
   assembleDashboard,
-  type BalanceAlertThresholds,
-  DEFAULT_BALANCE_ALERT,
   getAllTimeWindowPolicies,
   type HealthResult,
   type HealthSnapshot,
@@ -17,6 +15,7 @@ import {
   renderScheduleView,
   terminalDraw,
 } from "@omp-toolkit/tui";
+import { parseMonitorCliConfig } from "./config";
 import { writeHeartbeat } from "./heartbeat";
 import { jsonPayload } from "./json";
 import { useAlternateScreen } from "./terminal";
@@ -29,35 +28,22 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  if (process.argv.includes("--schedule")) {
+  const config = parseMonitorCliConfig();
+  if (config.schedule) {
     const policies = getAllTimeWindowPolicies();
     console.log(renderScheduleView(policies));
     return;
   }
 
-  const json = process.argv.includes("--json");
-  const watch = process.argv.includes("--watch");
-  const showHealth = process.argv.includes("--health");
-  const intervalArg = process.argv.find((arg) => arg.startsWith("--interval="));
-  const interval = Math.max(10, Number(intervalArg?.slice("--interval=".length) ?? 300) || 300);
-  function threshold(name: string, fallback: number): number {
-    const value = Number(process.env[name]);
-    return Number.isFinite(value) && value >= 0 ? value : fallback;
-  }
-
-  const balanceAlert: BalanceAlertThresholds = {
-    cny: threshold("DEEPSEEK_BALANCE_ALERT_CNY", DEFAULT_BALANCE_ALERT.cny),
-    usd: threshold("DEEPSEEK_BALANCE_ALERT_USD", DEFAULT_BALANCE_ALERT.usd),
-  };
+  const { json, watch, health: showHealth, interval, balanceAlert } = config;
 
   const interactive = useAlternateScreen({
     watch,
     isTTY: process.stdout.isTTY === true,
     json,
     term: process.env.TERM,
-    noAltScreen: process.argv.includes("--no-alt-screen"),
+    noAltScreen: !config.altScreen,
   });
-
   if (interactive) {
     const backend = createStdoutBackend(process.stdout);
     const terminal = createTerminal(backend);
