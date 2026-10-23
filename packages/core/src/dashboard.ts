@@ -1,8 +1,15 @@
 import { money } from "./format";
 import { evaluateWindow, getTimeWindowPolicy, type WindowEvaluation } from "./schedule";
-import type { BalanceAlertThresholds } from "./settings";
-import type { HealthResult, ProviderSection, Status, UsageLimit } from "./types";
-import { limitFor, local, providerName, shortProvider, usedPercent } from "./usage";
+import { type BalanceAlertThresholds, DEFAULT_BALANCE_ALERT } from "./settings";
+import type {
+  HealthResult,
+  HealthSnapshot,
+  ProviderSection,
+  Status,
+  UsageLimit,
+  UsageReport,
+} from "./types";
+import { limitFor, local, providerName, sectionsFor, shortProvider, usedPercent } from "./usage";
 export type UsageLevel = "ok" | "warn" | "hot" | "critical" | "unknown";
 export type RouteText = "OK" | "HANG" | "AUTH" | "MODEL" | "ERR" | "—";
 export const DASHBOARD_SCHEMA_VERSION = 2 as const;
@@ -83,6 +90,52 @@ export interface BuildDashboardOptions {
   staleMinutes: number;
   balanceAlert: BalanceAlertThresholds;
   userTimeZone?: string;
+}
+export const DEFAULT_USAGE_THRESHOLDS = {
+  warm: 0.4,
+  hot: 0.7,
+  critical: 0.85,
+  above: 0.8,
+} as const;
+
+export const DEFAULT_STALE_MINUTES = 15;
+
+export interface AssembleDashboardOptions {
+  now?: number;
+  showHealth?: boolean;
+  thresholds?: { warm: number; hot: number; critical: number; above: number };
+  staleMinutes?: number;
+  balanceAlert?: BalanceAlertThresholds;
+  userTimeZone?: string;
+}
+
+/**
+ * Deep, high-leverage entry point for constructing a fully-hydrated Dashboard.
+ * Automatically aligns health snapshot results, groups provider sections,
+ * injects default design thresholds, and evaluates time-window pricing schedules.
+ */
+export function assembleDashboard(
+  reports: UsageReport[],
+  snapshot?: HealthSnapshot | null,
+  options: AssembleDashboardOptions = {},
+): Dashboard {
+  const now = options.now ?? Date.now();
+  const showHealth = options.showHealth ?? (snapshot !== undefined && snapshot !== null);
+  const health = new Map<string, HealthResult>(
+    (snapshot?.results ?? []).map((result) => [result.email, result]),
+  );
+  const sections = sectionsFor(reports, health);
+
+  return buildDashboard(sections, {
+    fetchedAt: now,
+    now,
+    showHealth,
+    checkedAt: snapshot?.checkedAt,
+    thresholds: options.thresholds ?? DEFAULT_USAGE_THRESHOLDS,
+    staleMinutes: options.staleMinutes ?? DEFAULT_STALE_MINUTES,
+    balanceAlert: options.balanceAlert ?? DEFAULT_BALANCE_ALERT,
+    userTimeZone: options.userTimeZone,
+  });
 }
 export function usageLevel(
   value: number | undefined,

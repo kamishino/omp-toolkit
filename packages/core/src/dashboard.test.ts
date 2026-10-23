@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  assembleDashboard,
   buildDashboard,
   isDashboard,
   isLowBalance,
@@ -7,7 +8,7 @@ import {
   summaryText,
   usageLevel,
 } from "./dashboard";
-import type { HealthResult, UsageReport } from "./types";
+import type { HealthResult, HealthSnapshot, UsageReport } from "./types";
 import { sectionsFor } from "./usage";
 
 const thresholds = { warm: 0.4, hot: 0.7, critical: 0.85, above: 0.8 };
@@ -209,6 +210,37 @@ describe("buildDashboard", () => {
     expect(summaryText(dashboard.summary)).toBe(
       "0 providers · 0 accounts · 0 ≥80% · 0 maxed · no usage data",
     );
+    expect(isDashboard(dashboard)).toBe(true);
+  });
+});
+describe("assembleDashboard high-leverage entry point", () => {
+  test("assembles dashboard in one call with defaults", () => {
+    const reports: UsageReport[] = [
+      {
+        provider: "google-antigravity",
+        metadata: { email: "user@example.com" },
+        limits: [
+          {
+            id: "gemini-weekly",
+            label: "Gemini",
+            amount: { usedFraction: 0.3 },
+            window: { resetsAt: Date.now() + 1000 },
+          },
+        ],
+      },
+    ];
+    const snapshot: HealthSnapshot = {
+      checkedAt: Date.now() - 5000,
+      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+    };
+
+    const dashboard = assembleDashboard(reports, snapshot);
+    expect(dashboard.providers.length).toBe(1);
+    expect(dashboard.providers[0].name).toBe("GOOGLE ANTIGRAVITY");
+    expect(dashboard.providers[0].rows[0].health).toBe("ok");
+    expect(dashboard.providers[0].rows[0].route.text).toBe("OK");
+    expect(dashboard.health?.checkedAt).toBe(snapshot.checkedAt);
+    expect(dashboard.iconLevel).toBe("ok");
     expect(isDashboard(dashboard)).toBe(true);
   });
 });

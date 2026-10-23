@@ -1,14 +1,57 @@
 import { execFile } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
-import { DASHBOARD_SCHEMA_VERSION, type Dashboard, isDashboard } from "@omp-toolkit/core";
+import {
+  assembleDashboard,
+  DASHBOARD_SCHEMA_VERSION,
+  type Dashboard,
+  type HealthSnapshot,
+  isDashboard,
+  type UsageReport,
+} from "@omp-toolkit/core";
 
 const execFileAsync = promisify(execFile);
 
 export interface DataSource {
   bun: string;
   script: string;
+  ompBin?: string;
+  agentDir?: string;
 }
 
+export function readHealthSnapshot(agentDir?: string): HealthSnapshot | null {
+  const dir =
+    agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
+  const snapshotFile = path.join(dir, "gemini-health-latest.json");
+  try {
+    const raw = fs.readFileSync(snapshotFile, "utf8");
+    const parsed = JSON.parse(raw) as HealthSnapshot;
+    if (parsed && Array.isArray(parsed.results)) return parsed;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchRawUsage(
+  ompBin = process.env.OMP_BIN || "omp",
+  options?: { timeoutMs?: number; signal?: AbortSignal },
+): Promise<UsageReport[]> {
+  const { stdout } = await execFileAsync(ompBin, ["usage", "--json"], {
+    encoding: "utf8",
+    timeout: options?.timeoutMs ?? 25_000,
+    windowsHide: true,
+    maxBuffer: 2 * 1024 * 1024,
+    signal: options?.signal,
+  });
+  const parsed = JSON.parse(String(stdout));
+  if (!parsed || !Array.isArray(parsed.reports)) {
+    throw new Error("omp usage returned an unexpected payload");
+  }
+  return parsed.reports as UsageReport[];
+}
 export function parseMonitorPayload(text: string): Dashboard {
   let parsed: unknown;
   try {
@@ -36,38 +79,24 @@ export function parseMonitorPayload(text: string): Dashboard {
 }
 
 export async function fetchDashboard(
-  source: DataSource,
+  source?: DataSource,
   options?: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<Dashboard> {
   try {
-    const { stdout } = await execFileAsync(source.bun, [source.script, "--json", "--health"], {
-      encoding: "utf8",
-      timeout: options?.timeoutMs ?? 25_000,
-      windowsHide: true,
-      maxBuffer: 2 * 1024 * 1024,
-      signal: options?.signal,
-    });
-
-    return parseMonitorPayload(String(stdout));
-  } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "killed" in error &&
-      (error as { killed?: boolean }).killed
-    ) {
-      throw new Error("omp-provider-usage timed out after 25s");
+    const reports = await fetchRawUsage(source?.ompBin, options);
+    const snapshot = readHealthSnapshot(source?.agentDir);
+    return assembleDashboard(reports, snapshot);
+  } catch (directError) {
+    if (source?.bun && source?.script && fs.existsSync(source.script)) {
+      const { stdout } = await execFileAsync(source.bun, [source.script, "--json", "--health"], {
+        encoding: "utf8",
+        timeout: options?.timeoutMs ?? 25_000,
+        windowsHide: true,
+        maxBuffer: 2 * 1024 * 1024,
+        signal: options?.signal,
+      });
+      return parseMonitorPayload(String(stdout));
     }
-
-    const stderr = (error as { stderr?: string })?.stderr?.trim();
-    if (stderr) {
-      throw new Error(stderr);
-    }
-
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    throw new Error(String(error));
+    throw directError;
   }
 }
