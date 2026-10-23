@@ -1,19 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
+import { generateTrayManifest, type TrayMode } from "../apps/desktop/src/tray-path";
 import tokens from "../design/tokens.json";
+import type { UsageLevel } from "../packages/core/src/dashboard";
 import { oklchToRgb, type Rgb } from "./color";
 
 const desktop = tokens.desktop;
-
-const modes = ["light", "dark"] as const;
-const levels = ["ok", "warn", "hot", "critical", "unknown"] as const;
-
 function clamp(val: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, val));
 }
 
-function drawTrayIcon(size: number, mode: "light" | "dark", level: (typeof levels)[number]): PNG {
+function drawTrayIcon(size: number, mode: TrayMode, level: UsageLevel): PNG {
   const png = new PNG({ width: size, height: size });
   const palette = desktop.color[mode] as Record<string, { $value: string }>;
   const surfaceRaised = oklchToRgb(palette.surfaceRaised.$value);
@@ -147,18 +145,11 @@ export function buildTrayIcons(assetsDir: string): void {
   const trayDir = path.join(assetsDir, "tray");
   fs.mkdirSync(trayDir, { recursive: true });
 
-  for (const mode of modes) {
-    for (const level of levels) {
-      // 16x16 standard
-      const icon16 = drawTrayIcon(16, mode, level);
-      const buf16 = PNG.sync.write(icon16);
-      fs.writeFileSync(path.join(trayDir, `tray-${mode}-${level}.png`), buf16);
-
-      // 32x32 @2x
-      const icon32 = drawTrayIcon(32, mode, level);
-      const buf32 = PNG.sync.write(icon32);
-      fs.writeFileSync(path.join(trayDir, `tray-${mode}-${level}@2x.png`), buf32);
-    }
+  const manifest = generateTrayManifest();
+  for (const item of manifest) {
+    const size = item.scale === 2 ? 32 : 16;
+    const icon = drawTrayIcon(size, item.mode, item.level);
+    fs.writeFileSync(path.join(trayDir, item.fileName), PNG.sync.write(icon));
   }
 
   // App icon (256x256)
