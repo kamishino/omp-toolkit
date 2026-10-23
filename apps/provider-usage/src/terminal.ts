@@ -15,3 +15,5 @@ export function useAlternateScreen(options: AlternateScreenOptions): boolean {
     options.term !== "dumb"
   );
 }
+
+export const isInteractiveTui = useAlternateScreen;
