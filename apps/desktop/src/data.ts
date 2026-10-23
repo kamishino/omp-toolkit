@@ -1,7 +1,5 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { promisify } from "node:util";
 import {
   assembleDashboard,
@@ -9,6 +7,7 @@ import {
   type Dashboard,
   type HealthSnapshot,
   isDashboard,
+  resolveSnapshotPath,
   type UsageReport,
 } from "@omp-toolkit/core";
 
@@ -22,9 +21,9 @@ export interface DataSource {
 }
 
 export function readHealthSnapshot(agentDir?: string): HealthSnapshot | null {
-  const dir =
-    agentDir ?? process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
-  const snapshotFile = path.join(dir, "gemini-health-latest.json");
+  const snapshotFile = resolveSnapshotPath(
+    agentDir ? { PI_CODING_AGENT_DIR: agentDir } : process.env,
+  );
   try {
     const raw = fs.readFileSync(snapshotFile, "utf8");
     const parsed = JSON.parse(raw) as HealthSnapshot;
