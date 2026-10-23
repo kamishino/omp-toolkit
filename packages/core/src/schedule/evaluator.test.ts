@@ -6,6 +6,7 @@ import {
   formatDuration,
   getTimeWindowPolicy,
   registerTimeWindowPolicy,
+  ScheduleEvaluator,
   type TimeWindowPolicy,
 } from "./index";
 
@@ -210,5 +211,25 @@ describe("buildScheduleTable", () => {
     expect(activeRows[0].windowType).toBe("peak");
     expect(activeRows[0].referenceTime).toContain("UTC");
     expect(activeRows[0].localTime).toContain("09:00");
+  });
+});
+describe("ScheduleEvaluator deep domain module", () => {
+  test("evaluates policy and builds timetable via domain class", () => {
+    const evaluator = new ScheduleEvaluator(DEEPSEEK_POLICY);
+    const now = Date.UTC(2026, 9, 19, 2, 0, 0); // Monday 02:00 UTC (Peak)
+
+    const evaluation = evaluator.evaluate(now, "UTC");
+    expect(evaluation.isPeak).toBe(true);
+    expect(evaluation.label).toBe("PEAK: 2× Rate");
+
+    const transition = evaluator.getNextTransition(now);
+    expect(transition.isPeak).toBe(true);
+    expect(transition.nextTransitionAt).toBe(Date.UTC(2026, 9, 19, 4, 0, 0));
+    expect(transition.formattedTimeUntilNext).toBe("2h 0m");
+
+    const table = evaluator.buildTable(now, "UTC");
+    expect(table.length).toBeGreaterThan(0);
+    const active = table.find((r) => r.isCurrent);
+    expect(active?.windowType).toBe("peak");
   });
 });

@@ -1,4 +1,4 @@
-import { buildScheduleTable, evaluateWindow, type TimeWindowPolicy } from "@omp-toolkit/core";
+import { ScheduleEvaluator, type TimeWindowPolicy } from "@omp-toolkit/core";
 import { createParagraph, type Frame, frameRenderWidget, renderParagraph } from "terminui";
 import { ANSI, padVisible, paint, stripAnsi } from "./theme";
 
@@ -33,7 +33,8 @@ export function renderScheduleView(
   const lines: string[] = [top, line(paint(`Local Timezone: ${tz}`, ANSI.muted))];
 
   for (const policy of policies) {
-    const currentEval = evaluateWindow(policy, now, tz);
+    const evaluator = new ScheduleEvaluator(policy);
+    const currentEval = evaluator.evaluate(now, tz);
     lines.push(border(`├${"─".repeat(inner)}┤`));
     const badgeColor = currentEval.isPeak ? ANSI.yellow : ANSI.green;
     lines.push(
@@ -44,8 +45,7 @@ export function renderScheduleView(
 
     const header = `${"DAY".padEnd(10)} ${"REFERENCE (UTC)".padEnd(18)} ${"LOCAL TIME".padEnd(26)} ${"RATE".padEnd(14)} STATUS`;
     lines.push(line(paint(header, ANSI.bold)));
-
-    const rows = buildScheduleTable(policy, now, tz);
+    const rows = evaluator.buildTable(now, tz);
     for (const r of rows) {
       const day = r.dayName.padEnd(10);
       const ref = r.referenceTime.padEnd(18);
