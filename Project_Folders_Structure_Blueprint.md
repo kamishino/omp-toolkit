@@ -123,7 +123,8 @@ omp-toolkit/
 │   │       ├── main.ts                    # Electron main process entry point
 │   │       ├── preload.ts                 # Context-isolated secure IPC bridge
 │   │       ├── ipc.ts                     # Main-side IPC registration and handlers
-│   │       ├── tray.ts                    # System tray icon management
+│   │       ├── tray.ts                    # DesktopTray coordinator (Tray instance, context menu, theme updates)
+│   │       ├── tray.test.ts               # Desktop tray coordinator unit tests
 │   │       ├── tray-path.ts               # Dynamic platform tray icon asset resolver
 │   │       ├── panel.ts                   # DesktopPanel lifecycle coordinator (geometry, bounds, tray, visibility)
 │   │       ├── panel-position.ts          # Tray-relative window coordinate calculation
@@ -152,6 +153,10 @@ omp-toolkit/
 │   │       ├── history.ts                 # 30-day reliability history writer and process exit cleanup
 │   │       ├── history-store.ts           # ReliabilityHistoryStore SQLite database and analytical queries
 │   │       ├── history-store.test.ts      # History store unit tests
+│   │       ├── probe-client.ts            # AntigravityProbeClient OAuth token cache and SSE streaming HTTP client
+│   │       ├── probe-client.test.ts       # Antigravity probe client unit tests
+│   │       ├── policy-store.ts            # RoutingPolicyStore OMP policy persistence and temporary exclusions
+│   │       ├── policy-store.test.ts       # Routing policy store unit tests
 │   │       ├── warmup.ts                  # Background route verification logic
 │   │       └── omp-types.d.ts             # OMP plugin API type declarations
 │   │
@@ -162,6 +167,8 @@ omp-toolkit/
 │           ├── config.ts                  # MonitorCliConfig parser, environment fallbacks, and validation
 │           ├── config.test.ts             # Monitor config unit tests
 │           ├── usage.ts                   # `omp usage` CLI reader and parser
+│           ├── interactive-monitor.ts     # InteractiveMonitor terminal lifecycle, raw mode, and polling loop
+│           ├── interactive-monitor.test.ts # Interactive monitor unit tests
 │           ├── json.ts                    # JSON serialization adapter
 │           ├── json.test.ts               # JSON schema unit tests
 │           ├── heartbeat.ts               # Monitor heartbeat state writer
@@ -193,7 +200,7 @@ omp-toolkit/
 │   │           ├── types.ts               # TimeWindow, Policy, and Evaluation interfaces
 │   │           ├── deepseek-policy.ts     # Authoritative DeepSeek UTC schedule definition
 │   │           ├── registry.ts            # Extensible TimeWindowPolicy registry
-│   │           ├── evaluator.ts           # Pure functional window evaluator and timetable builder
+│   │           ├── evaluator.ts           # ScheduleEvaluator domain class, timezone parsing, and timetable builder
 │   │           └── evaluator.test.ts      # Schedule boundary & timezone TDD unit tests
 │   │
 │   └── tui/                               # Terminal presentation & TerminUI components

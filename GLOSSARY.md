@@ -181,3 +181,23 @@ event persistence, and analytical reporting queries.
 ## Monitor config
 A configuration module encapsulating CLI argument parsing, environment variable
 fallbacks, interval bounding, and flag validation into a unified type.
+## Antigravity probe client
+A deep communication module encapsulating OAuth bearer token resolution,
+in-memory TTL token caching, and SSE streaming HTTP health probes to Google
+Antigravity endpoints.
+
+## Interactive monitor
+A deep execution module encapsulating terminal alternate screen switching,
+raw-mode keystroke decoding, double-buffered frame state, and periodic polling.
+
+## Desktop tray coordinator
+A deep lifecycle module encapsulating Electron Tray instance management, tooltip
+formatting, context menu assembly, and OS theme event subscriptions.
+
+## Routing policy store
+A repository subsystem encapsulating OMP routing policy serialization, CLI
+fallback execution, and temporary exclusion mutations.
+
+## Schedule evaluator
+A deep domain module encapsulating timezone-aware pricing window evaluations,
+transition countdowns, and schedule timetable generation.
