@@ -157,3 +157,15 @@ and applies temporary routing exclusions to protect session pins from hanging.
 ## Terminal launcher
 A deep platform adapter that encapsulates shell command construction, PATH
 executable discovery, child process spawning, and clipboard fallback.
+
+## Agent environment resolver
+A centralized domain module that deterministically maps agent directories, state
+paths, snapshots, database files, and script search candidates without I/O.
+
+## Usage provider registry
+An extensible adapter registry in which upstream providers register column
+filtering rules, balance extractors, and currency formatting handlers.
+
+## Autostart manager
+A deep platform module that manages operating-system startup registration across
+Windows Registry, macOS LaunchAgent plists, and Linux XDG desktop entries.
