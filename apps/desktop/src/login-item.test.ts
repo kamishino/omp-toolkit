@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { autostartDesktopEntry, desktopQuote, launchAgentPlist } from "./login-item-files";
+import { autostartDesktopEntry, desktopQuote, launchAgentPlist } from "./login-item";
 
 describe("login item files and escaping", () => {
   test("desktopQuote escapes backslashes, quotes, shell variables and percent signs", () => {

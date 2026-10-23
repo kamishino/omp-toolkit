@@ -1,8 +1,18 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { app } from "electron";
-import { autostartDesktopEntry, launchAgentPlist } from "./login-item-files";
+import { build } from "plist";
+
+// Electron app is lazily accessed so unit tests can run outside Electron runtime
+function getElectronApp() {
+  try {
+    // biome-ignore lint/suspicious/noExplicitAny: runtime check
+    const electron = (globalThis as any).require?.("electron");
+    return electron?.app ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface LoginItem {
   isEnabled(): boolean;
@@ -17,7 +27,46 @@ export interface CreateLoginItemOptions {
   iconPath: string;
 }
 
-const MACOS_LABEL = "dev.omp-toolkit.desktop-widget";
+export const MACOS_LABEL = "dev.omp-toolkit.desktop-widget";
+
+export function desktopQuote(value: string): string {
+  const escaped = value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\$/g, "\\$")
+    .replace(/`/g, "\\`")
+    .replace(/%/g, "%%");
+  return `"${escaped}"`;
+}
+
+export function launchAgentPlist(options: {
+  label: string;
+  electronPath: string;
+  appPath: string;
+}): string {
+  return build({
+    Label: options.label,
+    ProgramArguments: [options.electronPath, options.appPath, "--hidden"],
+    RunAtLoad: true,
+    ProcessType: "Interactive",
+  });
+}
+
+export function autostartDesktopEntry(options: {
+  electronPath: string;
+  appPath: string;
+  iconPath: string;
+}): string {
+  return `[Desktop Entry]
+Type=Application
+Name=OMP Provider Usage
+Comment=OMP provider usage desktop widget
+Exec=${desktopQuote(options.electronPath)} ${desktopQuote(options.appPath)} --hidden
+Terminal=false
+Icon=${options.iconPath}
+X-GNOME-Autostart-enabled=true
+`;
+}
 
 function writeAtomic(filePath: string, content: string): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -42,10 +91,14 @@ export function createLoginItem(options: CreateLoginItemOptions): LoginItem {
     const args = [appPath, "--hidden"];
     return {
       isEnabled(): boolean {
-        return app.getLoginItemSettings({ path: electronPath, args }).openAtLogin;
+        const electronApp = getElectronApp();
+        return (
+          electronApp?.getLoginItemSettings({ path: electronPath, args })?.openAtLogin ?? false
+        );
       },
       setEnabled(enabled: boolean): void {
-        app.setLoginItemSettings({
+        const electronApp = getElectronApp();
+        electronApp?.setLoginItemSettings({
           openAtLogin: enabled,
           path: electronPath,
           args,
