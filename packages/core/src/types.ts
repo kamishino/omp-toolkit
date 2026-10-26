@@ -1,3 +1,14 @@
+/**
+ * Shared Type Definitions for @omp-toolkit/core
+ *
+ * Structured into three architectural layers:
+ * 1. Route Health & Circuit Breaker Domain
+ * 2. External Wire Schemas & Telemetry
+ * 3. Tabular Presentation & Compilation Models
+ */
+
+// ── 1. Route Health & Circuit Breaker Domain ────────────────────────────────
+
 export const STATUS_VALUES = ["ok", "hang", "error", "auth", "model-error"] as const;
 export type Status = (typeof STATUS_VALUES)[number];
 
@@ -56,6 +67,8 @@ export interface HealAction {
   reason: string;
 }
 
+// ── 2. External Wire Schemas & Telemetry ────────────────────────────────────
+
 export interface UsageAmount {
   usedFraction?: number;
   remainingFraction?: number;
@@ -108,6 +121,8 @@ export interface UsageReport {
   };
   limits?: UsageLimit[];
 }
+
+// ── 3. Tabular Presentation & Compilation Models ────────────────────────────
 
 export interface UsageColumn {
   key: string;
