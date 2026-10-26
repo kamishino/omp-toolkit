@@ -4,6 +4,7 @@ import {
   PROVIDER,
   readSnapshot,
   readStreaks,
+  removeAccountExclusion,
   restoreManaged,
   short,
   snapshotPath,
@@ -68,5 +69,9 @@ describe("circuit-breaker module", () => {
   test("restoreManaged returns array of restored accounts", async () => {
     const restored = await restoreManaged();
     expect(Array.isArray(restored)).toBe(true);
+  });
+
+  test("removeAccountExclusion executes cleanly for unexcluded account", async () => {
+    await expect(removeAccountExclusion("nonexistent@example.com")).resolves.toBeUndefined();
   });
 });

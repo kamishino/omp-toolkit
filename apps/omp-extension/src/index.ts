@@ -18,451 +18,50 @@
  * changes the model id or client version gate, update MODEL_WIRE / UA_VERSION.
  */
 
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import { deepSeekUsageReport, type WarmUpRequest } from "@omp-toolkit/core";
 import {
-  type Account,
-  deepSeekUsageReport,
-  excludedEmails,
-  type HealAction,
-  type HealthResult,
-  type HealthState,
-  mergeHealthResults,
-  nextStreaks,
-  type Policy,
-  type ProbeResult as Result,
-  restorableEmails,
-  type StreakState,
-  type WarmUpRequest,
-} from "@omp-toolkit/core";
+  AUTO_HEAL_COOLDOWN_MS,
+  agentDir,
+  applyHeal,
+  checkAll,
+  loadAccounts,
+  maybeRestoreManaged,
+  PROVIDER,
+  policyStore,
+  probe,
+  probeClient,
+  RESTORE_STREAK,
+  readPolicies,
+  readPoliciesForWrite,
+  readSnapshot,
+  recordHealth,
+  recordHistory,
+  removeAccountExclusion,
+  restoreManaged,
+  short,
+  sleep,
+} from "./circuit-breaker";
 import { registerGeminiNormalizer } from "./gemini-normalizer";
-import { closeHistory, type HistoryEventInput, recordEvents } from "./history";
-import { RoutingPolicyStore } from "./policy-store";
-import { AntigravityProbeClient } from "./probe-client";
+import { closeHistory } from "./history";
 import { runWarmUp, type WarmUpAdapter, type WarmUpDependencies } from "./warmup";
+import { publish, setWidgetEnabled, summary, table, widgetEnabled } from "./widget";
 
-const PROVIDER = "google-antigravity";
-const AUTO_HEAL_COOLDOWN_MS = 120_000;
-
-const AGENT_DIR = process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
-const STATE_PATH = path.join(AGENT_DIR, "gemini-health-state.json");
-const SNAPSHOT_PATH = path.join(AGENT_DIR, "gemini-health-latest.json");
-const WIDGET_STATE_PATH = path.join(AGENT_DIR, "gemini-health-widget.json");
-const STREAK_PATH = path.join(AGENT_DIR, "gemini-health-streaks.json");
-const RESTORE_STREAK = Math.max(1, Number(process.env.GEMINI_HEALTH_RESTORE_STREAK ?? 3) || 3);
-const RESTORE_GAP_MS = Math.max(
-  30_000,
-  (Number(process.env.GEMINI_HEALTH_RESTORE_GAP_SECONDS ?? 60) || 60) * 1000,
-);
-
-interface WidgetContext {
-  hasUI: boolean;
-  mode: string;
-  ui: {
-    setStatus(key: string, text: string | undefined): void;
-    setWidget(
-      key: string,
-      lines: string[] | undefined,
-      options?: { placement?: "aboveEditor" | "belowEditor" },
-    ): void;
-  };
-}
-
-function short(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/\s+/g, " ").slice(0, 180);
-}
-
-function sleep(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, ms);
-  return promise;
-}
-
-function writeFileAtomic(file: string, content: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(temp, content);
-  try {
-    fs.renameSync(temp, file);
-  } catch {
-    fs.writeFileSync(file, content);
-    try {
-      fs.rmSync(temp, { force: true });
-    } catch {
-      // Temp cleanup is best-effort.
-    }
-  }
-}
-
-function writeState(state: HealthState): void {
-  writeFileAtomic(STATE_PATH, JSON.stringify(state, null, 2) + "\n");
-}
-
-function readStateForWrite(): HealthState {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(STATE_PATH, "utf8")) as HealthState;
-    if (!parsed || !Array.isArray(parsed.excluded)) {
-      throw new Error("invalid gemini-health-state.json");
-    }
-    return {
-      excluded: parsed.excluded.filter((email): email is string => typeof email === "string"),
-    };
-  } catch (error) {
-    if ((error as { code?: string })?.code === "ENOENT") return { excluded: [] };
-    throw error;
-  }
-}
-
-function readSnapshot(): { checkedAt: number; results: Result[] } | null {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8")) as {
-      checkedAt?: number;
-      results?: Result[];
-    };
-    if (!parsed || !Array.isArray(parsed.results)) return null;
-    return {
-      checkedAt: Number(parsed.checkedAt) || 0,
-      results: parsed.results,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function readStreaks(): StreakState {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(STREAK_PATH, "utf8")) as StreakState;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function readStreaksForWrite(): StreakState {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(STREAK_PATH, "utf8")) as StreakState;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("invalid gemini-health-streaks.json");
-    }
-    const valid: StreakState = {};
-    for (const [email, entry] of Object.entries(parsed)) {
-      if (
-        entry &&
-        typeof entry === "object" &&
-        typeof entry.ok === "number" &&
-        typeof entry.lastAt === "number"
-      ) {
-        valid[email] = {
-          ok: Math.max(0, Math.floor(entry.ok)),
-          lastAt: entry.lastAt,
-        };
-      }
-    }
-    return valid;
-  } catch (error) {
-    if ((error as { code?: string })?.code === "ENOENT") return {};
-    const backup = `${STREAK_PATH}.corrupt-${Date.now()}`;
-    try {
-      fs.renameSync(STREAK_PATH, backup);
-    } catch {
-      // Keep the corrupt file if the backup rename fails.
-    }
-    return {};
-  }
-}
-
-function writeStreaks(state: StreakState): void {
-  writeFileAtomic(STREAK_PATH, JSON.stringify(state, null, 2) + "\n");
-}
-let historyWarning: string | null = null;
-
-function recordHistory(events: HistoryEventInput[]): void {
-  if (events.length === 0) return;
-  try {
-    recordEvents(events);
-  } catch (error) {
-    if (historyWarning !== null) return;
-    historyWarning = short(error);
-    console.warn(`[omp-toolkit] history write failed: ${historyWarning}`);
-  }
-}
-
-export function recordHealth(
-  results: Result[],
-  options: { merge?: boolean; source?: "warmup" | "check" } = {},
-): void {
-  const at = Date.now();
-  const streaks = nextStreaks(readStreaksForWrite(), results, at, RESTORE_GAP_MS);
-  writeStreaks(streaks);
-
-  const snapshotResults = options.merge
-    ? mergeHealthResults(readSnapshot()?.results ?? [], results, at)
-    : results.map((result) => ({ ...result, checkedAt: at }));
-
-  writeFileAtomic(
-    SNAPSHOT_PATH,
-    JSON.stringify({ checkedAt: at, results: snapshotResults }, null, 2) + "\n",
-  );
-
-  const prefix = options.source ? `${options.source} ` : "";
-  recordHistory(
-    results.map((result) => ({
-      at,
-      kind: "route_check" as const,
-      provider: PROVIDER,
-      account: result.email,
-      status: result.status,
-      detail: `${prefix}${result.ms}ms${result.detail ? ` ${result.detail}` : ""}`,
-    })),
-  );
-}
-
-export async function maybeRestoreManaged(): Promise<string[]> {
-  const state = readStateForWrite();
-  if (state.excluded.length === 0) return [];
-  const streaks = readStreaksForWrite();
-  const eligible = restorableEmails(state, streaks, RESTORE_STREAK);
-  if (eligible.length === 0) return [];
-
-  const policies = await readPoliciesForWrite();
-  const managed = new Set(state.excluded);
-  const next = policies.filter(
-    (policy) =>
-      !(
-        policy?.provider === PROVIDER &&
-        typeof policy?.account?.email === "string" &&
-        managed.has(policy.account.email) &&
-        eligible.includes(policy.account.email)
-      ),
-  );
-  if (next.length !== policies.length) await writePolicies(next);
-
-  for (const email of eligible) {
-    managed.delete(email);
-    delete streaks[email];
-  }
-  writeState({ excluded: [...managed], updatedAt: new Date().toISOString() });
-  writeStreaks(streaks);
-  recordHistory(
-    eligible.map((email) => ({
-      at: Date.now(),
-      kind: "restore" as const,
-      provider: PROVIDER,
-      account: email,
-      detail: "auto",
-    })),
-  );
-  return eligible;
-}
-
-function widgetEnabled(): boolean {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(WIDGET_STATE_PATH, "utf8")) as { enabled?: boolean };
-    return parsed.enabled !== false;
-  } catch {
-    return true;
-  }
-}
-
-function setWidgetEnabled(enabled: boolean): void {
-  writeFileAtomic(WIDGET_STATE_PATH, JSON.stringify({ enabled }, null, 2) + "\n");
-}
+export {
+  applyHeal,
+  checkAll,
+  loadAccounts,
+  maybeRestoreManaged,
+  policyStore,
+  probe,
+  probeClient,
+  recordHealth,
+  restoreManaged,
+};
 
 function reloadIfAvailable(ctx: ExtensionContext): Promise<void> | undefined {
   const reload = (ctx as ExtensionContext & { reload?: () => Promise<void> }).reload;
   return reload?.();
-}
-
-export const probeClient = new AntigravityProbeClient();
-
-export async function loadAccounts(): Promise<Account[]> {
-  return probeClient.loadAccounts();
-}
-
-export async function probe(account: Account): Promise<Result> {
-  return probeClient.probe(account);
-}
-
-export async function checkAll(confirm = false): Promise<Result[]> {
-  return probeClient.checkAll(confirm);
-}
-
-export const policyStore = new RoutingPolicyStore();
-
-async function readPolicies(): Promise<Policy[]> {
-  return policyStore.readPolicies();
-}
-
-async function readPoliciesForWrite(): Promise<Policy[]> {
-  return policyStore.readPolicies();
-}
-
-async function writePolicies(policies: Policy[]): Promise<void> {
-  return policyStore.writePolicies(policies);
-}
-
-export async function applyHeal(
-  results: Result[],
-  source: "heal" | "auto-heal" | "tool" = "heal",
-): Promise<HealAction> {
-  if (results.length === 0) {
-    return { changed: [], skipped: [], reason: "no accounts to check" };
-  }
-  const bad = results.filter((result) => result.status === "hang" || result.status === "error");
-  if (bad.length === 0) {
-    return { changed: [], skipped: [], reason: "all accounts healthy" };
-  }
-  if (bad.length >= results.length) {
-    return {
-      changed: [],
-      skipped: [],
-      reason: "all accounts failing; provider-wide issue, no exclusion applied",
-    };
-  }
-
-  const policies = await readPoliciesForWrite();
-  const state = readStateForWrite();
-  const managed = new Set(state.excluded);
-  const alreadyExcluded = excludedEmails(policies);
-  const changed: string[] = [];
-  const skipped: string[] = [];
-
-  for (const result of bad) {
-    if (alreadyExcluded.has(result.email)) {
-      if (managed.has(result.email)) continue;
-      skipped.push(result.email); // user-owned exclusion; leave it alone
-      continue;
-    }
-    const existing = policies.find(
-      (policy) => policy?.provider === PROVIDER && policy?.account?.email === result.email,
-    );
-    if (existing) {
-      skipped.push(result.email); // custom policy; do not overwrite it
-      continue;
-    }
-    policies.push({
-      provider: PROVIDER,
-      account: { email: result.email },
-      reservePct: 100,
-    });
-    managed.add(result.email);
-    changed.push(result.email);
-  }
-
-  if (changed.length > 0) {
-    await writePolicies(policies);
-    writeState({ excluded: [...managed], updatedAt: new Date().toISOString() });
-    recordHistory(
-      changed.map((email) => ({
-        at: Date.now(),
-        kind: "policy_change" as const,
-        provider: PROVIDER,
-        account: email,
-        detail: source,
-      })),
-    );
-  }
-
-  return {
-    changed,
-    skipped,
-    reason:
-      changed.length > 0
-        ? "temporary reservePct=100 applied"
-        : skipped.length > 0
-          ? "failing accounts already have exclusions/policies"
-          : "no new exclusions",
-  };
-}
-
-export async function restoreManaged(): Promise<string[]> {
-  const state = readStateForWrite();
-  if (state.excluded.length === 0) return [];
-  const managed = new Set(state.excluded);
-  const policies = await readPoliciesForWrite();
-  const next = policies.filter(
-    (policy) =>
-      !(
-        policy?.provider === PROVIDER &&
-        typeof policy?.account?.email === "string" &&
-        managed.has(policy.account.email)
-      ),
-  );
-  if (next.length !== policies.length) await writePolicies(next);
-  const streaks = readStreaksForWrite();
-  for (const email of managed) delete streaks[email];
-  writeStreaks(streaks);
-  writeState({ excluded: [], updatedAt: new Date().toISOString() });
-  recordHistory(
-    [...managed].map((email) => ({
-      at: Date.now(),
-      kind: "restore" as const,
-      provider: PROVIDER,
-      account: email,
-      detail: "manual",
-    })),
-  );
-  return [...managed];
-}
-
-function statusTag(result: HealthResult): string {
-  switch (result.status) {
-    case "ok":
-      return "OK  ";
-    case "hang":
-      return "HANG";
-    case "auth":
-      return "AUTH";
-    case "model-error":
-      return "MODEL";
-    default:
-      return "ERR ";
-  }
-}
-
-function summary(results: HealthResult[]): string {
-  const ok = results.filter((result) => result.status === "ok").length;
-  const hangs = results.filter((result) => result.status === "hang").length;
-  return `Gemini 3.8: ${ok}/${results.length} ok${hangs > 0 ? ` · ${hangs} hang` : ""}`;
-}
-
-function healthLines(results: HealthResult[], policies: Policy[]): string[] {
-  if (results.length === 0) return ["Gemini health: no Antigravity accounts found"];
-  const excluded = excludedEmails(policies);
-  const streaks = readStreaks();
-  const lines = [`Gemini 3.8 route health · ${new Date().toLocaleTimeString()}`];
-  for (const result of results) {
-    const ms = result.ms > 0 ? `${(result.ms / 1000).toFixed(1)}s` : "-";
-    const mark = excluded.has(result.email) ? " [excluded]" : "";
-    const streak =
-      excluded.has(result.email) && result.status === "ok"
-        ? ` ↻ ${Math.min(streaks[result.email]?.ok ?? 0, RESTORE_STREAK)}/${RESTORE_STREAK}`
-        : "";
-    const detail = result.detail ? `  ${result.detail.slice(0, 70)}` : "";
-    lines.push(
-      `  ${statusTag(result)} ${result.email.padEnd(28)} ${ms.padStart(6)}${mark}${streak}${detail}`,
-    );
-  }
-  return lines;
-}
-
-function table(results: HealthResult[], policies: Policy[]): string {
-  return healthLines(results, policies).join("\n");
-}
-
-function publish(ctx: WidgetContext, results: HealthResult[], policies: Policy[]): void {
-  if (!ctx.hasUI || ctx.mode !== "tui" || !widgetEnabled()) return;
-  try {
-    ctx.ui.setStatus("gemini-health", summary(results));
-    ctx.ui.setWidget("gemini-health", healthLines(results, policies), {
-      placement: "belowEditor",
-    });
-  } catch {
-    // UI failure must not fail the health check or healing path.
-  }
 }
 
 const antigravityAdapter: WarmUpAdapter = {
@@ -472,12 +71,11 @@ const antigravityAdapter: WarmUpAdapter = {
 };
 const warmUpAdapters = new Map<string, WarmUpAdapter>([[PROVIDER, antigravityAdapter]]);
 const warmUpDeps: WarmUpDependencies = {
-  agentDir: AGENT_DIR,
+  agentDir: agentDir(),
   adapters: warmUpAdapters,
   readSnapshot,
   recordHealth,
 };
-
 export default function geminiHealthExtension(pi: ExtensionAPI) {
   registerGeminiNormalizer(pi);
   pi.registerProvider("deepseek", {
@@ -1002,26 +600,9 @@ export default function geminiHealthExtension(pi: ExtensionAPI) {
             "warning",
           );
         }
-        const next = policies.filter((policy) => !matches.includes(policy));
-        await writePolicies(next);
-        const state = readStateForWrite();
-        state.excluded = state.excluded.filter((email) => !emails.has(email));
-        writeState({
-          excluded: state.excluded,
-          updatedAt: new Date().toISOString(),
-        });
-        const streaks = readStreaksForWrite();
-        for (const email of emails) delete streaks[email];
-        writeStreaks(streaks);
-        recordHistory(
-          [...emails].map((email) => ({
-            at: Date.now(),
-            kind: "manual_intervention" as const,
-            provider: PROVIDER,
-            account: email,
-            detail: "gemini-enable",
-          })),
-        );
+        if (target) {
+          await removeAccountExclusion(target, "gemini-enable");
+        }
         const message = `Enabled ${[...emails].join(", ")}`;
         ctx.ui.notify(message, "info");
         pi.sendMessage(
