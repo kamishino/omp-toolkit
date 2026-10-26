@@ -1,10 +1,51 @@
 import { spawn } from "node:child_process";
-import { monitorCommandArgs, parseMonitorArgs, resolveMonitorScript } from "./monitor-target";
+import fs from "node:fs";
+import path from "node:path";
+import { DEFAULT_MONITOR_INTERVAL, parseMonitorCliConfig } from "../apps/provider-usage/src/config";
+import { resolveMonitorScriptCandidates } from "../packages/core/src/environment";
 
-const USAGE = "usage: bun run monitor [--interval=<seconds>] [--no-health] [--no-alt-screen]";
+export const DEFAULT_INTERVAL = DEFAULT_MONITOR_INTERVAL;
+export const USAGE =
+  "usage: bun run monitor [--interval=<seconds>] [--no-health] [--no-alt-screen]";
 
-function main(): void {
-  const options = parseMonitorArgs(process.argv.slice(2));
+export interface MonitorOptions {
+  interval: number;
+  health: boolean;
+  altScreen: boolean;
+  unknown: string[];
+}
+
+export function parseMonitorArgs(args: string[]): MonitorOptions {
+  const config = parseMonitorCliConfig(args);
+  return {
+    interval: config.interval,
+    health: !args.includes("--no-health"),
+    altScreen: config.altScreen,
+    unknown: config.unknown,
+  };
+}
+
+export function monitorCommandArgs(script: string, options: MonitorOptions): string[] {
+  return [
+    script,
+    "--watch",
+    `--interval=${options.interval}`,
+    ...(options.health ? ["--health"] : []),
+    ...(options.altScreen ? [] : ["--no-alt-screen"]),
+  ];
+}
+
+export function resolveMonitorScript(
+  agentDir?: string,
+  root = path.resolve(import.meta.dir, ".."),
+): string {
+  const env = agentDir ? { PI_CODING_AGENT_DIR: agentDir } : process.env;
+  const candidates = resolveMonitorScriptCandidates(root, env);
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
+}
+
+export function runMonitor(argv: string[] = process.argv.slice(2)): void {
+  const options = parseMonitorArgs(argv);
   if (options.unknown.length > 0) {
     console.error(`unknown option: ${options.unknown.join(", ")}`);
     console.error(USAGE);
@@ -33,4 +74,6 @@ function main(): void {
   });
 }
 
-if (import.meta.main) main();
+if (import.meta.main) {
+  runMonitor();
+}

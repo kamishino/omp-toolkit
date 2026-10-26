@@ -33,8 +33,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun scripts/build.ts && bun scripts/build-desktop.ts",
-    "build:desktop": "bun scripts/build-desktop.ts",
+    "build": "bun scripts/build.ts",
+    "build:desktop": "bun scripts/build.ts --desktop",
     "desktop": "bun scripts/widget.ts",
     "desktop:preview": "bun scripts/widget.ts --preview",
     "desktop:once": "bun scripts/widget.ts --once",
@@ -43,7 +43,7 @@
     "format": "biome format --write .",
     "check": "biome check . && tsc --noEmit && tsc -p apps/desktop/tsconfig.json --noEmit && bun test && bun scripts/check-tokens.ts",
     "widget": "bun scripts/widget.ts",
-    "install:omp": "bun scripts/build.ts && bun scripts/install.ts",
+    "install:omp": "bun scripts/build.ts --no-desktop && bun scripts/install.ts",
     "monitor": "bun scripts/monitor.ts",
     "monitor:orca": "bun scripts/orca-monitor.ts",
     "reliability:report": "bun scripts/reliability-report.ts"

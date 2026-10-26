@@ -5,7 +5,7 @@ import {
   monitorCommandArgs,
   parseMonitorArgs,
   resolveMonitorScript,
-} from "./monitor-target";
+} from "./monitor";
 
 const execFileAsync = promisify(execFile);
 
