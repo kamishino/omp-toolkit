@@ -3,7 +3,6 @@ import path from "node:path";
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
-import { launchOrcaTab, launchTerminalMonitor } from "./actions";
 import { IPC } from "./ipc";
 import { logError } from "./logger";
 import { createLoginItem, type LoginItem } from "./login-item";
@@ -101,15 +100,6 @@ void app.whenReady().then(async () => {
     }
   }
 
-  const openTerminalMonitor = () =>
-    launchTerminalMonitor({
-      checkoutRoot,
-      intervalSeconds: runtime?.getSettings().intervalSeconds ?? 300,
-      panelWindow: panel?.window,
-    });
-
-  const openOrca = () => launchOrcaTab({ checkoutRoot });
-
   function rebuildMenu(): void {
     desktopTray?.rebuildMenu();
   }
@@ -149,9 +139,11 @@ void app.whenReady().then(async () => {
         await runtime?.refresh();
       },
       onOpenTerminal: () => {
-        void openTerminalMonitor();
+        void runtime?.launchTerminal(panel?.window);
       },
-      onOpenOrca: openOrca,
+      onOpenOrca: () => {
+        runtime?.launchOrca();
+      },
       onQuit: () => {
         app.quit();
       },
@@ -200,9 +192,11 @@ void app.whenReady().then(async () => {
   });
   ipcMain.on(IPC.hide, hidePanel);
   ipcMain.on(IPC.openTerminal, () => {
-    void openTerminalMonitor();
+    void runtime?.launchTerminal(panel?.window);
   });
-  ipcMain.on(IPC.openOrca, openOrca);
+  ipcMain.on(IPC.openOrca, () => {
+    runtime?.launchOrca();
+  });
   ipcMain.on(IPC.ready, () => {
     if (runtime) {
       panel?.sendState(runtime.getState());

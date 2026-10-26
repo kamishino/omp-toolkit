@@ -5,7 +5,8 @@ import { fetchDashboard } from "./data";
 import type { PanelState } from "./ipc";
 import { logError } from "./logger";
 import type { LoginItem } from "./login-item";
-import { findBun, resolveHealthScript, resolveMonitorScript } from "./paths";
+import { openOrca, openTerminal } from "./open";
+import { findBun, resolveCheckout, resolveHealthScript, resolveMonitorScript } from "./paths";
 import {
   type DesktopSettings,
   loadDesktopSettings,
@@ -372,6 +373,57 @@ export class DesktopRuntime {
     if (this.refreshTimer) {
       clearInterval(this.refreshTimer);
       this.refreshTimer = null;
+    }
+  }
+
+  async launchTerminal(panelWindow?: BrowserWindow | null): Promise<void> {
+    const bun = findBun();
+    const script = resolveMonitorScript(this.options.env ?? process.env, this.options.checkoutRoot);
+
+    if (!bun) {
+      this.dialogHost.showErrorBox(
+        "OMP Provider Usage",
+        "Bun not found. Install Bun or set BUN_BIN.",
+      );
+      return;
+    }
+    if (!script) {
+      this.dialogHost.showErrorBox(
+        "OMP Provider Usage",
+        'Monitor script not found. Run "bun run install:omp".',
+      );
+      return;
+    }
+
+    const command = [
+      bun,
+      script,
+      "--watch",
+      "--health",
+      `--interval=${this.settings.intervalSeconds}`,
+    ];
+    const res = openTerminal(process.platform, command);
+    if (res === "copied") {
+      const boxOpts: MessageBoxOptions = {
+        type: "info",
+        title: "OMP Provider Usage",
+        message: "Terminal monitor command copied to clipboard.",
+        detail: command.join(" "),
+      };
+      await this.dialogHost.showMessageBox(panelWindow, boxOpts);
+    }
+  }
+
+  launchOrca(): void {
+    const checkout = resolveCheckout(this.options.env ?? process.env, this.options.checkoutRoot);
+    const bun = findBun();
+    try {
+      openOrca(checkout, bun);
+    } catch (error) {
+      this.dialogHost.showErrorBox(
+        "OMP Provider Usage",
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 
