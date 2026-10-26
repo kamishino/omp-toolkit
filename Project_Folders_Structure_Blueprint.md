@@ -143,6 +143,8 @@ omp-toolkit/
 │   │       ├── preload.ts                 # Context-isolated secure IPC bridge
 │   │       ├── state.ts                   # Pure panel state machine computation
 │   │       ├── state.test.ts              # Panel state computation unit tests
+│   │       ├── settings.ts                # User configuration storage, validation, and defaults
+│   │       ├── settings.test.ts           # User configuration persistence and validation tests
 │   │       ├── tray.ts                    # DesktopTray coordinator (Tray instance, context menu, theme updates)
 │   │       ├── tray-path.ts               # Dynamic platform tray icon asset resolver
 │   │       ├── tray-path.test.ts          # Tray icon resolver unit tests
@@ -152,6 +154,10 @@ omp-toolkit/
 │   │       └── renderer/                  # Webview presentation layer
 │   │           ├── index.html             # Shell HTML document
 │   │           ├── renderer.ts            # Reactive state subscription and panel layout
+│   │           ├── settings-view.ts       # In-panel user settings form component and live validation
+│   │           ├── icon.ts                # SVG icon generator helper
+│   │           ├── limit-cell.ts          # Limit progress and currency cell renderer
+│   │           ├── limit-cell.test.ts     # Limit cell unit tests
 │   │           ├── card.ts                # Pure functional card and row DOM builders
 │   │           ├── card.test.ts           # Card DOM builder unit tests
 │   │           ├── styles.css             # OKLCH design-token styles

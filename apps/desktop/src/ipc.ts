@@ -1,4 +1,5 @@
 import type { Dashboard, WarmUpRequest } from "@omp-toolkit/core";
+import type { DesktopSettings } from "./settings";
 
 export const IPC = {
   state: "omp:state",
@@ -8,6 +9,7 @@ export const IPC = {
   openOrca: "omp:open-orca",
   ready: "omp:ready",
   warmup: "omp:warmup",
+  saveSettings: "omp:save-settings",
 } as const;
 
 export interface WarmUpState {
@@ -16,14 +18,27 @@ export interface WarmUpState {
 }
 
 export type PanelState =
-  | { status: "loading"; data: Dashboard | null; intervalSeconds: number; warmup: WarmUpState }
-  | { status: "ready"; data: Dashboard; intervalSeconds: number; warmup: WarmUpState }
+  | {
+      status: "loading";
+      data: Dashboard | null;
+      intervalSeconds: number;
+      warmup: WarmUpState;
+      settings: DesktopSettings;
+    }
+  | {
+      status: "ready";
+      data: Dashboard;
+      intervalSeconds: number;
+      warmup: WarmUpState;
+      settings: DesktopSettings;
+    }
   | {
       status: "error";
       data: Dashboard | null;
       message: string;
       intervalSeconds: number;
       warmup: WarmUpState;
+      settings: DesktopSettings;
     };
 
 export interface OmpApi {
@@ -33,6 +48,7 @@ export interface OmpApi {
   openTerminal(): void;
   openOrca(): void;
   warmup(request: WarmUpRequest): void;
+  saveSettings(settings: DesktopSettings): void;
 }
 
 declare global {

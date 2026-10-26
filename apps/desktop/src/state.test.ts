@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Dashboard } from "@omp-toolkit/core";
+import { DEFAULT_DESKTOP_SETTINGS } from "./settings";
 import { computePanelState } from "./state";
 
 const mockDashboard: Dashboard = {
@@ -29,10 +30,12 @@ describe("computePanelState", () => {
       refreshing: true,
       lastError: null,
       warmup: defaultWarmup,
+      settings: DEFAULT_DESKTOP_SETTINGS,
     });
     expect(state.status).toBe("loading");
     expect(state.data).toBe(mockDashboard);
     expect(state.intervalSeconds).toBe(60);
+    expect(state.settings).toEqual(DEFAULT_DESKTOP_SETTINGS);
   });
 
   test("returns error state when lastError is set and not refreshing", () => {
@@ -42,11 +45,13 @@ describe("computePanelState", () => {
       refreshing: false,
       lastError: "Failed to fetch",
       warmup: defaultWarmup,
+      settings: DEFAULT_DESKTOP_SETTINGS,
     });
     expect(state.status).toBe("error");
     if (state.status === "error") {
       expect(state.message).toBe("Failed to fetch");
       expect(state.data).toBe(mockDashboard);
+      expect(state.settings).toEqual(DEFAULT_DESKTOP_SETTINGS);
     }
   });
 
@@ -57,11 +62,13 @@ describe("computePanelState", () => {
       refreshing: false,
       lastError: null,
       warmup: defaultWarmup,
+      settings: DEFAULT_DESKTOP_SETTINGS,
     });
     expect(state.status).toBe("ready");
     if (state.status === "ready") {
       expect(state.data).toBe(mockDashboard);
       expect(state.intervalSeconds).toBe(30);
+      expect(state.settings).toEqual(DEFAULT_DESKTOP_SETTINGS);
     }
   });
 
@@ -72,10 +79,12 @@ describe("computePanelState", () => {
       refreshing: false,
       lastError: null,
       warmup: { running: true, message: "warming up..." },
+      settings: DEFAULT_DESKTOP_SETTINGS,
     });
     expect(state.status).toBe("loading");
     expect(state.data).toBeNull();
     expect(state.warmup.running).toBe(true);
     expect(state.warmup.message).toBe("warming up...");
+    expect(state.settings).toEqual(DEFAULT_DESKTOP_SETTINGS);
   });
 });
