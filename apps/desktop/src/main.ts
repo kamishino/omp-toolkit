@@ -12,7 +12,6 @@ import { panelPaths } from "./paths";
 import { DesktopRuntime } from "./runtime";
 import type { DesktopSettings } from "./settings";
 import { DesktopTray } from "./tray";
-import { handleWarmUpRequest } from "./warmup-handler";
 
 app.setName("OMP Provider Usage");
 if (process.platform === "win32") {
@@ -214,23 +213,7 @@ void app.whenReady().then(async () => {
     desktopTray?.rebuildMenu();
   });
   ipcMain.on(IPC.warmup, async (_event, request: WarmUpRequest) => {
-    if (!runtime) return;
-    await handleWarmUpRequest(request, {
-      panelWindow: panel?.window ?? null,
-      lastDashboard: runtime.getDashboard(),
-      checkoutRoot,
-      isWarmUpRunning: runtime.getState().warmup.running,
-      isQuitting: runtime.isQuitting(),
-      onWarmUpStart: (msg) => {
-        runtime?.setWarmUp(true, msg);
-      },
-      onWarmUpEnd: (finalMsg) => {
-        runtime?.setWarmUp(false, finalMsg);
-      },
-      onRefreshRequested: async () => {
-        await runtime?.refresh();
-      },
-    });
+    await runtime?.handleWarmUp(request, panel?.window);
   });
 
   panel.window.webContents.on("did-finish-load", () => {

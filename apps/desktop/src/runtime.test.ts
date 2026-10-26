@@ -151,4 +151,87 @@ describe("DesktopRuntime deep coordinator", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  test("handleWarmUp guards against missing dashboard", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      let errorTitle = "";
+      const mockDialogHost = {
+        showErrorBox: (title: string) => {
+          errorTitle = title;
+        },
+        showMessageBox: async () => ({ response: 0 }),
+      };
+
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        dialogHost: mockDialogHost,
+      });
+
+      await runtime.handleWarmUp({ provider: "google-antigravity", action: "warm", all: true });
+      expect(errorTitle).toBe("OMP Provider Usage");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("handleWarmUp executes warmup and refreshes dashboard on success", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      const dashboard = dummyDashboard();
+      dashboard.providers = [
+        {
+          id: "google-antigravity",
+          name: "GOOGLE ANTIGRAVITY",
+          suffix: "",
+          accounts: 1,
+          columns: [],
+          rows: [
+            {
+              account: "test@example.com",
+              displayAccount: "test",
+              health: "ok",
+              maxUsed: 0.2,
+              level: "ok",
+              route: { text: "OK", level: "ok" },
+              limits: [],
+            },
+          ],
+        },
+      ];
+
+      let warmUpCalled = false;
+      let refreshCalls = 0;
+
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        fetchDashboardFn: async () => {
+          refreshCalls++;
+          return dashboard;
+        },
+        dialogHost: {
+          showErrorBox: () => {},
+          showMessageBox: async () => ({ response: 1 }), // Confirm Warm Up
+        },
+        executeWarmUpFn: async () => {
+          warmUpCalled = true;
+          return { success: true, message: "Warmed up 1 account" };
+        },
+      });
+
+      // Seed initial dashboard
+      await runtime.refresh();
+
+      await runtime.handleWarmUp({ provider: "google-antigravity", action: "warm", all: true });
+
+      expect(warmUpCalled).toBe(true);
+      expect(refreshCalls).toBe(2); // Initial + after warmup success
+      expect(runtime.getState().warmup.running).toBe(false);
+      expect(runtime.getState().warmup.message).toBe("Warmed up 1 account");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
