@@ -13,6 +13,7 @@ import {
 import { createParagraph, type Frame, frameRenderWidget, renderParagraph } from "terminui";
 import {
   ANSI,
+  ansiToText,
   bar,
   colorForLevel,
   HEALTH_THRESHOLDS,
@@ -20,7 +21,6 @@ import {
   paint,
   percent,
   resetInAt,
-  stripAnsi,
   USAGE_THRESHOLDS,
 } from "./theme";
 
@@ -198,6 +198,6 @@ export function drawProviderUsage(
   options: ProviderUsageViewOptions,
 ): void {
   const rendered = renderProviderUsageFromDashboard(dashboard, options);
-  const p = createParagraph(stripAnsi(rendered));
+  const p = createParagraph(ansiToText(rendered));
   frameRenderWidget(frame, renderParagraph(p), frame.area);
 }
