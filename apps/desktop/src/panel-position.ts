@@ -17,10 +17,10 @@ export interface Size {
 
 export interface PanelPositionOptions {
   tray: Rect | null;
-  cursor: Point;
   workArea: Rect;
   panel: Size;
   platform: NodeJS.Platform;
+  cursor?: Point;
   margin?: number;
 }
 
