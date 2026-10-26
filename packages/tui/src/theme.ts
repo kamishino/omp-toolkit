@@ -1,4 +1,4 @@
-import { padPercent, padResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
+import { formatPercent, formatResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
 import {
   createLine,
   createSpan,
@@ -132,11 +132,11 @@ export function bar(value: number | undefined, width = 10): string {
 }
 
 export function percent(value: number | undefined): string {
-  return padPercent(value);
+  return formatPercent(value).padStart(6);
 }
 
 export function resetInAt(resetsAt: number | undefined): string {
-  return padResetCompact(resetsAt);
+  return formatResetCompact(resetsAt, Date.now()).padStart(6);
 }
 
 export function ansiToText(raw: string): Text {

@@ -60,7 +60,7 @@ export function usedPercent(limit: UsageLimit | undefined): number | undefined {
     : undefined;
 }
 
-export function limitKey(limit: UsageLimit): string {
+function limitKey(limit: UsageLimit): string {
   return `${limit.label ?? ""}|${limit.window?.label ?? limit.label ?? "limit"}`;
 }
 
@@ -94,7 +94,7 @@ export function limitFor(report: UsageReport, column: UsageColumn): UsageLimit |
   return (report.limits ?? []).find((limit) => limitKey(limit) === column.key);
 }
 
-export function healthRank(row: ProviderRow): number {
+function healthRank(row: ProviderRow): number {
   if (!row.health) return 3;
   switch (row.health.status) {
     case "hang":
@@ -110,7 +110,7 @@ export function healthRank(row: ProviderRow): number {
   }
 }
 
-export function rowsFor(
+function rowsFor(
   reports: UsageReport[],
   columns: UsageColumn[],
   health: Map<string, HealthResult>,
@@ -145,7 +145,7 @@ export function rowsFor(
     );
 }
 
-export function groupReports(reports: UsageReport[]): Map<string, UsageReport[]> {
+function groupReports(reports: UsageReport[]): Map<string, UsageReport[]> {
   const grouped = new Map<string, UsageReport[]>();
   for (const report of reports) {
     const list = grouped.get(report.provider) ?? [];
