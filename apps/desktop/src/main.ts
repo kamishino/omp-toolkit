@@ -3,7 +3,7 @@ import path from "node:path";
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
-import { IPC } from "./ipc";
+import { IPC, type RendererToMainEvents } from "./ipc";
 import { logError } from "./logger";
 import { createLoginItem, type LoginItem } from "./login-item";
 import { DesktopPanel } from "./panel";
@@ -186,30 +186,42 @@ void app.whenReady().then(async () => {
     );
   });
 
-  // Wire IPC handlers to runtime
-  ipcMain.on(IPC.refresh, () => {
+  // Wire type-safe IPC handlers to runtime
+  function onIpc<K extends keyof RendererToMainEvents>(
+    channel: K,
+    handler: (
+      event: Electron.IpcMainEvent,
+      ...args: Parameters<RendererToMainEvents[K]>
+    ) => void | Promise<void>,
+  ): void {
+    ipcMain.on(channel, (event, ...args) => {
+      // biome-ignore lint/suspicious/noExplicitAny: internal typed wrapper
+      return (handler as any)(event, ...args);
+    });
+  }
+
+  onIpc(IPC.refresh, () => {
     void runtime?.refresh();
   });
-  ipcMain.on(IPC.hide, hidePanel);
-  ipcMain.on(IPC.openTerminal, () => {
+  onIpc(IPC.hide, hidePanel);
+  onIpc(IPC.openTerminal, () => {
     void runtime?.launchTerminal(panel?.window);
   });
-  ipcMain.on(IPC.openOrca, () => {
+  onIpc(IPC.openOrca, () => {
     runtime?.launchOrca();
   });
-  ipcMain.on(IPC.ready, () => {
+  onIpc(IPC.ready, () => {
     if (runtime) {
       panel?.sendState(runtime.getState());
     }
   });
-  ipcMain.on(IPC.saveSettings, (_event, newSettings: DesktopSettings) => {
+  onIpc(IPC.saveSettings, (_event, newSettings) => {
     runtime?.updateSettings(newSettings);
     desktopTray?.rebuildMenu();
   });
-  ipcMain.on(IPC.warmup, async (_event, request: WarmUpRequest) => {
+  onIpc(IPC.warmup, async (_event, request) => {
     await runtime?.handleWarmUp(request, panel?.window);
   });
-
   panel.window.webContents.on("did-finish-load", () => {
     if (runtime) {
       panel?.sendState(runtime.getState());
