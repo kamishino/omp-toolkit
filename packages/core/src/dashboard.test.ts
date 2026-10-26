@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   assembleDashboard,
   buildDashboard,
+  DashboardEngine,
   isDashboard,
   isLowBalance,
   routeFor,
@@ -242,6 +243,37 @@ describe("assembleDashboard high-leverage entry point", () => {
     expect(dashboard.health?.checkedAt).toBe(snapshot.checkedAt);
     expect(dashboard.iconLevel).toBe("ok");
     expect(isDashboard(dashboard)).toBe(true);
+  });
+});
+
+describe("DashboardEngine unified domain engine", () => {
+  test("compiles dashboard via static method with snapshot and options", () => {
+    const reports: UsageReport[] = [
+      {
+        provider: "google-antigravity",
+        metadata: { email: "alice@example.com" },
+        limits: [{ id: "l1", label: "Gemini", amount: { usedFraction: 0.2 } }],
+      },
+    ];
+    const snapshot: HealthSnapshot = {
+      checkedAt: 1_700_000_000_000,
+      results: [{ email: "alice@example.com", status: "ok", ms: 50 }],
+    };
+
+    const dashboard = DashboardEngine.compile(reports, snapshot, {
+      now: 1_700_000_005_000,
+      showHealth: true,
+    });
+    expect(dashboard.providers.length).toBe(1);
+    expect(dashboard.providers[0].rows[0].health).toBe("ok");
+    expect(dashboard.health?.ageMs).toBe(5000);
+  });
+
+  test("compiles dashboard via instance with preconfigured default options", () => {
+    const engine = new DashboardEngine({ showHealth: true, now: 1_700_000_000_000 });
+    const dashboard = engine.compile([]);
+    expect(dashboard.providers).toEqual([]);
+    expect(dashboard.health).toBeDefined();
   });
 });
 

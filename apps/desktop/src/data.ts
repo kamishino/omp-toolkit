@@ -2,9 +2,9 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import { promisify } from "node:util";
 import {
-  assembleDashboard,
   DASHBOARD_SCHEMA_VERSION,
   type Dashboard,
+  DashboardEngine,
   type HealthSnapshot,
   isDashboard,
   resolveSnapshotPath,
@@ -84,7 +84,7 @@ export async function fetchDashboard(
   try {
     const reports = await fetchRawUsage(source?.ompBin, options);
     const snapshot = readHealthSnapshot(source?.agentDir);
-    return assembleDashboard(reports, snapshot);
+    return DashboardEngine.compile(reports, snapshot);
   } catch (directError) {
     if (source?.bun && source?.script && fs.existsSync(source.script)) {
       const { stdout } = await execFileAsync(source.bun, [source.script, "--json", "--health"], {

@@ -1,5 +1,5 @@
 import {
-  assembleDashboard,
+  DashboardEngine,
   getAllTimeWindowPolicies,
   type HealthSnapshot,
   type UsageReport,
@@ -148,7 +148,7 @@ export class InteractiveMonitor {
         drawScheduleView(frame, policies);
       } else {
         const now = Date.now();
-        const dashboard = assembleDashboard(this.currentReports, this.currentSnapshot, {
+        const dashboard = DashboardEngine.compile(this.currentReports, this.currentSnapshot, {
           now,
           showHealth: this.config.health,
           balanceAlert: this.config.balanceAlert,
