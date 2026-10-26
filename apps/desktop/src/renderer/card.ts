@@ -1,75 +1,12 @@
 import { mdiFlash, mdiStethoscope } from "@mdi/js";
-import {
-  type DashboardLimit,
-  type DashboardProvider,
-  formatPercent,
-  formatResetCompact,
-  money,
-  supportsWarmUp,
-  warmUpEligibility,
-} from "@omp-toolkit/core";
+import { type DashboardProvider, supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
+import { icon } from "./icon";
+import { renderLimitCell } from "./limit-cell";
 import { providerLogo } from "./provider-logos";
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-
-export function icon(pathData: string): SVGSVGElement {
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  const pathElem = document.createElementNS(SVG_NS, "path");
-  pathElem.setAttribute("d", pathData);
-  pathElem.setAttribute("fill", "currentColor");
-  svg.appendChild(pathElem);
-  return svg;
-}
-
-export function renderLimitCell(limit: DashboardLimit): HTMLElement {
-  const td = document.createElement("td");
-  td.className = "col-limit";
-
-  const container = document.createElement("div");
-  container.className = "limit-cell";
-
-  if (limit.unit === "cny" || limit.unit === "usd") {
-    const moneySpan = document.createElement("span");
-    moneySpan.className = `money level-${limit.level}`;
-    moneySpan.textContent = money(limit.remaining, limit.unit);
-    container.appendChild(moneySpan);
-
-    if (limit.low) {
-      const lowSpan = document.createElement("span");
-      lowSpan.className = "low";
-      lowSpan.textContent = "LOW";
-      container.appendChild(lowSpan);
-    }
-  } else if (limit.usedFraction !== undefined) {
-    const progress = document.createElement("progress");
-    progress.max = 100;
-    progress.value = Math.round(limit.usedFraction * 100);
-    progress.className = `level-${limit.level}`;
-    progress.setAttribute("aria-label", `${limit.label} ${formatPercent(limit.usedFraction)}`);
-    container.appendChild(progress);
-
-    const pctSpan = document.createElement("span");
-    pctSpan.className = `percent level-${limit.level}`;
-    pctSpan.textContent = formatPercent(limit.usedFraction);
-    container.appendChild(pctSpan);
-
-    const resetSpan = document.createElement("span");
-    resetSpan.className = "reset";
-    resetSpan.textContent = formatResetCompact(limit.resetsAt, Date.now());
-    container.appendChild(resetSpan);
-  } else {
-    const emptySpan = document.createElement("span");
-    emptySpan.className = "level-unknown";
-    emptySpan.textContent = "—";
-    container.appendChild(emptySpan);
-  }
-
-  td.appendChild(container);
-  return td;
-}
+export { icon } from "./icon";
+export { renderLimitCell } from "./limit-cell";
 
 export function renderProviderCard(
   provider: DashboardProvider,
