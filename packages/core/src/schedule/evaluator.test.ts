@@ -7,6 +7,8 @@ import {
   getTimeWindowPolicy,
   registerTimeWindowPolicy,
   ScheduleEvaluator,
+  ScheduleRegistry,
+  scheduleRegistry,
   type TimeWindowPolicy,
 } from "./index";
 
@@ -231,5 +233,36 @@ describe("ScheduleEvaluator deep domain module", () => {
     expect(table.length).toBeGreaterThan(0);
     const active = table.find((r) => r.isCurrent);
     expect(active?.windowType).toBe("peak");
+  });
+});
+
+describe("ScheduleRegistry deep domain registry", () => {
+  test("evaluates registered policy in one step", () => {
+    const now = Date.UTC(2026, 9, 19, 2, 0, 0); // Monday 02:00 UTC (Peak)
+    const res = scheduleRegistry.evaluate("deepseek", now, "UTC");
+    expect(res).not.toBeNull();
+    expect(res?.isPeak).toBe(true);
+    expect(res?.label).toBe("PEAK: 2× Rate");
+  });
+
+  test("returns null for unregistered provider", () => {
+    expect(scheduleRegistry.evaluate("unknown-provider")).toBeNull();
+    expect(scheduleRegistry.buildTable("unknown-provider")).toBeNull();
+  });
+
+  test("builds schedule timetable via registry", () => {
+    const now = Date.UTC(2026, 9, 19, 2, 0, 0);
+    const rows = scheduleRegistry.buildTable("deepseek", now, "UTC");
+    expect(rows).not.toBeNull();
+    expect(rows?.length).toBeGreaterThan(0);
+  });
+
+  test("supports isolated custom registry instances", () => {
+    const customRegistry = new ScheduleRegistry([]);
+    expect(customRegistry.all()).toEqual([]);
+    expect(customRegistry.get("deepseek")).toBeUndefined();
+
+    customRegistry.register(DEEPSEEK_POLICY);
+    expect(customRegistry.get("deepseek")).toBeDefined();
   });
 });

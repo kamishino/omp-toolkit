@@ -1,5 +1,5 @@
 import { money } from "../format";
-import { evaluateWindow, getTimeWindowPolicy } from "../schedule";
+import { scheduleRegistry } from "../schedule";
 import { DEFAULT_BALANCE_ALERT } from "../settings";
 import type { HealthResult, HealthSnapshot, ProviderSection, UsageReport } from "../types";
 import { limitFor, local, providerName, sectionsFor, usedPercent } from "../usage";
@@ -109,8 +109,11 @@ export function buildDashboard(
       };
     });
 
-    const policy = getTimeWindowPolicy(section.provider);
-    const timeWindow = policy ? evaluateWindow(policy, options.now, options.userTimeZone) : null;
+    const timeWindow = scheduleRegistry.evaluate(
+      section.provider,
+      options.now,
+      options.userTimeZone,
+    );
 
     return {
       id: section.provider,
