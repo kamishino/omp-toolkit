@@ -10,7 +10,7 @@ import {
   recordEvent,
   recordEvents,
   resetHistoryCachesForTest,
-} from "./history";
+} from "./history-store";
 
 let tempDir: string;
 
