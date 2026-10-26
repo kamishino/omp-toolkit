@@ -32,8 +32,8 @@ flowchart TD
     subgraph Round1_Before["Before Round 1: Fragmented & Leaky Seams"]
         direction TB
         R1_R[Usage Reports] --> R1_SF[sectionsFor helper]
-        R1_SF -.leaks ProviderSection.- -> R1_TUI[packages/tui]
-        R1_SF -.leaks ProviderSection.- -> R1_CLI[apps/provider-usage]
+        R1_SF -. leaks ProviderSection .-> R1_TUI[packages/tui]
+        R1_SF -. leaks ProviderSection .-> R1_CLI[apps/provider-usage]
         R1_MAIN[desktop/main.ts] -->|10+ globals| R1_SAT[4 shallow satellite files]
         R1_TUI_STRIP[tui draw] -->|stripAnsi| R1_MONO[Monochrome Paragraph]
     end
@@ -79,8 +79,8 @@ flowchart TD
         direction TB
         R2_MAIN[main.ts] -->|9-callback bag| R2_WARM[warmup-handler.ts]
         R2_WARM -->|calls back| R2_MAIN
-        R2_CMD[commands.ts] -.bypasses.- -> R2_HM[health-manager.ts]
-        R2_CMD -.calls 10+ free fns.- -> R2_CB[circuit-breaker.ts]
+        R2_CMD[commands.ts] -. bypasses .-> R2_HM[health-manager.ts]
+        R2_CMD -. calls 10+ free fns .-> R2_CB[circuit-breaker.ts]
         R2_BUILD[builder.ts] -->|lookup & null check| R2_REG[registry.ts 19 lines]
         R2_BUILD -->|manual eval| R2_EVAL[evaluator.ts]
     end
@@ -121,9 +121,9 @@ flowchart TD
 flowchart LR
     subgraph Round3_Before["Before Round 3: Memory Leaks & Anemic Facade"]
         direction TB
-        R3_HM[HealthManager Facade] -.delegates.- -> R3_CB[circuit-breaker free fns]
+        R3_HM[HealthManager Facade] -. delegates .-> R3_CB[circuit-breaker free fns]
         R3_CB --> R3_GLOB[(Global Singleton State)]
-        R3_WIN[window] -.keydown listener leak.- -> R3_SETT[Settings View unmounted]
+        R3_WIN[window] -. keydown listener leak .-> R3_SETT[Settings View unmounted]
         R3_TERM[terminal.ts 19 LOC]
     end
 
@@ -165,7 +165,7 @@ flowchart TD
         R4_IDX[index.ts CLI] -->|interactive| R4_IM[InteractiveMonitor polling loop]
         R4_IDX -->|batch / json| R4_LOOP[runOnce & sleep loop in index.ts]
         R4_ACT[actions.ts 64 lines] --> R4_PROC[Child Process & Dialogs]
-        R4_MONEY[money fn] -.fails uppercase 'CNY'.- -> R4_DROP[Drops symbol: '100.00']
+        R4_MONEY[money fn] -. fails uppercase CNY .-> R4_DROP["Drops symbol: 100.00"]
     end
 
     subgraph Round4_After["After Round 4: Unified MonitorRunner & Hardened Core"]
@@ -203,10 +203,10 @@ flowchart TD
 flowchart LR
     subgraph Round5_Before["Before Round 5: Boundary & Layout Pollution"]
         direction TB
-        R5_REND[renderer.ts] -.unmanaged mediaQuery.- -> R5_TOK[tokens.ts]
-        R5_TOK -.duplicate query.- -> R5_DOM[DOM CSS vars]
-        R5_CORE[packages/core] -.exports padPercent.- -> R5_PAD[padStart 6 layout]
-        R5_CORE -.exports 12 usage fns.- -> R5_LEAK[Internal compiler steps]
+        R5_REND[renderer.ts] -. unmanaged mediaQuery .-> R5_TOK[tokens.ts]
+        R5_TOK -. duplicate query .-> R5_DOM[DOM CSS vars]
+        R5_CORE[packages/core] -. exports padPercent .-> R5_PAD[padStart 6 layout]
+        R5_CORE -. exports 12 usage fns .-> R5_LEAK[Internal compiler steps]
     end
 
     subgraph Round5_After["After Round 5: Cohesive Theme & Domain Purity"]
@@ -244,10 +244,10 @@ flowchart TD
     subgraph Round6_Before["Before Round 6: Leaking Locks & Untyped IPC"]
         direction TB
         R6_CMD[commands.ts] -->|try finally setRunning| R6_LOCK[AutoHealCoordinator.running]
-        R6_PROV[provider-usage] -.own agentDir.- -> R6_HB1[(monitor.json)]
-        R6_EXT[omp-extension] -.own LocalHeartbeat.- -> R6_HB2[(monitor.json)]
-        R6_PRE[preload.ts] -.untyped send.- -> R6_IPC[IPC string constants]
-        R6_IPC -.unchecked cast.- -> R6_MAIN[main.ts on]
+        R6_PROV[provider-usage] -. own agentDir .-> R6_HB1[(monitor.json)]
+        R6_EXT[omp-extension] -. own LocalHeartbeat .-> R6_HB2[(monitor.json)]
+        R6_PRE[preload.ts] -. untyped send .-> R6_IPC[IPC string constants]
+        R6_IPC -. unchecked cast .-> R6_MAIN[main.ts on]
     end
 
     subgraph Round6_After["After Round 6: Compile-Time Contracts & Deep Locking"]
@@ -285,8 +285,8 @@ flowchart TD
 flowchart LR
     subgraph Round7_Before["Before Round 7: Procedural Duplication & Dead Parameters"]
         direction TB
-        R7_WARM[gemini-warmup] -.duplicate filter.- -> R7_ACC[Account List]
-        R7_CHK[gemini-check] -.duplicate filter.- -> R7_ACC
+        R7_WARM[gemini-warmup] -. duplicate filter .-> R7_ACC[Account List]
+        R7_CHK[gemini-check] -. duplicate filter .-> R7_ACC
         R7_SCREEN[screen.getCursorScreenPoint] -->|unused cursor param| R7_POS[placePanel]
         R7_DEAD[createPanel export in panel.ts: 0 callers]
     end
