@@ -4,7 +4,7 @@ import type { PanelState } from "../ipc";
 import { DEFAULT_DESKTOP_SETTINGS, type DesktopSettings } from "../settings";
 import { renderProviderCard } from "./card";
 import { icon } from "./icon";
-import { renderSettingsView } from "./settings-view";
+import { renderSettingsView, type SettingsViewController } from "./settings-view";
 import { applyTheme, applyThemePreference, getActiveThemePreference } from "./tokens";
 
 const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -16,6 +16,7 @@ media.addEventListener("change", (e) => {
 });
 
 let activeTab: "dashboard" | "settings" = "dashboard";
+let activeSettingsController: SettingsViewController | null = null;
 let toastMessage: string | null = null;
 let toastTimer: number | null = null;
 
@@ -39,6 +40,10 @@ function formatTime(timestamp: number): string {
 }
 
 function buildPanel(state: PanelState): HTMLElement {
+  if (activeSettingsController) {
+    activeSettingsController.destroy();
+    activeSettingsController = null;
+  }
   const panel = document.createElement("div");
   panel.className = "panel";
 
@@ -124,19 +129,21 @@ function buildPanel(state: PanelState): HTMLElement {
   panel.appendChild(header);
 
   if (activeTab === "settings") {
-    const settingsEl = renderSettingsView(
+    activeSettingsController = renderSettingsView(
       state.settings,
       (updatedSettings: DesktopSettings) => {
+        activeSettingsController = null;
         window.omp.saveSettings(updatedSettings);
         activeTab = "dashboard";
         showToast("Settings saved");
       },
       () => {
+        activeSettingsController = null;
         activeTab = "dashboard";
         render();
       },
     );
-    panel.appendChild(settingsEl);
+    panel.appendChild(activeSettingsController.element);
   } else {
     // Summary
     const summaryP = document.createElement("p");

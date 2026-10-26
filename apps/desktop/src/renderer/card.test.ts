@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { icon, renderLimitCell } from "./card";
+import { DEFAULT_DESKTOP_SETTINGS } from "../settings";
+import { renderProviderCard } from "./card";
+import { icon } from "./icon";
+import { renderLimitCell } from "./limit-cell";
 
 describe("renderer card module", () => {
   const originalDoc = globalThis.document;
@@ -15,6 +18,7 @@ describe("renderer card module", () => {
           setAttribute: (k: string, v: string) => {
             el[k] = v;
           },
+          addEventListener: () => {},
         };
         return el;
       },
@@ -60,6 +64,35 @@ describe("renderer card module", () => {
       });
       expect(cell).toBeDefined();
       expect(cell.className).toBe("col-limit");
+    } finally {
+      restoreDoc();
+    }
+  });
+
+  test("renderProviderCard constructs provider card section", () => {
+    mockDoc();
+    try {
+      const card = renderProviderCard(
+        {
+          id: "google-antigravity",
+          name: "GOOGLE ANTIGRAVITY",
+          suffix: "",
+          accounts: 1,
+          columns: [{ key: "c1", label: "Gemini" }],
+          rows: [],
+        },
+        false,
+        0,
+        {
+          status: "loading",
+          data: null,
+          intervalSeconds: 300,
+          warmup: { running: false, message: null },
+          settings: DEFAULT_DESKTOP_SETTINGS,
+        },
+      );
+      expect(card).toBeDefined();
+      expect(card.className).toBe("provider-card");
     } finally {
       restoreDoc();
     }
