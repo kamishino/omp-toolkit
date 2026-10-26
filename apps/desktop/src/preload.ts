@@ -1,7 +1,14 @@
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type OmpApi, type PanelState } from "./ipc";
+import { IPC, type OmpApi, type PanelState, type RendererToMainEvents } from "./ipc";
 import type { DesktopSettings } from "./settings";
+
+function sendIpc<K extends keyof RendererToMainEvents>(
+  channel: K,
+  ...args: Parameters<RendererToMainEvents[K]>
+): void {
+  ipcRenderer.send(channel, ...args);
+}
 
 const api: OmpApi = {
   onState(callback: (state: PanelState) => void): () => void {
@@ -9,29 +16,29 @@ const api: OmpApi = {
       callback(state);
     };
     ipcRenderer.on(IPC.state, listener);
-    ipcRenderer.send(IPC.ready);
+    sendIpc(IPC.ready);
 
     return () => {
       ipcRenderer.removeListener(IPC.state, listener);
     };
   },
   refresh(): void {
-    ipcRenderer.send(IPC.refresh);
+    sendIpc(IPC.refresh);
   },
   hide(): void {
-    ipcRenderer.send(IPC.hide);
+    sendIpc(IPC.hide);
   },
   openTerminal(): void {
-    ipcRenderer.send(IPC.openTerminal);
+    sendIpc(IPC.openTerminal);
   },
   openOrca(): void {
-    ipcRenderer.send(IPC.openOrca);
+    sendIpc(IPC.openOrca);
   },
   warmup(request: WarmUpRequest): void {
-    ipcRenderer.send(IPC.warmup, request);
+    sendIpc(IPC.warmup, request);
   },
   saveSettings(settings: DesktopSettings): void {
-    ipcRenderer.send(IPC.saveSettings, settings);
+    sendIpc(IPC.saveSettings, settings);
   },
 };
 

@@ -12,6 +12,20 @@ export const IPC = {
   saveSettings: "omp:save-settings",
 } as const;
 
+export interface RendererToMainEvents {
+  [IPC.refresh]: () => void;
+  [IPC.hide]: () => void;
+  [IPC.openTerminal]: () => void;
+  [IPC.openOrca]: () => void;
+  [IPC.ready]: () => void;
+  [IPC.warmup]: (request: WarmUpRequest) => void;
+  [IPC.saveSettings]: (settings: DesktopSettings) => void;
+}
+
+export interface MainToRendererEvents {
+  [IPC.state]: (state: PanelState) => void;
+}
+
 export interface WarmUpState {
   running: boolean;
   message: string | null;
