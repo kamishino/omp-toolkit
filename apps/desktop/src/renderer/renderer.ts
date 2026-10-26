@@ -1,7 +1,8 @@
 import { mdiClose, mdiRefresh, mdiWindowMinimize } from "@mdi/js";
 import { formatAge, summaryText } from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
-import { icon, renderProviderCard } from "./card";
+import { renderProviderCard } from "./card";
+import { icon } from "./icon";
 import { applyTheme } from "./tokens";
 
 const media = window.matchMedia("(prefers-color-scheme: dark)");
