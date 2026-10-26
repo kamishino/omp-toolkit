@@ -5,7 +5,6 @@
  * exclusions (reservePct: 100), and policy restoration.
  */
 
-import fs from "node:fs";
 import {
   type Account,
   type HealAction,
@@ -21,7 +20,7 @@ import {
 } from "@omp-toolkit/core";
 import { short, writeFileAtomic } from "./fs-util";
 import { healthManager } from "./health-manager";
-import { type HistoryEventInput, recordEvents } from "./history-store";
+import type { HistoryEventInput } from "./history-store";
 import { RoutingPolicyStore } from "./policy-store";
 
 export { short, writeFileAtomic } from "./fs-util";
@@ -83,79 +82,14 @@ export function sleep(ms: number): Promise<void> {
   return promise;
 }
 
-export function writeState(state: HealthState): void {
-  writeFileAtomic(statePath(), `${JSON.stringify(state, null, 2)}\n`);
-}
-
-export function readStateForWrite(): HealthState {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(statePath(), "utf8")) as HealthState;
-    if (!parsed || !Array.isArray(parsed.excluded)) {
-      throw new Error("invalid gemini-health-state.json");
-    }
-    return {
-      excluded: parsed.excluded.filter((email): email is string => typeof email === "string"),
-    };
-  } catch (error) {
-    if ((error as { code?: string })?.code === "ENOENT") return { excluded: [] };
-    throw error;
-  }
-}
-
-export function readSnapshot(): { checkedAt: number; results: HealthResult[] } | null {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(snapshotPath(), "utf8")) as {
-      checkedAt?: number;
-      results?: HealthResult[];
-    };
-    if (!parsed || !Array.isArray(parsed.results)) return null;
-    return {
-      checkedAt: Number(parsed.checkedAt) || 0,
-      results: parsed.results,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function readStreaks(): StreakState {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(streakPath(), "utf8")) as StreakState;
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-export function readStreaksForWrite(): StreakState {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(streakPath(), "utf8")) as StreakState;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("invalid gemini-health-streaks.json");
-    }
-    return parsed;
-  } catch (error) {
-    if ((error as { code?: string })?.code === "ENOENT") return {};
-    throw error;
-  }
-}
-
-export function writeStreaks(state: StreakState): void {
-  writeFileAtomic(streakPath(), `${JSON.stringify(state, null, 2)}\n`);
-}
-
-let historyWarning: string | null = null;
-
-export function recordHistory(events: HistoryEventInput[]): void {
-  try {
-    recordEvents(events);
-    historyWarning = null;
-  } catch (error) {
-    if (historyWarning !== null) return;
-    historyWarning = short(error);
-    console.warn(`[omp-toolkit] history write failed: ${historyWarning}`);
-  }
-}
+export const writeState = (state: HealthState): void => healthManager.writeState(state);
+export const readStateForWrite = (): HealthState => healthManager.readState();
+export const readSnapshot = () => healthManager.readSnapshot();
+export const readStreaks = (): StreakState => healthManager.readStreaks();
+export const readStreaksForWrite = (): StreakState => healthManager.readStreaks();
+export const writeStreaks = (state: StreakState): void => healthManager.writeStreaks(state);
+export const recordHistory = (events: HistoryEventInput[]): void =>
+  healthManager.recordHistory(events);
 
 export const policyStore = new RoutingPolicyStore();
 
