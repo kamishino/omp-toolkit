@@ -94,7 +94,6 @@ export class DesktopPanel {
 
     const pos = placePanel({
       tray: trayBounds,
-      cursor,
       workArea: display.workArea,
       panel: { width: this.width, height: this.height },
       platform: process.platform,
@@ -136,9 +135,4 @@ export class DesktopPanel {
       this.window.destroy();
     }
   }
-}
-
-export function createPanel(options: CreatePanelOptions): BrowserWindow {
-  const panel = new DesktopPanel(options);
-  return panel.window;
 }

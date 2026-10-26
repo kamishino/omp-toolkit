@@ -4,13 +4,11 @@ import { placePanel } from "./panel-position";
 describe("placePanel positioning", () => {
   const panel = { width: 600, height: 640 };
   const workArea = { x: 0, y: 0, width: 1920, height: 1040 };
-  const cursor = { x: 500, y: 500 };
 
   test("places above bottom taskbar on win32", () => {
     const tray = { x: 1800, y: 1040, width: 24, height: 24 };
     const res = placePanel({
       tray,
-      cursor,
       workArea,
       panel,
       platform: "win32",
@@ -29,7 +27,6 @@ describe("placePanel positioning", () => {
     const tray = { x: 1800, y: 0, width: 24, height: 24 };
     const res = placePanel({
       tray,
-      cursor,
       workArea,
       panel,
       platform: "win32",
@@ -43,7 +40,6 @@ describe("placePanel positioning", () => {
     const tray = { x: 1920, y: 500, width: 24, height: 24 };
     const res = placePanel({
       tray,
-      cursor,
       workArea,
       panel,
       platform: "win32",
@@ -57,7 +53,6 @@ describe("placePanel positioning", () => {
     const tray = { x: 1500, y: 0, width: 24, height: 24 };
     const res = placePanel({
       tray,
-      cursor,
       workArea,
       panel,
       platform: "darwin",
@@ -72,7 +67,6 @@ describe("placePanel positioning", () => {
   test("places bottom-right on linux or when tray is absent", () => {
     const resLinux = placePanel({
       tray: { x: 100, y: 100, width: 24, height: 24 },
-      cursor,
       workArea,
       panel,
       platform: "linux",
@@ -83,7 +77,6 @@ describe("placePanel positioning", () => {
 
     const resNoTray = placePanel({
       tray: null,
-      cursor,
       workArea,
       panel,
       platform: "win32",
@@ -97,7 +90,6 @@ describe("placePanel positioning", () => {
     const smallArea = { x: 0, y: 0, width: 400, height: 300 };
     const res = placePanel({
       tray: null,
-      cursor,
       workArea: smallArea,
       panel,
       platform: "linux",
