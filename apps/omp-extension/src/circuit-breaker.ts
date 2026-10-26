@@ -5,10 +5,8 @@
  * exclusions (reservePct: 100), and policy restoration.
  */
 
-import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { promisify } from "node:util";
 import {
   type Account,
   excludedEmails,
@@ -24,25 +22,30 @@ import {
   resolveStatePath,
   resolveStreakPath,
   restorableEmails,
-  type Status,
   type StreakState,
 } from "@omp-toolkit/core";
 import { type HistoryEventInput, recordEvents } from "./history";
 import { RoutingPolicyStore } from "./policy-store";
+import {
+  AntigravityProbeClient,
+  DEFAULT_CONFIRM_DELAY_MS,
+  DEFAULT_ENDPOINT,
+  DEFAULT_MODEL_WIRE,
+  DEFAULT_PROBE_PROMPT,
+  DEFAULT_PROBE_TIMEOUT_MS,
+  DEFAULT_PROVIDER,
+  DEFAULT_USER_AGENT,
+} from "./probe-client";
 
-const execFileAsync = promisify(execFile);
-
-export const PROVIDER = "google-antigravity";
-export const MODEL_WIRE = "gemini-3.8-flash-high";
-export const PROBE_TIMEOUT_MS = 15_000;
-export const PROBE_PROMPT = "Reply with exactly: OK";
-export const CONFIRM_DELAY_MS = 1_000;
+export const PROVIDER = DEFAULT_PROVIDER;
+export const MODEL_WIRE = DEFAULT_MODEL_WIRE;
+export const PROBE_TIMEOUT_MS = DEFAULT_PROBE_TIMEOUT_MS;
+export const PROBE_PROMPT = DEFAULT_PROBE_PROMPT;
+export const CONFIRM_DELAY_MS = DEFAULT_CONFIRM_DELAY_MS;
 export const AUTO_HEAL_COOLDOWN_MS = 120_000;
-export const ENDPOINT =
-  "https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
+export const ENDPOINT = DEFAULT_ENDPOINT;
 export const UA_VERSION = process.env.PI_AI_ANTIGRAVITY_VERSION ?? "2.24.0";
-export const USER_AGENT = `antigravity/hub/${UA_VERSION} (aidev_client; os_type=darwin; arch=arm64; cl=963137146)`;
-
+export const USER_AGENT = DEFAULT_USER_AGENT;
 export const RESTORE_STREAK = Math.max(
   1,
   Number(process.env.GEMINI_HEALTH_RESTORE_STREAK ?? 3) || 3,
@@ -52,15 +55,8 @@ export const RESTORE_GAP_MS = Math.max(
   (Number(process.env.GEMINI_HEALTH_RESTORE_GAP_SECONDS ?? 60) || 60) * 1000,
 );
 
-const EXEC_OPTS = {
-  encoding: "utf8" as const,
-  timeout: 25_000,
-  windowsHide: true,
-  maxBuffer: 2 * 1024 * 1024,
-};
-
+export const probeClient = new AntigravityProbeClient();
 export const tokenCache = new Map<number, { token: string; at: number }>();
-
 export function ompBin(): string {
   return process.env.OMP_BIN || "omp";
 }
@@ -212,188 +208,38 @@ export function recordHealth(
   );
 }
 
-const sharedPolicyStore = new RoutingPolicyStore({ configKey: "models.routing.policy" });
+export const policyStore = new RoutingPolicyStore();
 
 export async function readPolicies(): Promise<Policy[]> {
-  return sharedPolicyStore.readPolicies();
+  return policyStore.readPolicies();
 }
 
 export async function readPoliciesForWrite(): Promise<Policy[]> {
-  return sharedPolicyStore.readPolicies();
+  return policyStore.readPolicies();
 }
 
 export async function writePolicies(policies: Policy[]): Promise<void> {
-  return sharedPolicyStore.writePolicies(policies);
+  return policyStore.writePolicies(policies);
 }
 
 export async function tokenList(): Promise<Map<string, number>> {
-  const { stdout } = await execFileAsync(ompBin(), ["token", PROVIDER, "--list"], EXEC_OPTS);
-  const map = new Map<string, number>();
-  for (const line of String(stdout).split(/\r?\n/)) {
-    const match = /^(\d+)\.\s+(\S+@\S+)\s*$/.exec(line.trim());
-    if (match) map.set(match[2].toLowerCase(), Number(match[1]));
-  }
-  return map;
+  return probeClient.tokenList();
 }
 
 export async function getToken(index: number): Promise<string> {
-  const cached = tokenCache.get(index);
-  if (cached && Date.now() - cached.at < 30 * 60_000) return cached.token;
-  const { stdout } = await execFileAsync(
-    ompBin(),
-    ["token", PROVIDER, "-a", String(index), "--raw"],
-    EXEC_OPTS,
-  );
-  const token = String(stdout).trim();
-  if (!token) throw new Error(`empty token for account ${index}`);
-  tokenCache.set(index, { token, at: Date.now() });
-  return token;
+  return probeClient.getToken(index);
 }
 
 export async function probe(account: Account): Promise<Result> {
-  const started = performance.now();
-  let token: string;
-  try {
-    token = await getToken(account.index);
-  } catch (error) {
-    return { ...account, status: "auth", ms: 0, detail: short(error) };
-  }
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  try {
-    const response = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        "User-Agent": USER_AGENT,
-      },
-      body: JSON.stringify({
-        project: account.project,
-        requestId: `agent/${crypto.randomUUID()}/${Date.now()}/${crypto.randomUUID()}/0`,
-        userAgent: "antigravity",
-        model: MODEL_WIRE,
-        request: {
-          contents: [{ role: "user", parts: [{ text: PROBE_PROMPT }] }],
-          generationConfig: { maxOutputTokens: 8 },
-          sessionId: crypto.randomUUID(),
-        },
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      if (response.status === 401 || response.status === 403) {
-        tokenCache.delete(account.index);
-      }
-      const status: Status =
-        response.status === 401 || response.status === 403
-          ? "auth"
-          : response.status === 404
-            ? "model-error"
-            : "error";
-      return {
-        ...account,
-        status,
-        ms: Math.round(performance.now() - started),
-        detail: `${response.status} ${body.replace(/\s+/g, " ").slice(0, 150)}`.trim(),
-      };
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      return {
-        ...account,
-        status: "error",
-        ms: Math.round(performance.now() - started),
-        detail: "empty response body",
-      };
-    }
-
-    try {
-      const decoder = new TextDecoder();
-      for (let i = 0; i < 4; i += 1) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        if (text.includes("data:")) {
-          return {
-            ...account,
-            status: "ok",
-            ms: Math.round(performance.now() - started),
-          };
-        }
-      }
-      return {
-        ...account,
-        status: "hang",
-        ms: Math.round(performance.now() - started),
-        detail: "no data event in stream head",
-      };
-    } finally {
-      reader.cancel().catch(() => {});
-    }
-  } catch (error) {
-    const isTimeout =
-      (error as { name?: string })?.name === "AbortError" || controller.signal.aborted;
-    return {
-      ...account,
-      status: isTimeout ? "hang" : "error",
-      ms: Math.round(performance.now() - started),
-      detail: isTimeout ? `timeout after ${PROBE_TIMEOUT_MS / 1000}s` : short(error),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+  return probeClient.probe(account);
 }
 
 export async function loadAccounts(): Promise<Account[]> {
-  const [stdout, tokenMap] = await Promise.all([
-    execFileAsync(ompBin(), ["usage", "--provider", PROVIDER, "--json"], EXEC_OPTS).then(
-      (r) => r.stdout,
-    ),
-    tokenList(),
-  ]);
-  const parsed = JSON.parse(String(stdout));
-  const reports = Array.isArray(parsed?.reports) ? parsed.reports : [];
-  const accounts: Account[] = [];
-  for (const report of reports) {
-    const email = report?.metadata?.email;
-    const project = report?.metadata?.projectId;
-    if (typeof email !== "string" || typeof project !== "string") continue;
-    const index = tokenMap.get(email.toLowerCase());
-    if (index === undefined) continue;
-    accounts.push({ index, email, project });
-  }
-  return accounts.sort((a, b) => a.index - b.index);
+  return probeClient.loadAccounts();
 }
 
 export async function checkAll(confirm = false): Promise<Result[]> {
-  const accounts = await loadAccounts();
-  if (accounts.length === 0) return [];
-  const results = await Promise.all(accounts.map(probe));
-  if (!confirm) return results;
-
-  const suspects = results.filter(
-    (result) => result.status === "hang" || result.status === "error",
-  );
-  await Promise.all(
-    suspects.map(async (result) => {
-      await sleep(CONFIRM_DELAY_MS);
-      const again = await probe(result);
-      if (again.status === "ok") {
-        result.status = "ok";
-        result.ms = again.ms;
-        result.detail = "recovered on retry";
-      } else {
-        result.detail = `${result.detail ?? ""}${result.detail ? " · " : ""}confirmed`;
-      }
-    }),
-  );
-  return results;
+  return probeClient.checkAll(confirm);
 }
 
 export async function applyHeal(
@@ -536,4 +382,37 @@ export async function maybeRestoreManaged(): Promise<string[]> {
     })),
   );
   return eligible;
+}
+
+export async function removeAccountExclusion(email: string, detail = "enable"): Promise<void> {
+  const policies = await readPoliciesForWrite();
+  const next = policies.filter(
+    (policy) =>
+      !(
+        policy?.provider === PROVIDER &&
+        typeof policy?.account?.email === "string" &&
+        policy.account.email.toLowerCase() === email.toLowerCase()
+      ),
+  );
+  if (next.length !== policies.length) {
+    await writePolicies(next);
+  }
+
+  const state = readStateForWrite();
+  state.excluded = state.excluded.filter((e) => e.toLowerCase() !== email.toLowerCase());
+  writeState({ excluded: state.excluded, updatedAt: new Date().toISOString() });
+
+  const streaks = readStreaksForWrite();
+  delete streaks[email];
+  writeStreaks(streaks);
+
+  recordHistory([
+    {
+      at: Date.now(),
+      kind: "restore" as const,
+      provider: PROVIDER,
+      account: email,
+      detail,
+    },
+  ]);
 }
