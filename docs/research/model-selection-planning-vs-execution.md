@@ -1,8 +1,8 @@
 # Selecting planning and execution models
 
-*Research note, 2026-10-22. Sources are Artificial Analysis (AA) model pages and
+_Research note, 2026-10-22. Sources are Artificial Analysis (AA) model pages and
 methodology, the Stencil catalog, OMP source/docs, and planning research. AA's
-headline score is a composite; `[INFERENCE]` marks judgment.*
+headline score is a composite; `[INFERENCE]` marks judgment._
 
 ## Short answers
 
@@ -83,24 +83,24 @@ The research evidence is mixed in a specific way:
 
 A model that writes an elegant plan but leaves design decisions to the executor
 is not a good planner. A model that writes a plain but decision-complete plan
-is. Measure the plan's *executability*, not its prose.
+is. Measure the plan's _executability_, not its prose.
 
 ## 2. DeepSeek plan + Gemini execution: is it a good strategy?
 
 ### The AA facts
 
-| Item | DeepSeek V4.1 Flash 1017 (Max) | Gemini 3.8 Flash (High) |
-|---|---|---|
-| AA Intelligence Index | **45** [A1] | **41** [A3] |
-| Earlier/base version | V4.1 Flash (Max) = **39**, deprecated [A2] | — |
-| OMP catalog `int` | **missing** in observed `models.db`; CLI name says 1017 [O6] | **40.9**, rounded to 41 [O6] |
-| Released | Oct 2026 [A1] | Sep 2026 [A3] |
-| Rank shown | #2 / 121 (open-weights class) [A1] | #51 / 214 (its class) [A3] |
-| Cost per AA task | **$0.26** [A1] | **$1.24** [A3] |
-| Output tokens on AA | 210M (very verbose) [A1] | 170M (very verbose) [A3] |
-| Speed | 203.4 output tok/s [A1] | 136.6 output tok/s [A3] |
-| Context / output cap | 1M / 384K (OMP provider) [O6] | 1M / 64K (OMP provider) [O6] |
-| Input | text, image [A1] | text, image, speech, video [A3] |
+| Item                  | DeepSeek V4.1 Flash 1017 (Max)                               | Gemini 3.8 Flash (High)         |
+| --------------------- | ------------------------------------------------------------ | ------------------------------- |
+| AA Intelligence Index | **45** [A1]                                                  | **41** [A3]                     |
+| Earlier/base version  | V4.1 Flash (Max) = **39**, deprecated [A2]                   | —                               |
+| OMP catalog `int`     | **missing** in observed `models.db`; CLI name says 1017 [O6] | **40.9**, rounded to 41 [O6]    |
+| Released              | Oct 2026 [A1]                                                | Sep 2026 [A3]                   |
+| Rank shown            | #2 / 121 (open-weights class) [A1]                           | #51 / 214 (its class) [A3]      |
+| Cost per AA task      | **$0.26** [A1]                                               | **$1.24** [A3]                  |
+| Output tokens on AA   | 210M (very verbose) [A1]                                     | 170M (very verbose) [A3]        |
+| Speed                 | 203.4 output tok/s [A1]                                      | 136.6 output tok/s [A3]         |
+| Context / output cap  | 1M / 384K (OMP provider) [O6]                                | 1M / 64K (OMP provider) [O6]    |
+| Input                 | text, image [A1]                                             | text, image, speech, video [A3] |
 
 The 4-point headline gap is real on the same index version, but it is not a
 planning effect size. AA's index includes agentic, coding, scientific, and
@@ -133,12 +133,12 @@ composite and higher cost make it a weaker default planner.
 
 ### 2×2 evaluation
 
-| Pair | Planner | Executor | What it tests |
-|---|---|---|---|
-| A | DeepSeek 1017 Max | DeepSeek 1017 Max | One-model baseline; no handoff |
-| B | DeepSeek 1017 Max | Gemini 3.8 High | Proposed split |
-| C | Gemini 3.8 High | DeepSeek 1017 Max | Reverse split |
-| D | Gemini 3.8 High | Gemini 3.8 High | Gemini-only baseline |
+| Pair | Planner           | Executor          | What it tests                  |
+| ---- | ----------------- | ----------------- | ------------------------------ |
+| A    | DeepSeek 1017 Max | DeepSeek 1017 Max | One-model baseline; no handoff |
+| B    | DeepSeek 1017 Max | Gemini 3.8 High   | Proposed split                 |
+| C    | Gemini 3.8 High   | DeepSeek 1017 Max | Reverse split                  |
+| D    | Gemini 3.8 High   | Gemini 3.8 High   | Gemini-only baseline           |
 
 Measure: plan acceptance, missing constraints, plan adherence, test pass,
 tool-call errors, replans, cost per success, wall-clock. Keep B only if it beats
@@ -183,11 +183,11 @@ does not guarantee that.
 
 ### Example shortlist (observed 2026-10-22)
 
-| Provider | Plan candidate | Execution candidate | Notes |
-|---|---|---|---|
-| `deepseek` | `deepseek/deepseek-flash:max` — AA 45 for 1017 Max; OMP `int` missing | Same model `:max` or `:high` | Cheapest/fastest; verify the 1017 checkpoint; no OMP `int` |
-| `google-antigravity` | `google-antigravity/gemini-3.8-flash:high` — AA 41; OMP `int` 40.9 | Same model `:high` | 1M context, multimodal input; $1.24/task, 137 tok/s; high effort is the top OMP level |
-| Cross-provider | DeepSeek plan + Gemini exec | — | Test against DeepSeek/DeepSeek; do not assume 45 > 41 means better plan |
+| Provider             | Plan candidate                                                        | Execution candidate          | Notes                                                                                 |
+| -------------------- | --------------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------- |
+| `deepseek`           | `deepseek/deepseek-flash:max` — AA 45 for 1017 Max; OMP `int` missing | Same model `:max` or `:high` | Cheapest/fastest; verify the 1017 checkpoint; no OMP `int`                            |
+| `google-antigravity` | `google-antigravity/gemini-3.8-flash:high` — AA 41; OMP `int` 40.9    | Same model `:high`           | 1M context, multimodal input; $1.24/task, 137 tok/s; high effort is the top OMP level |
+| Cross-provider       | DeepSeek plan + Gemini exec                                           | —                            | Test against DeepSeek/DeepSeek; do not assume 45 > 41 means better plan               |
 
 Do not infer that `deepseek-v4-pro` or `deepseek-v4-flash` are better/worse
 planners from `int` alone; their OMP `int` values (36 and 34.3) are composite
@@ -275,7 +275,7 @@ false unless a 2×2 test shows a mid-task handoff helps.
    and its cache may be stale or omit `int` [O6]. Missing is not zero.
 
 So: **no evidence of an undisclosed score or manipulation**. The numbers are
-disclosed; what is *not* disclosed in the headline is the version/effort/index
+disclosed; what is _not_ disclosed in the headline is the version/effort/index
 composition/provider context that determines whether the comparison is relevant
 to planning.
 

@@ -284,26 +284,34 @@ omp-toolkit/
 │       ├── model-intelligence-planning-vs-execution.md
 │       └── omp-brain-score.md
 │
-└── scripts/                               # Monorepo build, verification, and tooling scripts
-    ├── build.ts                           # Unified workspace bundler for extensions, CLI, and desktop
-    ├── build-tray-icons.ts                # Rasterizes SVG tray icons for OS trays
-    ├── check-tokens.ts                    # Audits APCA contrast (|Lc| >= 60) for design tokens
-    ├── color.ts                           # OKLCH and APCA color calculation utilities
-    ├── color.test.ts                      # Color math unit tests
-    ├── create-desktop-shortcut.ts         # Unified cross-platform desktop shortcut generator (Windows, macOS, Linux)
-    ├── create-desktop-shortcut.test.ts    # Desktop shortcut generator unit tests
-    ├── create-desktop-shortcut.ps1        # Windows PowerShell shortcut generator
-    ├── eval-model-roles.ts                # 2x2 empirical model role evaluation runner and CLI
-    ├── eval-model-roles.test.ts           # Model evaluation harness unit tests
-    ├── eval-metrics.ts                    # Evaluation metric calculators, pair configs, and scorecards
-    ├── eval-tasks.ts                      # Benchmark task definitions and prompt templates
-    ├── install.ts                         # Installs bundled extension into ~/.omp/agent/
-    ├── monitor.ts                         # Unified monitor runner, CLI argument parser, and script path resolver
-    ├── monitor.test.ts                    # Monitor launcher and argument parsing unit tests
-    ├── orca-monitor.ts                    # Launches Orca Floating Workspace monitor tab
-    ├── orca-monitor.test.ts               # Orca launcher unit tests
-    ├── reliability-report.ts              # Generates 30-day reliability history markdown report
-    └── widget.ts                          # Cross-platform desktop widget launcher helper
+└── scripts/                               # Monorepo build, verification, and tooling scripts organized by feature
+    ├── build/                             # Build, bundling, and icon generation pipelines
+    │   ├── build.ts                       # Unified workspace bundler for extensions, CLI, and desktop
+    │   └── build-tray-icons.ts            # Rasterizes SVG tray icons for OS trays
+    ├── desktop/                           # Desktop widget launcher and OS shortcut generators
+    │   ├── widget.ts                      # Cross-platform desktop widget launcher helper
+    │   ├── create-desktop-shortcut.ts     # Unified cross-platform desktop shortcut generator (Windows, macOS, Linux)
+    │   ├── create-desktop-shortcut.test.ts # Desktop shortcut generator unit tests
+    │   └── create-desktop-shortcut.ps1    # Windows PowerShell shortcut generator
+    ├── eval/                              # 2x2 empirical model role evaluation harness & benchmarks
+    │   ├── eval-model-roles.ts            # Model role evaluation runner and CLI
+    │   ├── eval-model-roles.test.ts       # Model evaluation harness unit tests
+    │   ├── eval-metrics.ts                # Metric calculators, pair configs, and scorecards
+    │   └── eval-tasks.ts                  # Benchmark task definitions and prompt templates
+    ├── install/                           # Extension installer
+    │   └── install.ts                     # Installs bundled extension into ~/.omp/agent/
+    ├── monitor/                           # CLI and Orca Floating Workspace monitor launchers
+    │   ├── monitor.ts                     # Unified monitor runner, CLI argument parser, and script path resolver
+    │   ├── monitor.test.ts                # Monitor launcher and argument parsing unit tests
+    │   ├── orca-monitor.ts                # Launches Orca Floating Workspace monitor tab
+    │   └── orca-monitor.test.ts           # Orca launcher unit tests
+    ├── reliability/                       # Reliability reporting
+    │   └── reliability-report.ts          # Generates 30-day reliability history markdown report
+    ├── tokens/                            # Design tokens and color math validation
+    │   ├── color.ts                       # OKLCH and APCA color calculation utilities
+    │   ├── color.test.ts                  # Color math unit tests
+    │   └── check-tokens.ts                # Audits APCA contrast (|Lc| >= 60) for design tokens
+    └── [root bridges]                     # Re-export bridge files (build.ts, widget.ts, monitor.ts, etc.) for zero broken imports
 ```
 
 ---
@@ -372,13 +380,16 @@ To prevent premature directory proliferation, a subfolder may be introduced ONLY
 
 Grouping 1–2 arbitrary files into a standalone subdirectory is strictly forbidden. Both `packages/core/src/schedule/` and `packages/core/src/dashboard/` follow this rule while respecting the Colocated Shallow (Depth <= 2) ceiling.
 
-### Scripts Prefix Grouping Convention
+### Scripts Feature Organization
 
-The `scripts/` directory remains strictly flat (Depth 1) to ensure single-hop discovery and keep `package.json` script paths clean and resilient. Scripts are organized via functional prefixes:
-- `build.ts` / `build-tray-icons.ts`: Compilation and packaging pipelines.
-- `check-*.ts`: Token validation and contrast audits.
-- `eval-*.ts`: Model evaluation and benchmarking harnesses.
-- `monitor.ts` / `orca-monitor.ts`: Live monitor launchers.
+Scripts are organized into cohesive feature subfolders under `scripts/`, paired with root-level re-export bridges to preserve 100% backwards compatibility and zero broken import links:
+- `scripts/build/`: Bundling (`build.ts`) and icon rasterization (`build-tray-icons.ts`).
+- `scripts/desktop/`: Desktop widget runtime (`widget.ts`) and cross-platform desktop shortcut generation (`create-desktop-shortcut.ts`, `.ps1`).
+- `scripts/eval/`: 2x2 empirical model role evaluation harness (`eval-model-roles.ts`), tasks (`eval-tasks.ts`), and metrics (`eval-metrics.ts`).
+- `scripts/install/`: OMP extension installation (`install.ts`).
+- `scripts/monitor/`: Live CLI monitor (`monitor.ts`) and Orca Floating Workspace launcher (`orca-monitor.ts`).
+- `scripts/reliability/`: 30-day reliability markdown report generator (`reliability-report.ts`).
+- `scripts/tokens/`: Color science utilities (`color.ts`) and APCA contrast auditor (`check-tokens.ts`).
 
 ---
 

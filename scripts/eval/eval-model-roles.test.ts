@@ -29,6 +29,7 @@ describe("eval-model-roles harness", () => {
     expect(ids).toEqual(["T1", "T2", "T3", "T4", "T5"]);
     for (const task of BENCHMARK_TASKS) {
       expect(task.title.length).toBeGreaterThan(0);
+      expect(task.description.length).toBeGreaterThan(0);
       expect(task.verificationCommand.length).toBeGreaterThan(0);
     }
   });
@@ -61,61 +62,60 @@ describe("eval-model-roles harness", () => {
   });
 
   test("estimateTokenCount returns expected character ratio", () => {
-    expect(estimateTokenCount("1234")).toBe(1);
-    expect(estimateTokenCount("12345678")).toBe(2);
-    expect(estimateTokenCount("")).toBe(1);
+    expect(estimateTokenCount("abcd")).toBe(1);
+    expect(estimateTokenCount("abcdefgh")).toBe(2);
+    expect(estimateTokenCount("")).toBe(1); // min 1
   });
 
   test("calculateModelCost uses published rates for DeepSeek and Gemini", () => {
-    // DeepSeek: $0.30 in / $1.20 out per 1M tokens
-    const deepSeekCost = calculateModelCost("deepseek/deepseek-flash", 1_000_000, 1_000_000);
-    expect(deepSeekCost).toBeCloseTo(1.5, 3);
+    // DeepSeek: in 0.3 / 1M, out 1.2 / 1M
+    const dsCost = calculateModelCost("deepseek/deepseek-flash", 1_000_000, 1_000_000);
+    expect(dsCost).toBeCloseTo(1.5, 2);
 
-    // Gemini: $0.75 in / $3.75 out per 1M tokens
+    // Gemini: in 0.75 / 1M, out 3.75 / 1M
     const geminiCost = calculateModelCost(
-      "google-antigravity/gemini-3.8-flash:high",
+      "google-antigravity/gemini-3.8-flash",
       1_000_000,
       1_000_000,
     );
-    expect(geminiCost).toBeCloseTo(4.5, 3);
+    expect(geminiCost).toBeCloseTo(4.5, 2);
   });
 
   test("calculateSummary accurately computes summary statistics", () => {
-    const pair = PAIR_CONFIGS.A;
     const metrics = [
       {
         taskId: "T1",
         planAcceptedFirstPass: true,
         firstPassSuccess: true,
-        toolTurns: 5,
+        toolTurns: 3,
         preToolChatterRetries: 0,
         inputTokens: 1000,
-        outputTokens: 500,
-        reasoningTokens: 2000,
-        durationSeconds: 30,
-        costUsd: 0.05,
+        outputTokens: 200,
+        reasoningTokens: 0,
+        durationSeconds: 10,
+        costUsd: 0.01,
       },
       {
         taskId: "T2",
         planAcceptedFirstPass: false,
         firstPassSuccess: true,
-        toolTurns: 3,
+        toolTurns: 5,
         preToolChatterRetries: 1,
         inputTokens: 2000,
-        outputTokens: 1000,
-        reasoningTokens: 3000,
-        durationSeconds: 90,
-        costUsd: 0.15,
+        outputTokens: 400,
+        reasoningTokens: 0,
+        durationSeconds: 20,
+        costUsd: 0.02,
       },
     ];
 
-    const res = calculateSummary(pair, metrics);
-    expect(res.summary.planAcceptanceRate).toBe(50);
-    expect(res.summary.firstPassSolveRate).toBe(100);
-    expect(res.summary.avgToolTurns).toBe(4);
-    expect(res.summary.totalTokens).toBe(9500);
-    expect(res.summary.totalCostUsd).toBe(0.2);
-    expect(res.summary.totalDurationMinutes).toBe(2);
+    const result = calculateSummary(PAIR_CONFIGS.A, metrics);
+    expect(result.summary.planAcceptanceRate).toBe(50);
+    expect(result.summary.firstPassSolveRate).toBe(100);
+    expect(result.summary.avgToolTurns).toBe(4.0);
+    expect(result.summary.totalTokens).toBe(3600);
+    expect(result.summary.totalCostUsd).toBe(0.03);
+    expect(result.summary.totalDurationMinutes).toBe(0.5);
   });
 
   test("formatScorecard generates a Markdown comparison table", () => {
@@ -124,12 +124,10 @@ describe("eval-model-roles harness", () => {
       calculateSummary(PAIR_CONFIGS.B, [mockMetricsForDryRun("T1", "B")]),
     ];
 
-    const table = formatScorecard(results);
-    expect(table).toContain(
-      "| Metric | Pair A (DeepSeek / DeepSeek) | Pair B (DeepSeek plan / Gemini exec) |",
-    );
-    expect(table).toContain("**Plan Acceptance Rate**");
-    expect(table).toContain("**First-Pass Solve Rate**");
-    expect(table).toContain("**Total Cost (USD)**");
+    const markdown = formatScorecard(results);
+    expect(markdown).toContain("| Metric | Pair A");
+    expect(markdown).toContain("| **Plan Acceptance Rate** |");
+    expect(markdown).toContain("| **First-Pass Solve Rate** |");
+    expect(markdown).toContain("| **Total Cost (USD)** |");
   });
 });

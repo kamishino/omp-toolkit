@@ -1,12 +1,12 @@
 # Architecture Decision Records
 
-| ADR | Title | Status |
-|---|---|---|
-| [0001](0001-event-driven-health.md) | Event-driven health | Accepted |
-| [0002](0002-opt-in-auto-restore.md) | Opt-in auto-restore for manual exclusions | Accepted |
-| [0003](0003-public-release-scope.md) | Public release scope and support boundary | Accepted; platform clause superseded by 0004 |
-| [0004](0004-cross-platform-support.md) | Cross-platform installation and support boundary | Accepted |
-| [0005](0005-cross-platform-desktop-widget.md) | Cross-platform desktop widget host | Accepted |
-| [0006](0006-manual-account-warmup.md) | Manual account warm-up and unhang check | Accepted |
-| [0007](0007-multi-provider-time-window-scheduling.md) | Multi-provider time-window scheduling and context-aware monitoring | Accepted |
-| [0008](0008-terminui-terminal-refactor.md) | TerminUI terminal UI refactoring | Accepted |
+| ADR                                                   | Title                                                              | Status                                       |
+| ----------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
+| [0001](0001-event-driven-health.md)                   | Event-driven health                                                | Accepted                                     |
+| [0002](0002-opt-in-auto-restore.md)                   | Opt-in auto-restore for manual exclusions                          | Accepted                                     |
+| [0003](0003-public-release-scope.md)                  | Public release scope and support boundary                          | Accepted; platform clause superseded by 0004 |
+| [0004](0004-cross-platform-support.md)                | Cross-platform installation and support boundary                   | Accepted                                     |
+| [0005](0005-cross-platform-desktop-widget.md)         | Cross-platform desktop widget host                                 | Accepted                                     |
+| [0006](0006-manual-account-warmup.md)                 | Manual account warm-up and unhang check                            | Accepted                                     |
+| [0007](0007-multi-provider-time-window-scheduling.md) | Multi-provider time-window scheduling and context-aware monitoring | Accepted                                     |
+| [0008](0008-terminui-terminal-refactor.md)            | TerminUI terminal UI refactoring                                   | Accepted                                     |

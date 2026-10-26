@@ -1,203 +1,255 @@
 # Glossary
 
 ## Account
+
 A credential identity within a provider, identified by email, account id, or
 project id.
 
 ## Provider
+
 An upstream model service registered in OMP, such as Google Antigravity,
 OpenAI Codex, Muse Code, or DeepSeek.
 
 ## Route
+
 The provider -> account -> model path used for one request.
 
 ## Route health
+
 The result of a route probe: OK, HANG, ERR, AUTH, or MODEL.
 
 ## Route stall
+
 A route that emits no first SSE event within the probe timeout, or that fails
 with a qualifying retryable error.
 
 ## Snapshot
+
 The latest recorded route-health result for every probed account.
 
 ## Managed exclusion
+
 A routing exclusion written by the toolkit. Managed exclusions are eligible for
 automatic restore.
 
 ## Manual exclusion
+
 A routing exclusion that was not written by the toolkit. Manual exclusions are
 never restored automatically unless the account opts in.
 
 ## Opt-in auto-restore
+
 Per-account permission for a manual exclusion to be removed automatically after
 the required healthy-check streak.
 
 ## Recovery sweep
+
 A conditional probe run that happens only while at least one restorable
 exclusion exists.
 
 ## Manual intervention
+
 An operator action that manually changes exclusions or forces recovery: enabling
 an excluded account, running a manual heal, or manually restoring policies.
 ## Incident
+
 A state where every account fails, or where automatic recovery cannot restore
 service and the operator must act.
 
 ## Machine
+
 One host with its own OMP agent directory and its own toolkit state.
 
 ## Monitor
+
 A live provider-usage view. It runs in any terminal, or in an Orca Floating
 Workspace tab when Orca is the chosen host.
 
 ## Monitor host
+
 The terminal, desktop widget, or Orca Floating Workspace tab that runs the
 monitor.
 
 ## Desktop widget
+
 A cross-platform tray host for the monitor: a tray icon plus a compact panel
 showing the same provider-usage dashboard. It is separate from the OMP
 `/gemini-health-widget` TUI toggle and is not a Windows 11 Widgets-board widget.
 _Avoid_: Tray widget, menu bar app
 
 ## Tray icon
+
 The OS notification-area (Windows/Linux) or menu-bar (macOS) icon that indicates
 status and toggles the desktop widget panel.
 
 ## Panel
+
 The compact, always-on-top window owned by the desktop widget.
 ## History
+
 The 30-day local record of route checks, policy changes, manual interventions,
 incidents, and monitor heartbeats.
 
 ## Experimental feature
+
 A feature published for feedback without compatibility or support guarantees.
 
 ## Maintainer
+
 The person who sets project direction and merges contributions.
 
 ## Public release
+
 A tagged source snapshot published on GitHub. The project does not publish npm
 packages.
 
 ## Supported platform
+
 A platform covered by CI and documented installation, build, and CLI support.
 
 ## Best-effort platform
+
 A platform where installation and CLI are expected to work, but
 integration-specific behavior may be untested.
 
 ## Balance alert
+
 A red `LOW` state shown when a provider balance is at or below the configured
 threshold for its currency.
 
 ## Route column
+
 The per-account `ROUTE` cell. It is shown for every provider section when the
 snapshot contains route health for any account.
 
 ## Warm-up
+
 A deliberate minimal model request to one provider account that establishes or
 verifies the account's model route before use. Warm-up does not change the OMP
 account pin, policy, or exclusion state.
 
 ## Warm-up eligible
+
 An account whose latest route status is OK or unknown. Known non-OK accounts are
 skipped by provider-wide warm-up and require an Unhang check.
 
 ## Unhang check
+
 A single-account route probe for a known non-OK account, used to see whether the
 account has recovered. It updates route health but does not immediately restore
 an exclusion.
 
 ## Time window policy
+
 An authoritative specification of recurring peak and off-peak intervals, reference
 timezone, and token rate multipliers for an upstream model provider.
 
 ## Peak window
+
 A recurring time interval during which standard (full-price) rates apply for a
 provider's model usage.
 
 ## Off-peak window
+
 A recurring time interval during which a discounted rate (e.g. 50% discount)
 applies for a provider's model usage.
 
 ## Reference timezone
+
 The canonical IANA timezone used by a provider's pricing specification (such as
 UTC or China Standard Time) against which recurring hours are evaluated.
 
 ## Window evaluation
+
 A point-in-time calculation determining the current pricing window, active rate
 multiplier, discount percentage, and duration until the next schedule transition.
 
 ## Context-aware advisory
+
 A non-blocking visibility cue (such as a dashboard badge or countdown timer)
 informing the operator of the active pricing window and cost implications.
 
 ## Double-buffered cell diffing
+
 An in-memory grid comparison that emits ANSI escapes only for modified terminal
 cells between consecutive frames, eliminating screen flicker.
 
 ## Terminal backend
+
 The stream or buffer adapter (such as Node stdout, a crossterm bridge, or an
 in-memory test buffer) that receives cell writes from a terminal instance.
 
 ## Frame buffer
+
 A two-dimensional grid of cell structs (character, foreground, background, and
 modifiers) representing a single render pass before flushing.
 
 ## Dashboard engine
+
 A unified domain subsystem that accepts raw provider reports and route health
 snapshots and constructs a fully hydrated, thresholded view model in one step.
 
 ## Circuit breaker module
+
 An autonomous subsystem that monitors route stalls, tracks healthy check streaks,
 and applies temporary routing exclusions to protect session pins from hanging.
 
 ## Terminal launcher
+
 A deep platform adapter that encapsulates shell command construction, PATH
 executable discovery, child process spawning, and clipboard fallback.
 
 ## Agent environment resolver
+
 A centralized domain module that deterministically maps agent directories, state
 paths, snapshots, database files, and script search candidates without I/O.
 
 ## Usage provider registry
+
 An extensible adapter registry in which upstream providers register column
 filtering rules, balance extractors, and currency formatting handlers.
 
 ## Autostart manager
+
 A deep platform module that manages operating-system startup registration across
 Windows Registry, macOS LaunchAgent plists, and Linux XDG desktop entries.
 ## Desktop panel
+
 A deep lifecycle coordinator module that encapsulates BrowserWindow creation,
 screen geometry detection, tray edge clamping, visibility transitions, and IPC
 state synchronization.
 
 ## Reliability history store
+
 A repository subsystem encapsulating SQLite database access, schema migrations,
 event persistence, and analytical reporting queries.
 
 ## Monitor config
+
 A configuration module encapsulating CLI argument parsing, environment variable
 fallbacks, interval bounding, and flag validation into a unified type.
 ## Antigravity probe client
+
 A deep communication module encapsulating OAuth bearer token resolution,
 in-memory TTL token caching, and SSE streaming HTTP health probes to Google
 Antigravity endpoints.
 
 ## Interactive monitor
+
 A deep execution module encapsulating terminal alternate screen switching,
 raw-mode keystroke decoding, double-buffered frame state, and periodic polling.
 
 ## Desktop tray coordinator
+
 A deep lifecycle module encapsulating Electron Tray instance management, tooltip
 formatting, context menu assembly, and OS theme event subscriptions.
 
 ## Routing policy store
+
 A repository subsystem encapsulating OMP routing policy serialization, CLI
 fallback execution, and temporary exclusion mutations.
 
 ## Schedule evaluator
+
 A deep domain module encapsulating timezone-aware pricing window evaluations,
 transition countdowns, and schedule timetable generation.

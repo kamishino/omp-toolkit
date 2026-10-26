@@ -1,7 +1,6 @@
 # ADR-0003: Public release scope and support boundary
 
 > Platform boundary updated by ADR-0004.
-
 - Status: Accepted; platform boundary superseded by ADR-0004
 - Date: 2026-10-21
 

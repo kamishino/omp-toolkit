@@ -8,15 +8,15 @@ hex or px literals live in the renderers.
 
 ## Color tokens
 
-| Token | ANSI index | Use |
-|---|---:|---|
-| `color.border` | 240 | Frame lines |
-| `color.muted` | 245 | Labels, reset times, source line |
-| `color.accent` | 81 | Title and provider headers |
-| `color.ok` | 42 | Usage below the warm threshold |
-| `color.warn` | 220 | Warm usage |
-| `color.hot` | 208 | Hot usage |
-| `color.danger` | 203 | Critical usage, HANG/ERR |
+| Token          | ANSI index | Use                              |
+| -------------- | ---------: | -------------------------------- |
+| `color.border` |        240 | Frame lines                      |
+| `color.muted`  |        245 | Labels, reset times, source line |
+| `color.accent` |         81 | Title and provider headers       |
+| `color.ok`     |         42 | Usage below the warm threshold   |
+| `color.warn`   |        220 | Warm usage                       |
+| `color.hot`    |        208 | Hot usage                        |
+| `color.danger` |        203 | Critical usage, HANG/ERR         |
 
 ANSI 256 indices are used instead of hex because the terminal owns the palette
 and light/dark theme. `NO_COLOR=1` disables all color; the layout and symbols
@@ -25,15 +25,15 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
 
 ## Thresholds
 
-| Token | Value | Meaning |
-|---|---:|---|
-| `usage.warmThreshold` | 0.40 | Green -> yellow |
-| `usage.hotThreshold` | 0.70 | Yellow -> orange |
-| `usage.criticalThreshold` | 0.85 | Orange -> red |
-| `usage.aboveThreshold` | 0.80 | Summary >=80% count |
-| `health.restoreStreak` | 3 | Healthy checks before auto-restore |
-| `health.restoreGapSeconds` | 60 | Minimum spacing between counted checks |
-| `health.staleSnapshotMinutes` | 15 | Mark the cached snapshot stale |
+| Token                         | Value | Meaning                                |
+| ----------------------------- | ----: | -------------------------------------- |
+| `usage.warmThreshold`         |  0.40 | Green -> yellow                        |
+| `usage.hotThreshold`          |  0.70 | Yellow -> orange                       |
+| `usage.criticalThreshold`     |  0.85 | Orange -> red                          |
+| `usage.aboveThreshold`        |  0.80 | Summary >=80% count                    |
+| `health.restoreStreak`        |     3 | Healthy checks before auto-restore     |
+| `health.restoreGapSeconds`    |    60 | Minimum spacing between counted checks |
+| `health.staleSnapshotMinutes` |    15 | Mark the cached snapshot stale         |
 
 ## Provider usage frame
 

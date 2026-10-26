@@ -79,7 +79,7 @@ describe("cross-platform desktop shortcut generator", () => {
       const res = createDesktopShortcut({
         platform: "linux",
         home: tempDir,
-        repoRoot: path.resolve(import.meta.dir, ".."),
+        repoRoot: path.resolve(import.meta.dir, "../.."),
         silent: true,
       });
 

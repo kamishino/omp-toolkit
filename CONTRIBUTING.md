@@ -1,6 +1,7 @@
 # Contributing
 
 ## Project scope
+
 This is an unofficial, Windows-first toolkit for OMP + Orca. The terminal
 monitor, DeepSeek balance, reliability history, and desktop widget are supported
 on Windows and macOS; Linux is best-effort. Orca integration outside Windows is
@@ -10,6 +11,7 @@ The Gemini route-health rotation is experimental. Changes to account exclusion,
 OMP config mutation, or recovery behavior require a focused issue first.
 
 ## Setup
+
 Prerequisites: Bun 1.4.3, Git, and OMP 18.12.5. Windows 10/11 is the primary
 Orca platform; installation, build, and CLI are supported on macOS and Linux.
 Orca 1.4.226 is optional and only needed for the Floating Workspace launcher.
@@ -22,6 +24,7 @@ bun run check
 ```
 
 ## Checks
+
 Run before every pull request:
 
 ```powershell
@@ -35,6 +38,7 @@ suite, and token contrast validation. Tests must not require network access, rea
 OMP credentials, a running Orca instance, or launching an Electron GUI.
 
 ## Pull requests
+
 - Keep each PR to one concern.
 - Add or update tests for behavior changes in `packages/core`,
   `packages/tui`, or `apps/desktop`.
@@ -47,6 +51,7 @@ OMP credentials, a running Orca instance, or launching an Electron GUI.
   and failure behavior.
 
 ## AI assistant artifacts
+
 Do not commit `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.cursor/`, `.claude/`,
 `.codex/`, `.agents/`, `.omp/`, `copilot-instructions.md`, session handoffs,
 agent transcripts, local skill files, or prompt files. They are gitignored and
@@ -55,5 +60,6 @@ runtime directory required by the product; they are not a request to publish
 local agent state.
 
 ## Security
+
 Do not open a public issue with credentials, tokens, or full provider payloads.
 See `SECURITY.md`.
