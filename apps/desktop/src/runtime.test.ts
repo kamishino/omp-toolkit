@@ -234,4 +234,52 @@ describe("DesktopRuntime deep coordinator", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  test("launchTerminal reports error when monitor script is missing", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      let reportedError = "";
+      const mockDialogHost = {
+        showErrorBox: (_title: string, message: string) => {
+          reportedError = message;
+        },
+        showMessageBox: async () => ({ response: 0 }),
+      };
+
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        dialogHost: mockDialogHost,
+      });
+
+      await runtime.launchTerminal();
+      expect(reportedError).toContain("Monitor script not found");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("launchOrca reports error when checkout is invalid", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      let reportedError = "";
+      const mockDialogHost = {
+        showErrorBox: (_title: string, message: string) => {
+          reportedError = message;
+        },
+        showMessageBox: async () => ({ response: 0 }),
+      };
+
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        dialogHost: mockDialogHost,
+      });
+
+      runtime.launchOrca();
+      expect(reportedError.length).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
