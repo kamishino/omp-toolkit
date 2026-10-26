@@ -284,7 +284,9 @@ omp-toolkit/
     ├── check-tokens.ts                    # Audits APCA contrast (|Lc| >= 60) for design tokens
     ├── color.ts                           # OKLCH and APCA color calculation utilities
     ├── color.test.ts                      # Color math unit tests
-    ├── create-desktop-shortcut.ps1        # Generates Windows desktop shortcut
+    ├── create-desktop-shortcut.ts         # Unified cross-platform desktop shortcut generator (Windows, macOS, Linux)
+    ├── create-desktop-shortcut.test.ts    # Desktop shortcut generator unit tests
+    ├── create-desktop-shortcut.ps1        # Windows PowerShell shortcut generator
     ├── eval-model-roles.ts                # 2x2 empirical model role evaluation runner and CLI
     ├── eval-model-roles.test.ts           # Model evaluation harness unit tests
     ├── eval-metrics.ts                    # Evaluation metric calculators, pair configs, and scorecards

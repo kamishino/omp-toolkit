@@ -14,6 +14,9 @@ if (-not $desktop) {
 }
 
 $shortcutPath = Join-Path $desktop "OMP Provider Usage.lnk"
+if (Test-Path -LiteralPath $shortcutPath) {
+  Remove-Item -LiteralPath $shortcutPath -Force -ErrorAction SilentlyContinue
+}
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = $launcher

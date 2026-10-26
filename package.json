@@ -38,6 +38,7 @@
     "desktop": "bun scripts/widget.ts",
     "desktop:preview": "bun scripts/widget.ts --preview",
     "desktop:once": "bun scripts/widget.ts --once",
+    "desktop:shortcut": "bun scripts/create-desktop-shortcut.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.json --noEmit",
     "format": "biome format --write .",
