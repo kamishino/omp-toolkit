@@ -280,7 +280,6 @@ omp-toolkit/
 │
 └── scripts/                               # Monorepo build, verification, and tooling scripts
     ├── build.ts                           # Unified workspace bundler for extensions, CLI, and desktop
-    ├── build-desktop.ts                   # Packages apps/desktop with electron-builder and assets
     ├── build-tray-icons.ts                # Rasterizes SVG tray icons for OS trays
     ├── check-tokens.ts                    # Audits APCA contrast (|Lc| >= 60) for design tokens
     ├── color.ts                           # OKLCH and APCA color calculation utilities
@@ -366,7 +365,7 @@ Grouping 1–2 arbitrary files into a standalone subdirectory is strictly forbid
 ### Scripts Prefix Grouping Convention
 
 The `scripts/` directory remains strictly flat (Depth 1) to ensure single-hop discovery and keep `package.json` script paths clean and resilient. Scripts are organized via functional prefixes:
-- `build-*.ts` / `build.ts`: Compilation and packaging pipelines.
+- `build.ts` / `build-tray-icons.ts`: Compilation and packaging pipelines.
 - `check-*.ts`: Token validation and contrast audits.
 - `eval-*.ts`: Model evaluation and benchmarking harnesses.
 - `monitor.ts` / `orca-monitor.ts`: Live monitor launchers.
@@ -407,7 +406,7 @@ The unified build pipeline compiles TypeScript packages into optimized, standalo
 scripts/build.ts
   ├── apps/provider-usage/src/index.ts  ──►  apps/provider-usage/dist/index.js (CLI bundle)
   ├── apps/omp-extension/src/index.ts   ──►  apps/omp-extension/dist/index.js  (OMP plugin bundle)
-  └── apps/desktop/                     ──►  apps/desktop/dist/ (Electron executable package via build-desktop.ts)
+  └── apps/desktop/                     ──►  apps/desktop/dist/ (Electron executable package)
 ```
 
 - **Unified Orchestrator:** `scripts/build.ts` serves as the single build entry point for all workspace packages. Supports `--desktop` for desktop-only builds and `--no-desktop` / `--targets` for extension and CLI only.
