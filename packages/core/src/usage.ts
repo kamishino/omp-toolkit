@@ -8,7 +8,17 @@ import type {
 } from "./types";
 import { getUsageProviderAdapter } from "./usage-providers";
 
-const WINDOW_ORDER = ["weekly", "5 hour", "5 hours", "30 days", "daily", "monthly", "300m", "1w"];
+const WINDOW_ORDER = [
+  "5 hour",
+  "5 hours",
+  "5h",
+  "300m",
+  "daily",
+  "weekly",
+  "1w",
+  "monthly",
+  "30 days",
+];
 
 export function providerName(provider: string): string {
   const adapter = getUsageProviderAdapter(provider);
@@ -113,6 +123,7 @@ export function rowsFor(
         .filter((limit): limit is UsageLimit => !!limit);
       const source = selected.length > 0 ? selected : (report.limits ?? []);
       const max = Math.max(0, ...source.map((limit) => usedPercent(limit) ?? 0));
+      const primary = selected[0] ? (usedPercent(selected[0]) ?? 0) : max;
       return {
         report,
         account,
@@ -122,11 +133,15 @@ export function rowsFor(
             ? health.get(report.metadata.email)
             : undefined),
         max,
+        primary,
       };
     })
     .sort(
       (a, b) =>
-        healthRank(a) - healthRank(b) || b.max - a.max || a.account.localeCompare(b.account),
+        healthRank(a) - healthRank(b) ||
+        (b.primary ?? b.max) - (a.primary ?? a.max) ||
+        b.max - a.max ||
+        a.account.localeCompare(b.account),
     );
 }
 
