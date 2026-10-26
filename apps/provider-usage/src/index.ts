@@ -1,4 +1,4 @@
-import { getAllTimeWindowPolicies, type HealthResult, sectionsFor } from "@omp-toolkit/core";
+import { DashboardEngine, getAllTimeWindowPolicies } from "@omp-toolkit/core";
 import { renderProviderUsage, renderScheduleView } from "@omp-toolkit/tui";
 import { parseMonitorCliConfig } from "./config";
 import { writeHeartbeat } from "./heartbeat";
@@ -45,16 +45,19 @@ async function main(): Promise<void> {
       // The monitor stays usable; the report shows a stale heartbeat.
     }
     const snapshot = showHealth ? readSnapshot() : null;
-    const health = new Map<string, HealthResult>(
-      (snapshot?.results ?? []).map((result) => [result.email, result]),
-    );
-    const sections = sectionsFor(reports, health);
-
+    const dashboard = DashboardEngine.compile(reports, snapshot, {
+      showHealth,
+      balanceAlert,
+    });
     if (json) {
-      const fetchedAt = Date.now();
       console.log(
         JSON.stringify(
-          jsonPayload(sections, { fetchedAt, showHealth, snapshot, balanceAlert }),
+          jsonPayload(dashboard, {
+            fetchedAt: dashboard.fetchedAt,
+            showHealth,
+            snapshot,
+            balanceAlert,
+          }),
           null,
           2,
         ),
@@ -62,7 +65,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    const frame = renderProviderUsage(sections, {
+    const frame = renderProviderUsage(dashboard, {
       interval,
       watch,
       showHealth,

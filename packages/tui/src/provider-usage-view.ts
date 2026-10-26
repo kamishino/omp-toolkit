@@ -173,11 +173,14 @@ export function renderProviderUsageFromDashboard(
 }
 
 export function renderProviderUsage(
-  sections: ProviderSection[],
+  target: Dashboard | ProviderSection[],
   options: ProviderUsageViewOptions,
 ): string {
+  if ("providers" in target && "summary" in target) {
+    return renderProviderUsageFromDashboard(target, options);
+  }
   const now = Date.now();
-  const dashboard = buildDashboard(sections, {
+  const dashboard = buildDashboard(target, {
     fetchedAt: now,
     now,
     showHealth: options.showHealth,
