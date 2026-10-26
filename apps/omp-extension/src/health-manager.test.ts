@@ -50,4 +50,55 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
     ]);
     expect(healthyAction.reason).toBe("all accounts healthy");
   });
+
+  test("resolveAccount prioritizes exact match and resolves unique prefix", async () => {
+    const accounts = [
+      { index: 1, email: "alpha@example.com", project: "p1" },
+      { index: 2, email: "beta@example.com", project: "p2" },
+      { index: 3, email: "alpha.work@example.com", project: "p3" },
+    ];
+
+    const manager = new AntigravityHealthManager({
+      probeClient: {
+        loadAccounts: async () => accounts,
+      } as unknown as AntigravityProbeClient,
+    });
+
+    // Exact email
+    const exact = await manager.resolveAccount("beta@example.com");
+    expect(exact.status).toBe("found");
+    if (exact.status === "found") expect(exact.account.index).toBe(2);
+
+    // Unique prefix
+    const prefix = await manager.resolveAccount("beta");
+    expect(prefix.status).toBe("found");
+    if (prefix.status === "found") expect(prefix.account.index).toBe(2);
+
+    // Not found
+    const notFound = await manager.resolveAccount("gamma");
+    expect(notFound.status).toBe("not_found");
+
+    // Empty
+    const empty = await manager.resolveAccount("   ");
+    expect(empty.status).toBe("not_found");
+  });
+
+  test("resolveAccount reports ambiguous for duplicate local parts", async () => {
+    const accounts = [
+      { index: 1, email: "dev@work.com", project: "p1" },
+      { index: 2, email: "dev@personal.com", project: "p2" },
+    ];
+
+    const manager = new AntigravityHealthManager({
+      probeClient: {
+        loadAccounts: async () => accounts,
+      } as unknown as AntigravityProbeClient,
+    });
+
+    const res = await manager.resolveAccount("dev");
+    expect(res.status).toBe("ambiguous");
+    if (res.status === "ambiguous") {
+      expect(res.matches.length).toBe(2);
+    }
+  });
 });

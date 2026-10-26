@@ -41,6 +41,11 @@ export interface HealthManagerOptions {
  * - 30-day reliability history audit logging
  * - Health snapshot and streak state file persistence
  */
+export type AccountResolution =
+  | { status: "found"; account: Account }
+  | { status: "not_found"; error: string }
+  | { status: "ambiguous"; error: string; matches: Account[] };
+
 export class AntigravityHealthManager {
   readonly probeClient: AntigravityProbeClient;
   readonly policyStore: RoutingPolicyStore;
@@ -67,6 +72,40 @@ export class AntigravityHealthManager {
 
   async loadAccounts(): Promise<Account[]> {
     return this.probeClient.loadAccounts();
+  }
+
+  async resolveAccount(needle: string): Promise<AccountResolution> {
+    const raw = needle.trim().toLowerCase();
+    if (!raw) {
+      return { status: "not_found", error: "Account identifier must not be empty." };
+    }
+    const accounts = await this.loadAccounts();
+
+    // 1. Exact match takes top priority
+    const exact = accounts.find((a) => a.email.toLowerCase() === raw);
+    if (exact) {
+      return { status: "found", account: exact };
+    }
+
+    // 2. Prefix / local-part matches
+    const matches = accounts.filter((a) => a.email.toLowerCase().split("@")[0] === raw);
+
+    if (matches.length === 0) {
+      return {
+        status: "not_found",
+        error: `No Antigravity account found for "${needle}"`,
+      };
+    }
+
+    if (matches.length > 1) {
+      return {
+        status: "ambiguous",
+        error: `Multiple accounts match "${needle}": ${matches.map((a) => a.email).join(", ")}. Use full email.`,
+        matches,
+      };
+    }
+
+    return { status: "found", account: matches[0] };
   }
 
   // --- Policy Operations ---
