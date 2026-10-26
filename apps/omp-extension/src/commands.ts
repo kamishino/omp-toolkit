@@ -37,42 +37,33 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     description: "Probe every Google Antigravity account for gemini-3.8-flash route hangs",
     handler: async (args, ctx) => {
       const confirm = /--confirm\b/.test(args);
-      if (coordinator.isRunning()) {
-        ctx.ui.notify("Gemini health check already running", "info");
-        return;
-      }
-      coordinator.setRunning(true);
-      try {
-        const results = await healthManager.checkAll(confirm);
-        healthManager.recordHealth(results);
-        const restored = await healthManager.maybeRestoreManaged();
-        const policies = await healthManager.readPolicies();
-        publish(ctx, results, policies);
-        const text = table(results, policies);
-        const restoredNote =
-          restored.length > 0
-            ? `\nRestored after ${RESTORE_STREAK} healthy checks: ${restored.join(", ")}`
-            : "";
-        pi.sendMessage(
-          {
-            customType: "gemini-health",
-            content: `${text}${restoredNote}`,
-            display: true,
-            attribution: "agent",
-          },
-          { triggerTurn: false },
-        );
-        if (restored.length > 0) {
-          ctx.ui.notify(
-            `Gemini health: restored ${restored.join(", ")} after ${RESTORE_STREAK} healthy checks.`,
-            "info",
+      await coordinator.runExclusive(ctx, "Gemini health check", async () => {
+        try {
+          const { results, restored, policies } = await coordinator.probeAndPublish(ctx, confirm);
+          const text = table(results, policies);
+          const restoredNote =
+            restored.length > 0
+              ? `\nRestored after ${RESTORE_STREAK} healthy checks: ${restored.join(", ")}`
+              : "";
+          pi.sendMessage(
+            {
+              customType: "gemini-health",
+              content: `${text}${restoredNote}`,
+              display: true,
+              attribution: "agent",
+            },
+            { triggerTurn: false },
           );
+          if (restored.length > 0) {
+            ctx.ui.notify(
+              `Gemini health: restored ${restored.join(", ")} after ${RESTORE_STREAK} healthy checks.`,
+              "info",
+            );
+          }
+        } catch (error) {
+          ctx.ui.notify(`Gemini health check failed: ${short(error)}`, "error");
         }
-      } catch (error) {
-        ctx.ui.notify(`Gemini health check failed: ${short(error)}`, "error");
-      } finally {
-        coordinator.setRunning(false);
-      }
+      });
     },
   });
 
@@ -99,16 +90,88 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         );
         return;
       }
-      if (coordinator.isRunning()) {
-        ctx.ui.notify("A health check or warm-up is already running", "info");
+      await coordinator.runExclusive(ctx, "A health check or warm-up is", async () => {
+        try {
+          let request: WarmUpRequest;
+          if (all) {
+            request = { provider: PROVIDER, action: "warm", all: true };
+          } else {
+            const accounts = await healthManager.loadAccounts();
+            const matches = accounts.filter(
+              (a) =>
+                a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
+            );
+            if (matches.length === 0) {
+              ctx.ui.notify(`No Antigravity account found for "${needle}"`, "warning");
+              return;
+            }
+            if (matches.length > 1) {
+              ctx.ui.notify(
+                `Multiple accounts match "${needle}": ${matches.map((a) => a.email).join(", ")}. Use full email.`,
+                "warning",
+              );
+              return;
+            }
+            request = { provider: PROVIDER, action: "warm", account: matches[0].email };
+          }
+
+          const run = await runWarmUp(warmUpDeps, request);
+          const policies = await healthManager.readPolicies();
+          const snapshotResults = healthManager.readSnapshot()?.results ?? run.results;
+          publish(ctx, snapshotResults, policies);
+
+          if ("all" in request) {
+            const nonOkSkipped = run.report.skipped.filter((s) => s.reason === "non-ok").length;
+            const cooldownSkipped = run.report.skipped.filter(
+              (s) => s.reason === "cooldown",
+            ).length;
+            const skipDetails = [
+              nonOkSkipped > 0 ? `${nonOkSkipped} non-OK` : null,
+              cooldownSkipped > 0 ? `${cooldownSkipped} cooldown` : null,
+            ]
+              .filter(Boolean)
+              .join(", ");
+            const note = skipDetails ? ` · skipped ${skipDetails}` : "";
+            ctx.ui.notify(`Warmed ${run.report.results.length} account(s)${note}.`, "info");
+          } else {
+            if (run.report.results.length > 0) {
+              const res = run.report.results[0];
+              ctx.ui.notify(
+                `Warmed ${res.account} (${res.status.toUpperCase()}, ${res.ms}ms).`,
+                "info",
+              );
+            } else if (run.report.skipped.length > 0) {
+              const skip = run.report.skipped[0];
+              if (skip.reason === "non-ok") {
+                ctx.ui.notify(
+                  `Not warmed: ${skip.account} is ${String(skip.status).toUpperCase()}; use /gemini-check.`,
+                  "warning",
+                );
+              } else {
+                ctx.ui.notify(
+                  `Not warmed: ${skip.account} was warmed recently (cooldown active).`,
+                  "info",
+                );
+              }
+            }
+          }
+        } catch (error) {
+          ctx.ui.notify(`Gemini warm-up failed: ${short(error)}`, "error");
+        }
+      });
+    },
+  });
+
+  pi.registerCommand("gemini-check", {
+    description: "Probe one Antigravity account to check if its route has recovered (unhang check)",
+    handler: async (args, ctx) => {
+      const needle = args.trim().toLowerCase();
+      if (!needle) {
+        ctx.ui.notify("Usage: /gemini-check <email-or-local-part>", "info");
         return;
       }
-      coordinator.setRunning(true);
-      try {
-        let request: WarmUpRequest;
-        if (all) {
-          request = { provider: PROVIDER, action: "warm", all: true };
-        } else {
+      await coordinator.runExclusive(ctx, "A health check or warm-up is", async () => {
+        try {
           const accounts = await healthManager.loadAccounts();
           const matches = accounts.filter(
             (a) =>
@@ -125,104 +188,25 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
             );
             return;
           }
-          request = { provider: PROVIDER, action: "warm", account: matches[0].email };
+
+          const run = await runWarmUp(warmUpDeps, {
+            provider: PROVIDER,
+            action: "check",
+            account: matches[0].email,
+          });
+
+          const policies = await healthManager.readPolicies();
+          const snapshotResults = healthManager.readSnapshot()?.results ?? run.results;
+          publish(ctx, snapshotResults, policies);
+
+          const res = run.report.results[0];
+          const statusText = res ? res.status.toUpperCase() : "UNKNOWN";
+          const message = `Checked ${matches[0].email}: ${statusText}${res ? ` (${res.ms}ms)` : ""}.`;
+          ctx.ui.notify(message, res?.status === "ok" ? "info" : "warning");
+        } catch (error) {
+          ctx.ui.notify(`Gemini check failed: ${short(error)}`, "error");
         }
-
-        const run = await runWarmUp(warmUpDeps, request);
-        const policies = await healthManager.readPolicies();
-        const snapshotResults = healthManager.readSnapshot()?.results ?? run.results;
-        publish(ctx, snapshotResults, policies);
-
-        if ("all" in request) {
-          const nonOkSkipped = run.report.skipped.filter((s) => s.reason === "non-ok").length;
-          const cooldownSkipped = run.report.skipped.filter((s) => s.reason === "cooldown").length;
-          const skipDetails = [
-            nonOkSkipped > 0 ? `${nonOkSkipped} non-OK` : null,
-            cooldownSkipped > 0 ? `${cooldownSkipped} cooldown` : null,
-          ]
-            .filter(Boolean)
-            .join(", ");
-          const note = skipDetails ? ` · skipped ${skipDetails}` : "";
-          ctx.ui.notify(`Warmed ${run.report.results.length} account(s)${note}.`, "info");
-        } else {
-          if (run.report.results.length > 0) {
-            const res = run.report.results[0];
-            ctx.ui.notify(
-              `Warmed ${res.account} (${res.status.toUpperCase()}, ${res.ms}ms).`,
-              "info",
-            );
-          } else if (run.report.skipped.length > 0) {
-            const skip = run.report.skipped[0];
-            if (skip.reason === "non-ok") {
-              ctx.ui.notify(
-                `Not warmed: ${skip.account} is ${String(skip.status).toUpperCase()}; use /gemini-check.`,
-                "warning",
-              );
-            } else {
-              ctx.ui.notify(
-                `Not warmed: ${skip.account} was warmed recently (cooldown active).`,
-                "info",
-              );
-            }
-          }
-        }
-      } catch (error) {
-        ctx.ui.notify(`Gemini warm-up failed: ${short(error)}`, "error");
-      } finally {
-        coordinator.setRunning(false);
-      }
-    },
-  });
-
-  pi.registerCommand("gemini-check", {
-    description: "Probe one Antigravity account to check if its route has recovered (unhang check)",
-    handler: async (args, ctx) => {
-      const needle = args.trim().toLowerCase();
-      if (!needle) {
-        ctx.ui.notify("Usage: /gemini-check <email-or-local-part>", "info");
-        return;
-      }
-      if (coordinator.isRunning()) {
-        ctx.ui.notify("A health check or warm-up is already running", "info");
-        return;
-      }
-      coordinator.setRunning(true);
-      try {
-        const accounts = await healthManager.loadAccounts();
-        const matches = accounts.filter(
-          (a) => a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
-        );
-        if (matches.length === 0) {
-          ctx.ui.notify(`No Antigravity account found for "${needle}"`, "warning");
-          return;
-        }
-        if (matches.length > 1) {
-          ctx.ui.notify(
-            `Multiple accounts match "${needle}": ${matches.map((a) => a.email).join(", ")}. Use full email.`,
-            "warning",
-          );
-          return;
-        }
-
-        const run = await runWarmUp(warmUpDeps, {
-          provider: PROVIDER,
-          action: "check",
-          account: matches[0].email,
-        });
-
-        const policies = await healthManager.readPolicies();
-        const snapshotResults = healthManager.readSnapshot()?.results ?? run.results;
-        publish(ctx, snapshotResults, policies);
-
-        const res = run.report.results[0];
-        const statusText = res ? res.status.toUpperCase() : "UNKNOWN";
-        const message = `Checked ${matches[0].email}: ${statusText}${res ? ` (${res.ms}ms)` : ""}.`;
-        ctx.ui.notify(message, res?.status === "ok" ? "info" : "warning");
-      } catch (error) {
-        ctx.ui.notify(`Gemini check failed: ${short(error)}`, "error");
-      } finally {
-        coordinator.setRunning(false);
-      }
+      });
     },
   });
 
@@ -230,69 +214,60 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     description: "Temporarily exclude Antigravity accounts whose Gemini 3.8 route is hung",
     handler: async (args, ctx) => {
       const dryRun = /--dry-run\b/.test(args);
-      if (coordinator.isRunning()) {
-        ctx.ui.notify("Gemini health check already running", "info");
-        return;
-      }
-      coordinator.setRunning(true);
-      try {
-        const results = await healthManager.checkAll(true);
-        healthManager.recordHealth(results);
-        const restored = dryRun ? [] : await healthManager.maybeRestoreManaged();
-        const policies = await healthManager.readPolicies();
-        publish(ctx, results, policies);
-        if (dryRun) {
+      await coordinator.runExclusive(ctx, "Gemini health check", async () => {
+        try {
+          const { results, restored } = await coordinator.probeAndPublish(ctx, true);
+          if (dryRun) {
+            recordHistory([
+              {
+                at: Date.now(),
+                kind: "manual_intervention",
+                provider: PROVIDER,
+                detail: "gemini-heal --dry-run",
+              },
+            ]);
+            const bad = results.filter(
+              (result) => result.status === "hang" || result.status === "error",
+            );
+            ctx.ui.notify(
+              bad.length === 0
+                ? "Dry run: no hung accounts"
+                : `Dry run: would exclude ${bad.map((result) => result.email).join(", ")}`,
+              "info",
+            );
+            return;
+          }
+          const action = await healthManager.applyHeal(results, "heal");
+          const nextPolicies = await healthManager.readPolicies();
+          publish(ctx, results, nextPolicies);
           recordHistory([
             {
               at: Date.now(),
               kind: "manual_intervention",
               provider: PROVIDER,
-              detail: "gemini-heal --dry-run",
+              detail: "gemini-heal",
             },
           ]);
-          const bad = results.filter(
-            (result) => result.status === "hang" || result.status === "error",
+          const restoredNote = restored.length > 0 ? ` Restored ${restored.join(", ")}.` : "";
+          const message =
+            action.changed.length > 0
+              ? `Excluded ${action.changed.join(", ")} temporarily.${restoredNote} Reloading settings.`
+              : `No new exclusion: ${action.reason}${action.skipped.length ? ` (skipped: ${action.skipped.join(", ")})` : ""}.${restoredNote}`;
+          ctx.ui.notify(message, action.changed.length > 0 ? "warning" : "info");
+          pi.sendMessage(
+            {
+              customType: "gemini-heal",
+              content: `${message}\n\n${table(results, nextPolicies)}`,
+              display: true,
+              attribution: "agent",
+            },
+            { triggerTurn: false },
           );
-          ctx.ui.notify(
-            bad.length === 0
-              ? "Dry run: no hung accounts"
-              : `Dry run: would exclude ${bad.map((result) => result.email).join(", ")}`,
-            "info",
-          );
-          return;
+          await reloadIfAvailable(ctx);
+        } catch (error) {
+          ctx.ui.notify(`Gemini heal failed: ${short(error)}`, "error");
         }
-        const action = await healthManager.applyHeal(results, "heal");
-        const nextPolicies = await healthManager.readPolicies();
-        publish(ctx, results, nextPolicies);
-        recordHistory([
-          {
-            at: Date.now(),
-            kind: "manual_intervention",
-            provider: PROVIDER,
-            detail: "gemini-heal",
-          },
-        ]);
-        const restoredNote = restored.length > 0 ? ` Restored ${restored.join(", ")}.` : "";
-        const message =
-          action.changed.length > 0
-            ? `Excluded ${action.changed.join(", ")} temporarily.${restoredNote} Reloading settings.`
-            : `No new exclusion: ${action.reason}${action.skipped.length ? ` (skipped: ${action.skipped.join(", ")})` : ""}.${restoredNote}`;
-        ctx.ui.notify(message, action.changed.length > 0 ? "warning" : "info");
-        pi.sendMessage(
-          {
-            customType: "gemini-heal",
-            content: `${message}\n\n${table(results, nextPolicies)}`,
-            display: true,
-            attribution: "agent",
-          },
-          { triggerTurn: false },
-        );
-        await reloadIfAvailable(ctx);
-      } catch (error) {
-        ctx.ui.notify(`Gemini heal failed: ${short(error)}`, "error");
-      } finally {
-        coordinator.setRunning(false);
-      }
+      });
     },
   });
 
