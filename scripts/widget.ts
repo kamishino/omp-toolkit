@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { buildDesktop } from "./build-desktop";
+import { buildDesktop } from "./build";
 
 const root = path.resolve(import.meta.dir, "..");
 const appDir = path.join(root, "apps", "desktop");
@@ -31,7 +31,7 @@ async function buildIfNeeded(): Promise<void> {
     path.join(appDir, "src"),
     path.join(root, "packages", "core", "src"),
     path.join(root, "design", "tokens.json"),
-    path.join(root, "scripts", "build-desktop.ts"),
+    path.join(root, "scripts", "build.ts"),
     path.join(root, "scripts", "build-tray-icons.ts"),
     path.join(root, "scripts", "color.ts"),
   ];
