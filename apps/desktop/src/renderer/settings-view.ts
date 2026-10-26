@@ -2,11 +2,16 @@ import type { DesktopSettings, DesktopTheme } from "../settings";
 import { MAX_INTERVAL_SECONDS, MIN_INTERVAL_SECONDS, validateDesktopSettings } from "../settings";
 import { applyThemePreference } from "./tokens";
 
+export interface SettingsViewController {
+  element: HTMLElement;
+  destroy(): void;
+}
+
 export function renderSettingsView(
   initialSettings: DesktopSettings,
   onSave: (settings: DesktopSettings) => void,
   onCancel: () => void,
-): HTMLElement {
+): SettingsViewController {
   const container = document.createElement("div");
   container.className = "settings-view";
 
@@ -256,9 +261,20 @@ export function renderSettingsView(
   cancelBtn.className = "button button-secondary";
   cancelBtn.textContent = "Cancel";
 
-  const handleCancel = () => {
-    applyThemePreference(initialSettings.theme);
+  let saved = false;
+  let destroyed = false;
+
+  const cleanup = () => {
+    if (destroyed) return;
+    destroyed = true;
     window.removeEventListener("keydown", keyHandler);
+    if (!saved) {
+      applyThemePreference(initialSettings.theme);
+    }
+  };
+
+  const handleCancel = () => {
+    cleanup();
     onCancel();
   };
 
@@ -308,11 +324,15 @@ export function renderSettingsView(
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (validate()) {
-      window.removeEventListener("keydown", keyHandler);
+      saved = true;
+      cleanup();
       onSave(draft);
     }
   });
 
   container.appendChild(form);
-  return container;
+  return {
+    element: container,
+    destroy: cleanup,
+  };
 }

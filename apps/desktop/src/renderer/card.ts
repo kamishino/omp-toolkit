@@ -5,9 +5,6 @@ import { icon } from "./icon";
 import { renderLimitCell } from "./limit-cell";
 import { providerLogo } from "./provider-logos";
 
-export { icon } from "./icon";
-export { renderLimitCell } from "./limit-cell";
-
 export function renderProviderCard(
   provider: DashboardProvider,
   hasAnyRoute: boolean,
