@@ -24,7 +24,7 @@ import {
   type StreakState,
 } from "@omp-toolkit/core";
 import { short, writeFileAtomic } from "./fs-util";
-import { type HistoryEventInput, recordEvents } from "./history";
+import { type HistoryEventInput, recordEvents } from "./history-store";
 import { RoutingPolicyStore } from "./policy-store";
 
 export { short, writeFileAtomic } from "./fs-util";
@@ -202,14 +202,6 @@ export async function readPoliciesForWrite(): Promise<Policy[]> {
 
 export async function writePolicies(policies: Policy[]): Promise<void> {
   return policyStore.writePolicies(policies);
-}
-
-export async function tokenList(): Promise<Map<string, number>> {
-  return probeClient.tokenList();
-}
-
-export async function getToken(index: number): Promise<string> {
-  return probeClient.getToken(index);
 }
 
 export async function probe(account: Account): Promise<Result> {

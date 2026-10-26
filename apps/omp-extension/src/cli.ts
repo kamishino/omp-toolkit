@@ -9,7 +9,7 @@ import {
   short,
   sleep,
 } from "./circuit-breaker";
-import { closeHistory } from "./history";
+import { closeHistory } from "./history-store";
 import { runWarmUp, type WarmUpDependencies } from "./warmup";
 import { table } from "./widget";
 

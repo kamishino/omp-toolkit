@@ -11,7 +11,7 @@ import {
   recordHistory,
 } from "./circuit-breaker";
 import { short } from "./fs-util";
-import { closeHistory } from "./history";
+import { closeHistory } from "./history-store";
 import { publish, summary, widgetEnabled } from "./widget";
 
 interface AssistantMessageDetails {
