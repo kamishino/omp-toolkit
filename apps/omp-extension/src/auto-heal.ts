@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import type { Policy, ProbeResult } from "@omp-toolkit/core";
 import { AUTO_HEAL_COOLDOWN_MS, PROVIDER, RESTORE_STREAK, recordHistory } from "./circuit-breaker";
 import { short } from "./fs-util";
 import { healthManager } from "./health-manager";
@@ -55,36 +56,55 @@ export class AutoHealCoordinator {
     return this.running;
   }
 
-  setRunning(value: boolean): void {
-    this.running = value;
-  }
-
-  async refresh(ctx: ExtensionContext, notify = false): Promise<void> {
-    if (this.running) return;
+  async runExclusive<T>(
+    ctx: ExtensionContext,
+    label: string,
+    action: () => Promise<T>,
+  ): Promise<T | null> {
+    if (this.running) {
+      ctx.ui.notify(`${label} already running`, "info");
+      return null;
+    }
     this.running = true;
     try {
-      const results = await healthManager.checkAll(false);
-      healthManager.recordHealth(results);
-      const restored = await healthManager.maybeRestoreManaged();
-      const policies = await healthManager.readPolicies();
-      publish(ctx, results, policies);
-      if (restored.length > 0) {
-        ctx.ui.notify(
-          `Gemini health: restored ${restored.join(", ")} after ${RESTORE_STREAK} healthy checks.`,
-          "info",
-        );
-      }
-      if (notify) {
-        ctx.ui.notify(
-          summary(results),
-          results.every((r) => r.status === "ok") ? "info" : "warning",
-        );
-      }
-    } catch (error) {
-      ctx.ui.notify(`Gemini health check failed: ${short(error)}`, "error");
+      return await action();
     } finally {
       this.running = false;
     }
+  }
+
+  async probeAndPublish(
+    ctx: ExtensionContext,
+    confirm = false,
+  ): Promise<{ results: ProbeResult[]; restored: string[]; policies: Policy[] }> {
+    const results = await healthManager.checkAll(confirm);
+    healthManager.recordHealth(results);
+    const restored = await healthManager.maybeRestoreManaged();
+    const policies = await healthManager.readPolicies();
+    publish(ctx, results, policies);
+    return { results, restored, policies };
+  }
+
+  async refresh(ctx: ExtensionContext, notify = false): Promise<void> {
+    await this.runExclusive(ctx, "Gemini health check", async () => {
+      try {
+        const { results, restored } = await this.probeAndPublish(ctx, false);
+        if (restored.length > 0) {
+          ctx.ui.notify(
+            `Gemini health: restored ${restored.join(", ")} after ${RESTORE_STREAK} healthy checks.`,
+            "info",
+          );
+        }
+        if (notify) {
+          ctx.ui.notify(
+            summary(results),
+            results.every((r) => r.status === "ok") ? "info" : "warning",
+          );
+        }
+      } catch (error) {
+        ctx.ui.notify(`Gemini health check failed: ${short(error)}`, "error");
+      }
+    });
   }
 
   async autoHeal(ctx: ExtensionContext, trigger: string): Promise<void> {
