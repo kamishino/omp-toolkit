@@ -1,4 +1,4 @@
-import type { Status } from "./types";
+import { isStatus, type Status } from "./types";
 
 export type WarmUpAction = "warm" | "check";
 export type WarmUpEligibility = "warm" | "check" | "unsupported";
@@ -47,12 +47,10 @@ export function isWarmUpReport(value: unknown): value is WarmUpReport {
   if (typeof report.checkedAt !== "number" || !Number.isFinite(report.checkedAt)) return false;
   if (!Array.isArray(report.results) || !Array.isArray(report.skipped)) return false;
 
-  const statuses = new Set(["ok", "hang", "error", "auth", "model-error"]);
   const reasons = new Set(["non-ok", "cooldown"]);
-
   for (const result of report.results) {
     if (!result || typeof result !== "object") return false;
-    if (typeof result.account !== "string" || !statuses.has(result.status)) return false;
+    if (typeof result.account !== "string" || !isStatus(result.status)) return false;
     if (typeof result.ms !== "number" || !Number.isFinite(result.ms)) return false;
     if (typeof result.checkedAt !== "number" || !Number.isFinite(result.checkedAt)) return false;
     if (result.detail !== undefined && typeof result.detail !== "string") return false;
@@ -61,7 +59,7 @@ export function isWarmUpReport(value: unknown): value is WarmUpReport {
   for (const skip of report.skipped) {
     if (!skip || typeof skip !== "object") return false;
     if (typeof skip.account !== "string") return false;
-    if (skip.status !== null && !statuses.has(skip.status)) return false;
+    if (skip.status !== null && !isStatus(skip.status)) return false;
     if (!reasons.has(skip.reason)) return false;
   }
 

@@ -79,6 +79,38 @@ export function formatLocalInterval(
   return `${formattedStart} - ${formattedEnd}`;
 }
 
+export function createScheduleRow(
+  dayName: string,
+  dayNumber: number,
+  windowType: "peak" | "off-peak",
+  startMin: number,
+  endMin: number,
+  rateMultiplier: number,
+  discountPercent: number,
+  isCurrent: boolean,
+  timestampMs: number,
+  userTimeZone: string,
+): ScheduleRow {
+  return {
+    dayName,
+    dayNumber,
+    windowType,
+    referenceTime: `${formatMin(startMin)} - ${formatMin(endMin)} UTC`,
+    localTime: formatLocalInterval(
+      timestampMs,
+      dayNumber,
+      Math.floor(startMin / 60),
+      startMin % 60,
+      Math.floor(endMin / 60),
+      endMin % 60,
+      userTimeZone,
+    ),
+    rateMultiplier,
+    discountPercent,
+    isCurrent,
+  };
+}
+
 export function buildScheduleTable(
   policy: TimeWindowPolicy,
   timestampMs: number,
@@ -87,7 +119,6 @@ export function buildScheduleTable(
   const currentEval = evaluateWindow(policy, timestampMs, userTimeZone);
   const rows: ScheduleRow[] = [];
 
-  // For each day 1..7 (Mon..Sun)
   for (let dayNum = 1; dayNum <= 7; dayNum++) {
     const dayName = DAY_NAMES[dayNum - 1];
     const peakWindowsForDay = policy.windows
@@ -95,29 +126,30 @@ export function buildScheduleTable(
       .sort((a, b) => a.startHour * 60 + a.startMinute - (b.startHour * 60 + b.startMinute));
 
     if (peakWindowsForDay.length === 0) {
-      // Entire day is off-peak
       const isCurrentDay = new Date(timestampMs).getUTCDay() === (dayNum === 7 ? 0 : dayNum);
-      rows.push({
-        dayName,
-        dayNumber: dayNum,
-        windowType: "off-peak",
-        referenceTime: "00:00 - 24:00 UTC",
-        localTime: formatLocalInterval(timestampMs, dayNum, 0, 0, 24, 0, userTimeZone),
-        rateMultiplier: policy.defaultWindow.rateMultiplier,
-        discountPercent: policy.defaultWindow.discountPercent,
-        isCurrent: isCurrentDay && !currentEval.isPeak,
-      });
+      rows.push(
+        createScheduleRow(
+          dayName,
+          dayNum,
+          "off-peak",
+          0,
+          24 * 60,
+          policy.defaultWindow.rateMultiplier,
+          policy.defaultWindow.discountPercent,
+          isCurrentDay && !currentEval.isPeak,
+          timestampMs,
+          userTimeZone,
+        ),
+      );
       continue;
     }
 
-    // Compose intervals: off-peak -> peak -> off-peak ...
     let currentMin = 0;
     for (const peakWin of peakWindowsForDay) {
       const peakStartMin = peakWin.startHour * 60 + peakWin.startMinute;
       const peakEndMin = peakWin.endHour * 60 + peakWin.endMinute;
 
       if (currentMin < peakStartMin) {
-        // Off-peak gap before this peak window
         const isCurrent = isMatchingWindow(
           timestampMs,
           dayNum,
@@ -125,27 +157,22 @@ export function buildScheduleTable(
           peakStartMin,
           currentEval,
         );
-        rows.push({
-          dayName,
-          dayNumber: dayNum,
-          windowType: "off-peak",
-          referenceTime: `${formatMin(currentMin)} - ${formatMin(peakStartMin)} UTC`,
-          localTime: formatLocalInterval(
-            timestampMs,
+        rows.push(
+          createScheduleRow(
+            dayName,
             dayNum,
-            Math.floor(currentMin / 60),
-            currentMin % 60,
-            peakWin.startHour,
-            peakWin.startMinute,
+            "off-peak",
+            currentMin,
+            peakStartMin,
+            policy.defaultWindow.rateMultiplier,
+            policy.defaultWindow.discountPercent,
+            isCurrent,
+            timestampMs,
             userTimeZone,
           ),
-          rateMultiplier: policy.defaultWindow.rateMultiplier,
-          discountPercent: policy.defaultWindow.discountPercent,
-          isCurrent,
-        });
+        );
       }
 
-      // Peak window
       const isCurrentPeak = isMatchingWindow(
         timestampMs,
         dayNum,
@@ -153,49 +180,40 @@ export function buildScheduleTable(
         peakEndMin,
         currentEval,
       );
-      rows.push({
-        dayName,
-        dayNumber: dayNum,
-        windowType: "peak",
-        referenceTime: `${formatMin(peakStartMin)} - ${formatMin(peakEndMin)} UTC`,
-        localTime: formatLocalInterval(
-          timestampMs,
+      rows.push(
+        createScheduleRow(
+          dayName,
           dayNum,
-          peakWin.startHour,
-          peakWin.startMinute,
-          peakWin.endHour,
-          peakWin.endMinute,
+          "peak",
+          peakStartMin,
+          peakEndMin,
+          peakWin.rateMultiplier,
+          peakWin.discountPercent,
+          isCurrentPeak,
+          timestampMs,
           userTimeZone,
         ),
-        rateMultiplier: peakWin.rateMultiplier,
-        discountPercent: peakWin.discountPercent,
-        isCurrent: isCurrentPeak,
-      });
+      );
 
       currentMin = peakEndMin;
     }
 
     if (currentMin < 24 * 60) {
-      // Remaining off-peak gap until midnight
       const isCurrent = isMatchingWindow(timestampMs, dayNum, currentMin, 24 * 60, currentEval);
-      rows.push({
-        dayName,
-        dayNumber: dayNum,
-        windowType: "off-peak",
-        referenceTime: `${formatMin(currentMin)} - 24:00 UTC`,
-        localTime: formatLocalInterval(
-          timestampMs,
+      rows.push(
+        createScheduleRow(
+          dayName,
           dayNum,
-          Math.floor(currentMin / 60),
-          currentMin % 60,
-          24,
-          0,
+          "off-peak",
+          currentMin,
+          24 * 60,
+          policy.defaultWindow.rateMultiplier,
+          policy.defaultWindow.discountPercent,
+          isCurrent,
+          timestampMs,
           userTimeZone,
         ),
-        rateMultiplier: policy.defaultWindow.rateMultiplier,
-        discountPercent: policy.defaultWindow.discountPercent,
-        isCurrent,
-      });
+      );
     }
   }
 

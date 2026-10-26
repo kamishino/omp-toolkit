@@ -26,119 +26,194 @@ export const VALID_ROUTES: Record<string, true> = {
   "—": true,
 };
 
+export function isDashboardColumn(c: unknown): boolean {
+  if (!c || typeof c !== "object") return false;
+  const col = c as { key?: unknown; label?: unknown };
+  return typeof col.key === "string" && typeof col.label === "string";
+}
+
+export function isDashboardLimit(l: unknown): boolean {
+  if (!l || typeof l !== "object") return false;
+  const lim = l as {
+    label?: unknown;
+    low?: unknown;
+    level?: unknown;
+    id?: unknown;
+    unit?: unknown;
+    usedFraction?: unknown;
+    resetsAt?: unknown;
+    remaining?: unknown;
+  };
+
+  if (typeof lim.label !== "string" || typeof lim.low !== "boolean") return false;
+  if (!lim.level || typeof lim.level !== "string" || !VALID_LEVELS[lim.level]) return false;
+  if (lim.id !== undefined && typeof lim.id !== "string") return false;
+  if (lim.unit !== undefined && typeof lim.unit !== "string") return false;
+  if (
+    lim.usedFraction !== undefined &&
+    (typeof lim.usedFraction !== "number" || !Number.isFinite(lim.usedFraction))
+  ) {
+    return false;
+  }
+  if (
+    lim.resetsAt !== undefined &&
+    (typeof lim.resetsAt !== "number" || !Number.isFinite(lim.resetsAt))
+  ) {
+    return false;
+  }
+  if (
+    lim.remaining !== undefined &&
+    (typeof lim.remaining !== "number" || !Number.isFinite(lim.remaining))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function isDashboardRow(r: unknown, columnsCount: number): boolean {
+  if (!r || typeof r !== "object") return false;
+  const row = r as {
+    account?: unknown;
+    displayAccount?: unknown;
+    health?: unknown;
+    maxUsed?: unknown;
+    level?: unknown;
+    route?: { text?: unknown; level?: unknown };
+    limits?: unknown[];
+  };
+
+  if (typeof row.account !== "string" || typeof row.displayAccount !== "string") return false;
+  if (row.health !== null && (typeof row.health !== "string" || !VALID_STATUSES[row.health])) {
+    return false;
+  }
+  if (typeof row.maxUsed !== "number" || !Number.isFinite(row.maxUsed)) return false;
+  if (!row.level || typeof row.level !== "string" || !VALID_LEVELS[row.level]) return false;
+  if (!row.route || typeof row.route !== "object") return false;
+  if (
+    !row.route.text ||
+    typeof row.route.text !== "string" ||
+    !VALID_ROUTES[row.route.text] ||
+    !row.route.level ||
+    typeof row.route.level !== "string" ||
+    !VALID_LEVELS[row.route.level]
+  ) {
+    return false;
+  }
+  if (!Array.isArray(row.limits) || row.limits.length !== columnsCount) return false;
+
+  return row.limits.every(isDashboardLimit);
+}
+
+export function isDashboardProvider(p: unknown): boolean {
+  if (!p || typeof p !== "object") return false;
+  const prov = p as {
+    id?: unknown;
+    name?: unknown;
+    suffix?: unknown;
+    accounts?: unknown;
+    timeWindow?: unknown;
+    columns?: unknown[];
+    rows?: unknown[];
+  };
+
+  if (
+    typeof prov.id !== "string" ||
+    typeof prov.name !== "string" ||
+    typeof prov.suffix !== "string"
+  ) {
+    return false;
+  }
+  if (typeof prov.accounts !== "number" || !Number.isFinite(prov.accounts)) return false;
+  if (
+    prov.timeWindow !== undefined &&
+    prov.timeWindow !== null &&
+    (typeof prov.timeWindow !== "object" ||
+      typeof (prov.timeWindow as WindowEvaluation).isPeak !== "boolean" ||
+      typeof (prov.timeWindow as WindowEvaluation).rateMultiplier !== "number")
+  ) {
+    return false;
+  }
+  if (!Array.isArray(prov.columns) || !Array.isArray(prov.rows)) return false;
+  if (!prov.columns.every(isDashboardColumn)) return false;
+
+  const colCount = prov.columns.length;
+  return prov.rows.every((row) => isDashboardRow(row, colCount));
+}
+
+export function isDashboardSummary(s: unknown): boolean {
+  if (!s || typeof s !== "object") return false;
+  const sum = s as {
+    providers?: unknown;
+    accounts?: unknown;
+    above80?: unknown;
+    maxed?: unknown;
+    aboveThreshold?: unknown;
+    tightest?: {
+      provider?: unknown;
+      account?: unknown;
+      usedFraction?: unknown;
+    } | null;
+  };
+
+  if (
+    typeof sum.providers !== "number" ||
+    typeof sum.accounts !== "number" ||
+    typeof sum.above80 !== "number" ||
+    typeof sum.maxed !== "number" ||
+    typeof sum.aboveThreshold !== "number"
+  ) {
+    return false;
+  }
+
+  if (sum.tightest !== null) {
+    if (
+      !sum.tightest ||
+      typeof sum.tightest.provider !== "string" ||
+      typeof sum.tightest.account !== "string" ||
+      typeof sum.tightest.usedFraction !== "number" ||
+      !Number.isFinite(sum.tightest.usedFraction)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+export function isDashboardHealth(h: unknown): boolean {
+  if (!h || typeof h !== "object") return false;
+  const health = h as { checkedAt?: unknown; ageMs?: unknown; stale?: unknown };
+  return (
+    typeof health.checkedAt === "number" &&
+    Number.isFinite(health.checkedAt) &&
+    typeof health.ageMs === "number" &&
+    Number.isFinite(health.ageMs) &&
+    typeof health.stale === "boolean"
+  );
+}
+
+export function isDashboardBalance(b: unknown): boolean {
+  if (!b || typeof b !== "object") return false;
+  const bal = b as { unit?: unknown; remaining?: unknown; low?: unknown };
+  return (
+    (bal.unit === "cny" || bal.unit === "usd") &&
+    typeof bal.remaining === "number" &&
+    Number.isFinite(bal.remaining) &&
+    typeof bal.low === "boolean"
+  );
+}
+
 export function isDashboard(value: unknown): value is Dashboard {
   if (!value || typeof value !== "object") return false;
   const d = value as Partial<Dashboard>;
 
   if (typeof d.fetchedAt !== "number" || !Number.isFinite(d.fetchedAt)) return false;
-  if (!Array.isArray(d.providers)) return false;
-
-  for (const p of d.providers) {
-    if (!p || typeof p !== "object") return false;
-    if (typeof p.id !== "string" || typeof p.name !== "string" || typeof p.suffix !== "string") {
-      return false;
-    }
-    if (typeof p.accounts !== "number" || !Number.isFinite(p.accounts)) return false;
-    if (
-      p.timeWindow !== undefined &&
-      p.timeWindow !== null &&
-      (typeof p.timeWindow !== "object" ||
-        typeof (p.timeWindow as WindowEvaluation).isPeak !== "boolean" ||
-        typeof (p.timeWindow as WindowEvaluation).rateMultiplier !== "number")
-    ) {
-      return false;
-    }
-    if (!Array.isArray(p.columns) || !Array.isArray(p.rows)) return false;
-
-    for (const c of p.columns) {
-      if (!c || typeof c !== "object" || typeof c.key !== "string" || typeof c.label !== "string") {
-        return false;
-      }
-    }
-
-    for (const r of p.rows) {
-      if (!r || typeof r !== "object") return false;
-      if (typeof r.account !== "string" || typeof r.displayAccount !== "string") return false;
-      if (r.health !== null && !VALID_STATUSES[r.health]) return false;
-      if (typeof r.maxUsed !== "number" || !Number.isFinite(r.maxUsed)) return false;
-      if (!VALID_LEVELS[r.level]) return false;
-      if (!r.route || typeof r.route !== "object") return false;
-      if (!VALID_ROUTES[r.route.text] || !VALID_LEVELS[r.route.level]) return false;
-      if (!Array.isArray(r.limits) || r.limits.length !== p.columns.length) return false;
-
-      for (const l of r.limits) {
-        if (!l || typeof l !== "object") return false;
-        if (typeof l.label !== "string" || typeof l.low !== "boolean") return false;
-        if (!VALID_LEVELS[l.level]) return false;
-        if (l.id !== undefined && typeof l.id !== "string") return false;
-        if (l.unit !== undefined && typeof l.unit !== "string") return false;
-        if (
-          l.usedFraction !== undefined &&
-          (typeof l.usedFraction !== "number" || !Number.isFinite(l.usedFraction))
-        ) {
-          return false;
-        }
-        if (
-          l.resetsAt !== undefined &&
-          (typeof l.resetsAt !== "number" || !Number.isFinite(l.resetsAt))
-        ) {
-          return false;
-        }
-        if (
-          l.remaining !== undefined &&
-          (typeof l.remaining !== "number" || !Number.isFinite(l.remaining))
-        ) {
-          return false;
-        }
-      }
-    }
-  }
-
-  if (!d.summary || typeof d.summary !== "object") return false;
-  const s = d.summary;
-  if (
-    typeof s.providers !== "number" ||
-    typeof s.accounts !== "number" ||
-    typeof s.above80 !== "number" ||
-    typeof s.maxed !== "number" ||
-    typeof s.aboveThreshold !== "number"
-  ) {
-    return false;
-  }
-  if (
-    s.tightest !== null &&
-    (!s.tightest ||
-      typeof s.tightest.provider !== "string" ||
-      typeof s.tightest.account !== "string" ||
-      typeof s.tightest.usedFraction !== "number" ||
-      !Number.isFinite(s.tightest.usedFraction))
-  ) {
-    return false;
-  }
-
-  if (d.health !== null) {
-    if (!d.health || typeof d.health !== "object") return false;
-    if (
-      typeof d.health.checkedAt !== "number" ||
-      !Number.isFinite(d.health.checkedAt) ||
-      typeof d.health.ageMs !== "number" ||
-      !Number.isFinite(d.health.ageMs) ||
-      typeof d.health.stale !== "boolean"
-    ) {
-      return false;
-    }
-  }
-
-  if (d.balance !== null) {
-    if (!d.balance || typeof d.balance !== "object") return false;
-    if (d.balance.unit !== "cny" && d.balance.unit !== "usd") return false;
-    if (typeof d.balance.remaining !== "number" || !Number.isFinite(d.balance.remaining))
-      return false;
-    if (typeof d.balance.low !== "boolean") return false;
-  }
-
+  if (!Array.isArray(d.providers) || !d.providers.every(isDashboardProvider)) return false;
+  if (!isDashboardSummary(d.summary)) return false;
+  if (d.health !== null && !isDashboardHealth(d.health)) return false;
+  if (d.balance !== null && !isDashboardBalance(d.balance)) return false;
   if (typeof d.tooltip !== "string") return false;
-  if (!d.iconLevel || !VALID_LEVELS[d.iconLevel]) return false;
+  if (!d.iconLevel || typeof d.iconLevel !== "string" || !VALID_LEVELS[d.iconLevel]) return false;
 
   return true;
 }
