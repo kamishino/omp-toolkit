@@ -96,23 +96,12 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           if (all) {
             request = { provider: PROVIDER, action: "warm", all: true };
           } else {
-            const accounts = await healthManager.loadAccounts();
-            const matches = accounts.filter(
-              (a) =>
-                a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
-            );
-            if (matches.length === 0) {
-              ctx.ui.notify(`No Antigravity account found for "${needle}"`, "warning");
+            const resolution = await healthManager.resolveAccount(needle);
+            if (resolution.status !== "found") {
+              ctx.ui.notify(resolution.error, "warning");
               return;
             }
-            if (matches.length > 1) {
-              ctx.ui.notify(
-                `Multiple accounts match "${needle}": ${matches.map((a) => a.email).join(", ")}. Use full email.`,
-                "warning",
-              );
-              return;
-            }
-            request = { provider: PROVIDER, action: "warm", account: matches[0].email };
+            request = { provider: PROVIDER, action: "warm", account: resolution.account.email };
           }
 
           const run = await runWarmUp(warmUpDeps, request);
@@ -172,27 +161,16 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
       }
       await coordinator.runExclusive(ctx, "A health check or warm-up is", async () => {
         try {
-          const accounts = await healthManager.loadAccounts();
-          const matches = accounts.filter(
-            (a) =>
-              a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
-          );
-          if (matches.length === 0) {
-            ctx.ui.notify(`No Antigravity account found for "${needle}"`, "warning");
-            return;
-          }
-          if (matches.length > 1) {
-            ctx.ui.notify(
-              `Multiple accounts match "${needle}": ${matches.map((a) => a.email).join(", ")}. Use full email.`,
-              "warning",
-            );
+          const resolution = await healthManager.resolveAccount(needle);
+          if (resolution.status !== "found") {
+            ctx.ui.notify(resolution.error, "warning");
             return;
           }
 
           const run = await runWarmUp(warmUpDeps, {
             provider: PROVIDER,
             action: "check",
-            account: matches[0].email,
+            account: resolution.account.email,
           });
 
           const policies = await healthManager.readPolicies();
@@ -201,7 +179,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
 
           const res = run.report.results[0];
           const statusText = res ? res.status.toUpperCase() : "UNKNOWN";
-          const message = `Checked ${matches[0].email}: ${statusText}${res ? ` (${res.ms}ms)` : ""}.`;
+          const message = `Checked ${resolution.account.email}: ${statusText}${res ? ` (${res.ms}ms)` : ""}.`;
           ctx.ui.notify(message, res?.status === "ok" ? "info" : "warning");
         } catch (error) {
           ctx.ui.notify(`Gemini check failed: ${short(error)}`, "error");

@@ -8,7 +8,6 @@
 import {
   type Account,
   type HealAction,
-  type HealthResult,
   type HealthState,
   type Policy,
   type ProbeResult as Result,
@@ -18,7 +17,6 @@ import {
   resolveStreakPath,
   type StreakState,
 } from "@omp-toolkit/core";
-import { short, writeFileAtomic } from "./fs-util";
 import { healthManager } from "./health-manager";
 import type { HistoryEventInput } from "./history-store";
 import { RoutingPolicyStore } from "./policy-store";

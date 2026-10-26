@@ -1,6 +1,5 @@
 import os from "node:os";
 import path from "node:path";
-import type { WarmUpRequest } from "@omp-toolkit/core";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { IPC, type RendererToMainEvents } from "./ipc";
@@ -9,7 +8,6 @@ import { createLoginItem, type LoginItem } from "./login-item";
 import { DesktopPanel } from "./panel";
 import { panelPaths } from "./paths";
 import { DesktopRuntime } from "./runtime";
-import type { DesktopSettings } from "./settings";
 import { DesktopTray } from "./tray";
 
 app.setName("OMP Provider Usage");
