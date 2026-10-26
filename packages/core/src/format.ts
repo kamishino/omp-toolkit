@@ -1,6 +1,7 @@
 export function money(value: number | undefined, unit: string | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return "—";
-  const symbol = unit === "cny" ? "¥" : unit === "usd" ? "$" : "";
+  const normalized = unit?.trim().toLowerCase();
+  const symbol = normalized === "cny" ? "¥" : normalized === "usd" ? "$" : "";
   const amount = value.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
