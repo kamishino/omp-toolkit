@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 — Desktop configuration settings, script modularization, and UX polish (2026-10-26)
+
+- Add in-panel Desktop User Configuration Settings view toggled via header gear icon.
+- Add atomic persistence for settings in Electron's `userData/settings.json`.
+- Support live runtime reloading for polling intervals (30–3600s), DeepSeek balance alert thresholds, theme preferences (`system`, `light`, `dark`), and "start at login" autostart.
+- Re-architect and modularize `scripts/` into cohesive feature subfolders: `build/`, `desktop/`, `eval/`, `install/`, `monitor/`, `reliability/`, and `tokens/`.
+- Add cross-platform desktop shortcut generation CLI and module (`scripts/desktop/create-desktop-shortcut.ts`, `.ps1`).
+- Polish desktop webview styling: segmented controls for theme switching, custom toggle switch, tactile button active states, and enhanced error state with in-line retry.
+- Add interactive keybinding hints in TUI monitor (`r` refresh, `q` quit, `Tab` schedule).
+
 ## 0.3.0 — Desktop widget refresh, terminal launchers, and scrolling (2026-10-22)
 
 - Add cross-platform terminal launchers (`omp-widget.cmd`, `omp-widget.sh`) and
