@@ -1,23 +1,16 @@
 import os from "node:os";
 import path from "node:path";
-import type { Dashboard, WarmUpRequest } from "@omp-toolkit/core";
+import type { WarmUpRequest } from "@omp-toolkit/core";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { launchOrcaTab, launchTerminalMonitor } from "./actions";
-import { fetchDashboard } from "./data";
-import { IPC, type PanelState } from "./ipc";
+import { IPC } from "./ipc";
 import { logError } from "./logger";
 import { createLoginItem, type LoginItem } from "./login-item";
 import { DesktopPanel } from "./panel";
-import { findBun, panelPaths, resolveMonitorScript } from "./paths";
-import {
-  DEFAULT_DESKTOP_SETTINGS,
-  type DesktopSettings,
-  loadDesktopSettings,
-  saveDesktopSettings,
-  validateDesktopSettings,
-} from "./settings";
-import { computePanelState } from "./state";
+import { panelPaths } from "./paths";
+import { DesktopRuntime } from "./runtime";
+import type { DesktopSettings } from "./settings";
 import { DesktopTray } from "./tray";
 import { handleWarmUpRequest } from "./warmup-handler";
 
@@ -36,15 +29,7 @@ if (!app.requestSingleInstanceLock()) {
 let panel: DesktopPanel | null = null;
 let desktopTray: DesktopTray | null = null;
 let loginItem: LoginItem | null = null;
-let refreshTimer: NodeJS.Timeout | null = null;
-
-let lastDashboard: Dashboard | null = null;
-let lastError: string | null = null;
-let refreshing = false;
-let quitting = false;
-let warmupRunning = false;
-let warmupMessage: string | null = null;
-let currentSettings: DesktopSettings = { ...DEFAULT_DESKTOP_SETTINGS };
+let runtime: DesktopRuntime | null = null;
 
 const desktopTokens = tokens.desktop;
 const panelWidth = desktopTokens.size.panelWidth.$value;
@@ -70,17 +55,6 @@ process.on("SIGINT", () => {
   app.quit();
 });
 
-function currentState(): PanelState {
-  return computePanelState({
-    intervalSeconds: currentSettings.intervalSeconds,
-    lastDashboard,
-    refreshing,
-    lastError,
-    warmup: { running: warmupRunning, message: warmupMessage },
-    settings: currentSettings,
-  });
-}
-
 void app.whenReady().then(async () => {
   if (process.platform === "darwin") {
     app.dock?.hide();
@@ -100,26 +74,21 @@ void app.whenReady().then(async () => {
     iconPath,
   });
 
-  currentSettings = loadDesktopSettings({
+  runtime = new DesktopRuntime({
     userDataDir: app.getPath("userData"),
+    checkoutRoot,
+    loginItem,
     argv: process.argv,
     env: process.env,
-    loginItemEnabled: loginItem.isEnabled(),
   });
 
   const preview = process.argv.includes("--preview");
 
-  function sendState(): void {
-    panel?.sendState(currentState());
-  }
-
-  function updateTray(): void {
-    desktopTray?.update(lastDashboard, refreshing, lastError);
-  }
-
   function showPanel(): void {
     panel?.show(desktopTray?.getBounds() ?? null);
-    sendState();
+    if (runtime) {
+      panel?.sendState(runtime.getState());
+    }
   }
 
   function hidePanel(): void {
@@ -128,15 +97,15 @@ void app.whenReady().then(async () => {
 
   function togglePanel(): void {
     panel?.toggle(desktopTray?.getBounds() ?? null);
-    if (panel?.isVisible()) {
-      sendState();
+    if (panel?.isVisible() && runtime) {
+      panel.sendState(runtime.getState());
     }
   }
 
   const openTerminalMonitor = () =>
     launchTerminalMonitor({
       checkoutRoot,
-      intervalSeconds: currentSettings.intervalSeconds,
+      intervalSeconds: runtime?.getSettings().intervalSeconds ?? 300,
       panelWindow: panel?.window,
     });
 
@@ -153,21 +122,17 @@ void app.whenReady().then(async () => {
     height: panelHeight,
     margin,
     onEscape: hidePanel,
-    onHide: () => {
-      rebuildMenu();
-    },
+    onHide: rebuildMenu,
   });
 
   panel.window.on("close", (event) => {
-    if (!quitting) {
+    if (!runtime?.isQuitting()) {
       event.preventDefault();
       hidePanel();
     }
   });
 
-  panel.window.on("show", () => {
-    rebuildMenu();
-  });
+  panel.window.on("show", rebuildMenu);
 
   panel.window.once("ready-to-show", () => {
     if (preview) {
@@ -181,7 +146,9 @@ void app.whenReady().then(async () => {
       loginItem,
       isPanelVisible: () => Boolean(panel?.isVisible()),
       onTogglePanel: togglePanel,
-      onRefreshNow: refresh,
+      onRefreshNow: async () => {
+        await runtime?.refresh();
+      },
       onOpenTerminal: () => {
         void openTerminalMonitor();
       },
@@ -218,137 +185,85 @@ void app.whenReady().then(async () => {
     return;
   }
 
+  // Reactive subscription to deep runtime state changes
+  runtime.subscribe((state) => {
+    panel?.sendState(state);
+    desktopTray?.update(
+      runtime?.getDashboard() ?? null,
+      runtime?.isRefreshing() ?? false,
+      runtime?.getLastError() ?? null,
+    );
+  });
+
+  // Wire IPC handlers to runtime
   ipcMain.on(IPC.refresh, () => {
-    void refresh();
+    void runtime?.refresh();
   });
-  ipcMain.on(IPC.hide, () => {
-    hidePanel();
-  });
+  ipcMain.on(IPC.hide, hidePanel);
   ipcMain.on(IPC.openTerminal, () => {
     void openTerminalMonitor();
   });
-  ipcMain.on(IPC.openOrca, () => {
-    openOrca();
-  });
+  ipcMain.on(IPC.openOrca, openOrca);
   ipcMain.on(IPC.ready, () => {
-    sendState();
+    if (runtime) {
+      panel?.sendState(runtime.getState());
+    }
   });
   ipcMain.on(IPC.saveSettings, (_event, newSettings: DesktopSettings) => {
-    const validation = validateDesktopSettings(newSettings);
-    if (!validation.valid) {
-      logError(new Error(`Invalid settings received: ${validation.errors.join(", ")}`));
-      return;
-    }
-
-    saveDesktopSettings(app.getPath("userData"), newSettings);
-    const intervalChanged = currentSettings.intervalSeconds !== newSettings.intervalSeconds;
-    currentSettings = newSettings;
-
-    try {
-      loginItem?.setEnabled(newSettings.openAtLogin);
-    } catch (error) {
-      logError(error);
-    }
-
-    if (intervalChanged) {
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
-        refreshTimer = null;
-      }
-      refreshTimer = setInterval(() => {
-        void refresh();
-      }, currentSettings.intervalSeconds * 1000);
-    }
-
-    sendState();
-    updateTray();
-    rebuildMenu();
+    runtime?.updateSettings(newSettings);
+    desktopTray?.rebuildMenu();
   });
   ipcMain.on(IPC.warmup, async (_event, request: WarmUpRequest) => {
+    if (!runtime) return;
     await handleWarmUpRequest(request, {
       panelWindow: panel?.window ?? null,
-      lastDashboard,
+      lastDashboard: runtime.getDashboard(),
       checkoutRoot,
-      isWarmUpRunning: warmupRunning,
-      isQuitting: quitting,
+      isWarmUpRunning: runtime.getState().warmup.running,
+      isQuitting: runtime.isQuitting(),
       onWarmUpStart: (msg) => {
-        warmupRunning = true;
-        warmupMessage = msg;
-        sendState();
+        runtime?.setWarmUp(true, msg);
       },
       onWarmUpEnd: (finalMsg) => {
-        warmupRunning = false;
-        if (finalMsg !== undefined) {
-          warmupMessage = finalMsg;
-        }
-        sendState();
+        runtime?.setWarmUp(false, finalMsg);
       },
-      onRefreshRequested: refresh,
+      onRefreshRequested: async () => {
+        await runtime?.refresh();
+      },
     });
   });
 
   panel.window.webContents.on("did-finish-load", () => {
-    sendState();
+    if (runtime) {
+      panel?.sendState(runtime.getState());
+    }
   });
 
-  async function refresh(): Promise<void> {
-    if (refreshing || quitting) return;
-    refreshing = true;
-    sendState();
-
-    try {
-      const bun = findBun();
-      const script = resolveMonitorScript(process.env, checkoutRoot);
-
-      if (!bun) {
-        throw new Error("Bun not found. Install Bun or set BUN_BIN.");
-      }
-      if (!script) {
-        throw new Error('Monitor script not found. Run "bun run install:omp".');
-      }
-
-      const dashboard = await fetchDashboard({ bun, script });
-      lastDashboard = dashboard;
-      lastError = null;
-      updateTray();
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-      logError(error);
-      updateTray();
-    } finally {
-      refreshing = false;
-      sendState();
-    }
-  }
-
-  void refresh();
-  refreshTimer = setInterval(() => {
-    void refresh();
-  }, currentSettings.intervalSeconds * 1000);
+  // Start runtime periodic polling
+  runtime.startTimer();
 
   powerMonitor.on("resume", () => {
-    void refresh();
+    void runtime?.refresh();
   });
 
   try {
     powerMonitor.on("unlock-screen", () => {
-      void refresh();
+      void runtime?.refresh();
     });
   } catch {
     // not supported on all platforms
   }
 
   nativeTheme.on("updated", () => {
-    updateTray();
+    desktopTray?.update(
+      runtime?.getDashboard() ?? null,
+      runtime?.isRefreshing() ?? false,
+      runtime?.getLastError() ?? null,
+    );
   });
 
-  app.on("second-instance", () => {
-    showPanel();
-  });
-
-  app.on("activate", () => {
-    showPanel();
-  });
+  app.on("second-instance", showPanel);
+  app.on("activate", showPanel);
 });
 
 app.on("window-all-closed", () => {
@@ -356,11 +271,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  quitting = true;
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-  }
+  runtime?.destroy();
   if (desktopTray) {
     desktopTray.destroy();
     desktopTray = null;
