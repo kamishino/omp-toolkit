@@ -1,8 +1,9 @@
 import { Database } from "bun:sqlite";
+import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { resolveAgentDir, resolveHistoryDbPath } from "@omp-toolkit/core";
-import type { HistoryEventInput } from "./history";
 
 export interface EventRow {
   at: number;
@@ -18,12 +19,29 @@ export interface EventRow {
 export interface LocalMachine {
   id?: string;
   hostname?: string;
+  createdAt?: number;
 }
 
 export interface LocalHeartbeat {
   at?: number;
   hostname?: string;
   pid?: number;
+}
+
+export interface MachineIdentity {
+  id: string;
+  hostname: string;
+  createdAt: number;
+}
+
+export interface HistoryEventInput {
+  at: number;
+  kind: string;
+  provider?: string | null;
+  account?: string | null;
+  status?: string | null;
+  incidentId?: string | null;
+  detail?: string | null;
 }
 
 export interface MachineStats {
@@ -40,14 +58,46 @@ export interface MachineStats {
   checksByDay: Map<string, number>;
 }
 
+export interface ReportColumn {
+  label: string;
+  width: number;
+}
+
+export interface ReliabilityReportData {
+  columns: ReportColumn[];
+  lines: string[];
+  allPass: boolean;
+}
+
+export type ReliabilityReportResult =
+  | { status: "no_history" | "no_matching_records"; message: string }
+  | { status: "success"; data: ReliabilityReportData };
+
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
+
+function writeAtomic(file: string, content: string): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(temp, content);
+  try {
+    fs.renameSync(temp, file);
+  } catch {
+    fs.writeFileSync(file, content);
+    try {
+      fs.rmSync(temp, { force: true });
+    } catch {
+      // Best-effort temp cleanup
+    }
+  }
+}
 
 /**
  * Deep module encapsulating the OMP reliability history SQLite database,
- * schema migrations, event persistence, and analytical reporting queries.
+ * schema migrations, machine identity resolution, and analytical reporting.
  */
 export class ReliabilityHistoryStore {
   private db: Database | null = null;
+  private cachedMachine: MachineIdentity | null = null;
   readonly dbPath: string;
   readonly agentDir: string;
 
@@ -92,8 +142,57 @@ export class ReliabilityHistoryStore {
     return db;
   }
 
-  recordEvents(events: HistoryEventInput[], machineId: string): void {
+  resetMachineCache(): void {
+    this.cachedMachine = null;
+  }
+
+  machine(): MachineIdentity {
+    if (this.cachedMachine) return this.cachedMachine;
+    const file = path.join(this.agentDir, "omp-toolkit-machine.json");
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<MachineIdentity>;
+      if (
+        typeof parsed?.id !== "string" ||
+        parsed.id.length === 0 ||
+        typeof parsed?.hostname !== "string" ||
+        typeof parsed?.createdAt !== "number"
+      ) {
+        throw new Error("invalid machine identity");
+      }
+      this.cachedMachine = {
+        id: parsed.id,
+        hostname: parsed.hostname,
+        createdAt: parsed.createdAt,
+      };
+      return this.cachedMachine;
+    } catch (error) {
+      const isEnoent =
+        typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+      if (!isEnoent) {
+        throw new Error(`history: corrupt machine file ${file}: ${String(error)}`);
+      }
+      const created: MachineIdentity = {
+        id: crypto.randomUUID(),
+        hostname: os.hostname(),
+        createdAt: Date.now(),
+      };
+      writeAtomic(file, `${JSON.stringify(created, null, 2)}\n`);
+      this.cachedMachine = created;
+      return created;
+    }
+  }
+
+  machineId(): string {
+    return this.machine().id;
+  }
+
+  recordEvent(event: HistoryEventInput): void {
+    this.recordEvents([event]);
+  }
+
+  recordEvents(events: HistoryEventInput[], machineId?: string): void {
     if (events.length === 0) return;
+    const mId = machineId ?? this.machineId();
     const db = this.getDatabase(false);
     const insert = db.query(`
       INSERT INTO events
@@ -104,7 +203,7 @@ export class ReliabilityHistoryStore {
       for (const row of rows) {
         insert.run(
           row.at,
-          machineId,
+          mId,
           row.kind,
           row.provider ?? null,
           row.account ?? null,
@@ -221,6 +320,107 @@ export class ReliabilityHistoryStore {
     return statsByMachine;
   }
 
+  buildReport(
+    options: { days?: number; machineFilter?: string; now?: number } = {},
+  ): ReliabilityReportResult {
+    if (!fs.existsSync(this.dbPath)) {
+      return { status: "no_history", message: "no history" };
+    }
+
+    const days = Math.min(366, Math.max(1, options.days ?? 30));
+    const machineFilter = options.machineFilter ?? "all";
+    const now = options.now ?? Date.now();
+    const nowDate = new Date(now);
+    const windowStartUtc =
+      Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate()) -
+      (days - 1) * 86_400_000;
+
+    let rows: EventRow[] = [];
+    try {
+      rows = this.queryEvents(windowStartUtc);
+    } catch (error) {
+      return { status: "no_history", message: `history read failed: ${String(error)}` };
+    }
+
+    if (rows.length === 0) {
+      return { status: "no_history", message: "no history" };
+    }
+
+    const localMachine = this.readLocalMachine();
+    const localHeartbeat = this.readLocalHeartbeat();
+    const statsByMachine = this.aggregateMachineStats(rows, machineFilter);
+    if (statsByMachine.size === 0) {
+      return { status: "no_matching_records", message: "no history" };
+    }
+
+    const columns: ReportColumn[] = [
+      { label: "machine", width: 22 },
+      { label: "days", width: 9 },
+      { label: "checks", width: 8 },
+      { label: "ok", width: 7 },
+      { label: "hang", width: 6 },
+      { label: "error", width: 7 },
+      { label: "auth", width: 6 },
+      { label: "restores", width: 10 },
+      { label: "manual", width: 8 },
+      { label: "incidents", width: 11 },
+      { label: "late", width: 6 },
+      { label: "monitor-age", width: 11 },
+    ];
+
+    const lines: string[] = [];
+    lines.push(columns.map((col) => col.label.padEnd(col.width)).join(" "));
+
+    let allPass = true;
+    for (const stats of statsByMachine.values()) {
+      const isLocal = localMachine?.id === stats.machineId;
+      let label = stats.machineId.slice(0, 8);
+      if (isLocal && localMachine?.hostname) {
+        label = `${label} (${localMachine.hostname.slice(0, 10)})`;
+      }
+
+      let monitorAge = "unknown";
+      if (isLocal && localHeartbeat?.at) {
+        const delta = now - localHeartbeat.at;
+        monitorAge = delta <= 10 * 60_000 ? "fresh" : "stale";
+      } else if (isLocal) {
+        monitorAge = "stale";
+      }
+
+      const coveredDays = stats.checksByDay.size;
+      const daysFraction = `${coveredDays}/${days}`;
+
+      const values = [
+        label.padEnd(22),
+        daysFraction.padEnd(9),
+        String(stats.checks).padEnd(8),
+        String(stats.ok).padEnd(7),
+        String(stats.hang).padEnd(6),
+        String(stats.error).padEnd(7),
+        String(stats.auth).padEnd(6),
+        String(stats.restores).padEnd(10),
+        String(stats.manual).padEnd(8),
+        String(stats.incidents).padEnd(11),
+        String(stats.late).padEnd(6),
+        monitorAge.padEnd(11),
+      ];
+      lines.push(values.join(" "));
+
+      if (coveredDays < days || stats.manual > 0 || stats.late > 0) {
+        allPass = false;
+      }
+    }
+
+    return {
+      status: "success",
+      data: {
+        columns,
+        lines,
+        allPass,
+      },
+    };
+  }
+
   close(): void {
     if (this.db) {
       this.db.close();
@@ -228,3 +428,47 @@ export class ReliabilityHistoryStore {
     }
   }
 }
+
+let sharedStore: ReliabilityHistoryStore | null = null;
+
+export function getHistoryStore(): ReliabilityHistoryStore {
+  if (!sharedStore) {
+    sharedStore = new ReliabilityHistoryStore();
+  }
+  return sharedStore;
+}
+
+export function resetHistoryCachesForTest(): void {
+  if (sharedStore) {
+    sharedStore.resetMachineCache();
+    sharedStore.close();
+    sharedStore = null;
+  }
+}
+
+export function machineId(): string {
+  return getHistoryStore().machineId();
+}
+
+export function historyPath(): string {
+  return getHistoryStore().dbPath;
+}
+
+export function recordEvent(event: HistoryEventInput): void {
+  getHistoryStore().recordEvent(event);
+}
+
+export function recordEvents(events: HistoryEventInput[]): void {
+  getHistoryStore().recordEvents(events);
+}
+
+export function closeHistory(): void {
+  if (sharedStore) {
+    sharedStore.close();
+    sharedStore = null;
+  }
+}
+
+process.on("exit", () => {
+  closeHistory();
+});
