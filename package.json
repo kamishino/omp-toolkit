@@ -1,6 +1,6 @@
 {
   "name": "omp-toolkit",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Unofficial OMP toolkit for provider usage, Gemini route health, and reliability history, with optional Orca integration.",
   "license": "MIT",
