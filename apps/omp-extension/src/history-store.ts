@@ -3,7 +3,12 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resolveAgentDir, resolveHistoryDbPath } from "@omp-toolkit/core";
+import {
+  type MonitorHeartbeat,
+  resolveAgentDir,
+  resolveHeartbeatPath,
+  resolveHistoryDbPath,
+} from "@omp-toolkit/core";
 
 export interface EventRow {
   at: number;
@@ -22,11 +27,7 @@ export interface LocalMachine {
   createdAt?: number;
 }
 
-export interface LocalHeartbeat {
-  at?: number;
-  hostname?: string;
-  pid?: number;
-}
+export type LocalHeartbeat = MonitorHeartbeat;
 
 export interface MachineIdentity {
   id: string;
@@ -240,7 +241,7 @@ export class ReliabilityHistoryStore {
 
   readLocalHeartbeat(): LocalHeartbeat | null {
     try {
-      const file = path.join(this.agentDir, "omp-toolkit-monitor.json");
+      const file = resolveHeartbeatPath({ PI_CODING_AGENT_DIR: this.agentDir });
       return JSON.parse(fs.readFileSync(file, "utf8")) as LocalHeartbeat;
     } catch {
       return null;

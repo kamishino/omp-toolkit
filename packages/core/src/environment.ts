@@ -39,6 +39,10 @@ export function resolveMachinePath(env = process.env, home = homedir()): string 
   return path.join(resolveAgentDir(env, home), "omp-toolkit-machine.json");
 }
 
+export function resolveHeartbeatPath(env = process.env, home = homedir()): string {
+  return path.join(resolveAgentDir(env, home), "omp-toolkit-monitor.json");
+}
+
 export function resolveInstalledScript(
   scriptName: string,
   env = process.env,
