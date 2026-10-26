@@ -189,13 +189,16 @@ Interact with the circuit breaker directly from inside OMP:
 bun run desktop             # Launch tray widget in background
 bun run desktop:preview     # Launch widget with panel immediately visible
 bun run desktop:once        # Run headless diagnostic and output summary
+bun run desktop:shortcut    # Create desktop launcher (Windows, macOS, Linux)
 ```
 
-On Windows, run the shortcut installer once to create a launcher on your Desktop:
+Create a desktop shortcut to launch the widget with one click:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1
+```bash
+bun run desktop:shortcut
 ```
+
+On Windows, `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1` can also be executed directly.
 
 The desktop panel includes a `Warm up all` header control and per-account `Warm up` and `Check` buttons. Warm-up sends minimal model prompts to eligible accounts (skipping non-OK rows) while enforcing a 60-second cooldown per account and cross-process single-flight locking.
 
