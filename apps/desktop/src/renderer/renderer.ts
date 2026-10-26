@@ -5,15 +5,9 @@ import { DEFAULT_DESKTOP_SETTINGS, type DesktopSettings } from "../settings";
 import { renderProviderCard } from "./card";
 import { icon } from "./icon";
 import { renderSettingsView, type SettingsViewController } from "./settings-view";
-import { applyTheme, applyThemePreference, getActiveThemePreference } from "./tokens";
+import { themeManager } from "./tokens";
 
-const media = window.matchMedia("(prefers-color-scheme: dark)");
-applyTheme(media.matches ? "dark" : "light");
-media.addEventListener("change", (e) => {
-  if (getActiveThemePreference() === "system") {
-    applyTheme(e.matches ? "dark" : "light");
-  }
-});
+themeManager.init();
 
 let activeTab: "dashboard" | "settings" = "dashboard";
 let activeSettingsController: SettingsViewController | null = null;
@@ -254,6 +248,6 @@ render();
 
 window.omp.onState((state) => {
   currentState = state;
-  applyThemePreference(state.settings.theme);
+  themeManager.apply(state.settings.theme);
   render();
 });

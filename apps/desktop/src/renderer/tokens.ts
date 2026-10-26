@@ -5,13 +5,8 @@ function kebab(str: string): string {
   return str.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 }
 
-let activeThemePreference: DesktopTheme = "system";
-
-export function getActiveThemePreference(): DesktopTheme {
-  return activeThemePreference;
-}
-
 export function applyTheme(mode: "light" | "dark"): void {
+  if (typeof document === "undefined") return;
   const root = document.documentElement;
   root.dataset.theme = mode;
 
@@ -42,12 +37,68 @@ export function applyTheme(mode: "light" | "dark"): void {
   }
 }
 
-export function applyThemePreference(theme: DesktopTheme): void {
-  activeThemePreference = theme;
-  if (theme === "system") {
-    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    applyTheme(isDark ? "dark" : "light");
-  } else {
-    applyTheme(theme);
+/**
+ * Deep Theme Coordinator for Desktop Renderer.
+ *
+ * Encapsulates:
+ * - Operating system dark/light media query observation
+ * - User theme preference tracking (system, light, dark)
+ * - Live DOM CSS variable property injection from design tokens
+ * - Lifecycle cleanup of media query change listeners
+ */
+export class ThemeManager {
+  private activePreference: DesktopTheme = "system";
+  private mediaQuery: MediaQueryList | null = null;
+  private changeListener: ((e: MediaQueryListEvent) => void) | null = null;
+
+  init(): void {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      applyTheme("light");
+      return;
+    }
+    if (this.mediaQuery) return;
+
+    this.mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    this.changeListener = (e: MediaQueryListEvent) => {
+      if (this.activePreference === "system") {
+        applyTheme(e.matches ? "dark" : "light");
+      }
+    };
+    this.mediaQuery.addEventListener("change", this.changeListener);
+    this.apply(this.activePreference);
   }
+
+  getPreference(): DesktopTheme {
+    return this.activePreference;
+  }
+
+  apply(theme: DesktopTheme): void {
+    this.activePreference = theme;
+    if (theme === "system") {
+      const isDark =
+        typeof window !== "undefined" &&
+        Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches);
+      applyTheme(isDark ? "dark" : "light");
+    } else {
+      applyTheme(theme);
+    }
+  }
+
+  destroy(): void {
+    if (this.mediaQuery && this.changeListener) {
+      this.mediaQuery.removeEventListener("change", this.changeListener);
+      this.changeListener = null;
+      this.mediaQuery = null;
+    }
+  }
+}
+
+export const themeManager = new ThemeManager();
+
+export function getActiveThemePreference(): DesktopTheme {
+  return themeManager.getPreference();
+}
+
+export function applyThemePreference(theme: DesktopTheme): void {
+  themeManager.apply(theme);
 }
