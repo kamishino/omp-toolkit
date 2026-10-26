@@ -8,22 +8,19 @@
 import fs from "node:fs";
 import {
   type Account,
-  excludedEmails,
   type HealAction,
   type HealthResult,
   type HealthState,
-  mergeHealthResults,
-  nextStreaks,
   type Policy,
   type ProbeResult as Result,
   resolveAgentDir,
   resolveSnapshotPath,
   resolveStatePath,
   resolveStreakPath,
-  restorableEmails,
   type StreakState,
 } from "@omp-toolkit/core";
 import { short, writeFileAtomic } from "./fs-util";
+import { healthManager } from "./health-manager";
 import { type HistoryEventInput, recordEvents } from "./history-store";
 import { RoutingPolicyStore } from "./policy-store";
 
@@ -160,36 +157,6 @@ export function recordHistory(events: HistoryEventInput[]): void {
   }
 }
 
-export function recordHealth(
-  results: Result[],
-  options: { merge?: boolean; source?: "warmup" | "check" } = {},
-): void {
-  const at = Date.now();
-  const streaks = nextStreaks(readStreaksForWrite(), results, at, RESTORE_GAP_MS);
-  writeStreaks(streaks);
-
-  const snapshotResults = options.merge
-    ? mergeHealthResults(readSnapshot()?.results ?? [], results, at)
-    : results.map((result) => ({ ...result, checkedAt: at }));
-
-  writeFileAtomic(
-    snapshotPath(),
-    `${JSON.stringify({ checkedAt: at, results: snapshotResults }, null, 2)}\n`,
-  );
-
-  const prefix = options.source ? `${options.source} ` : "";
-  recordHistory(
-    results.map((result) => ({
-      at,
-      kind: "route_check" as const,
-      provider: PROVIDER,
-      account: result.email,
-      status: result.status,
-      detail: `${prefix}${result.ms}ms${result.detail ? ` ${result.detail}` : ""}`,
-    })),
-  );
-}
-
 export const policyStore = new RoutingPolicyStore();
 
 export async function readPolicies(): Promise<Policy[]> {
@@ -216,177 +183,19 @@ export async function checkAll(confirm = false): Promise<Result[]> {
   return probeClient.checkAll(confirm);
 }
 
-export async function applyHeal(
+export const applyHeal = (
   results: Result[],
   source: "heal" | "auto-heal" | "tool" = "heal",
-): Promise<HealAction> {
-  if (results.length === 0) {
-    return { changed: [], skipped: [], reason: "no accounts to check" };
-  }
-  const bad = results.filter((result) => result.status === "hang" || result.status === "error");
-  if (bad.length === 0) {
-    return { changed: [], skipped: [], reason: "all accounts healthy" };
-  }
-  if (bad.length >= results.length) {
-    return {
-      changed: [],
-      skipped: [],
-      reason: "all accounts failing; provider-wide issue, no exclusion applied",
-    };
-  }
+): Promise<HealAction> => healthManager.applyHeal(results, source);
 
-  const policies = await readPoliciesForWrite();
-  const state = readStateForWrite();
-  const managed = new Set(state.excluded);
-  const alreadyExcluded = excludedEmails(policies);
-  const changed: string[] = [];
-  const skipped: string[] = [];
+export const restoreManaged = (): Promise<string[]> => healthManager.restoreManaged();
 
-  for (const result of bad) {
-    if (alreadyExcluded.has(result.email)) {
-      if (managed.has(result.email)) continue;
-      skipped.push(result.email);
-      continue;
-    }
-    const existing = policies.find(
-      (policy) => policy?.provider === PROVIDER && policy?.account?.email === result.email,
-    );
-    if (existing) {
-      skipped.push(result.email);
-      continue;
-    }
-    policies.push({
-      provider: PROVIDER,
-      account: { email: result.email },
-      reservePct: 100,
-    });
-    managed.add(result.email);
-    changed.push(result.email);
-  }
+export const maybeRestoreManaged = (): Promise<string[]> => healthManager.maybeRestoreManaged();
 
-  if (changed.length > 0) {
-    await writePolicies(policies);
-    writeState({ excluded: [...managed], updatedAt: new Date().toISOString() });
-    recordHistory(
-      changed.map((email) => ({
-        at: Date.now(),
-        kind: "policy_change" as const,
-        provider: PROVIDER,
-        account: email,
-        detail: source,
-      })),
-    );
-  }
+export const removeAccountExclusion = (email: string, detail = "enable"): Promise<void> =>
+  healthManager.removeExclusion(email, detail);
 
-  return {
-    changed,
-    skipped,
-    reason:
-      changed.length > 0
-        ? "temporary reservePct=100 applied"
-        : skipped.length > 0
-          ? "failing accounts already have exclusions/policies"
-          : "no new exclusions",
-  };
-}
-
-export async function restoreManaged(): Promise<string[]> {
-  const state = readStateForWrite();
-  if (state.excluded.length === 0) return [];
-  const managed = new Set(state.excluded);
-  const policies = await readPoliciesForWrite();
-  const next = policies.filter(
-    (policy) =>
-      !(
-        policy?.provider === PROVIDER &&
-        typeof policy?.account?.email === "string" &&
-        managed.has(policy.account.email)
-      ),
-  );
-  if (next.length !== policies.length) await writePolicies(next);
-  const streaks = readStreaksForWrite();
-  for (const email of managed) delete streaks[email];
-  writeStreaks(streaks);
-  writeState({ excluded: [], updatedAt: new Date().toISOString() });
-  recordHistory(
-    [...managed].map((email) => ({
-      at: Date.now(),
-      kind: "restore" as const,
-      provider: PROVIDER,
-      account: email,
-      detail: "manual",
-    })),
-  );
-  return [...managed];
-}
-
-export async function maybeRestoreManaged(): Promise<string[]> {
-  const state = readStateForWrite();
-  if (state.excluded.length === 0) return [];
-  const streaks = readStreaksForWrite();
-  const eligible = restorableEmails(state, streaks, RESTORE_STREAK);
-  if (eligible.length === 0) return [];
-
-  const policies = await readPoliciesForWrite();
-  const managed = new Set(state.excluded);
-  const next = policies.filter(
-    (policy) =>
-      !(
-        policy?.provider === PROVIDER &&
-        typeof policy?.account?.email === "string" &&
-        managed.has(policy.account.email) &&
-        eligible.includes(policy.account.email)
-      ),
-  );
-  if (next.length !== policies.length) await writePolicies(next);
-
-  for (const email of eligible) {
-    managed.delete(email);
-    delete streaks[email];
-  }
-  writeState({ excluded: [...managed], updatedAt: new Date().toISOString() });
-  writeStreaks(streaks);
-  recordHistory(
-    eligible.map((email) => ({
-      at: Date.now(),
-      kind: "restore" as const,
-      provider: PROVIDER,
-      account: email,
-      detail: "auto",
-    })),
-  );
-  return eligible;
-}
-
-export async function removeAccountExclusion(email: string, detail = "enable"): Promise<void> {
-  const policies = await readPoliciesForWrite();
-  const next = policies.filter(
-    (policy) =>
-      !(
-        policy?.provider === PROVIDER &&
-        typeof policy?.account?.email === "string" &&
-        policy.account.email.toLowerCase() === email.toLowerCase()
-      ),
-  );
-  if (next.length !== policies.length) {
-    await writePolicies(next);
-  }
-
-  const state = readStateForWrite();
-  state.excluded = state.excluded.filter((e) => e.toLowerCase() !== email.toLowerCase());
-  writeState({ excluded: state.excluded, updatedAt: new Date().toISOString() });
-
-  const streaks = readStreaksForWrite();
-  delete streaks[email];
-  writeStreaks(streaks);
-
-  recordHistory([
-    {
-      at: Date.now(),
-      kind: "restore" as const,
-      provider: PROVIDER,
-      account: email,
-      detail,
-    },
-  ]);
-}
+export const recordHealth = (
+  results: Result[],
+  options: { merge?: boolean; source?: "warmup" | "check" } = {},
+): void => healthManager.recordHealth(results, options);
