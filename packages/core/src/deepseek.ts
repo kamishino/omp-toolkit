@@ -1,3 +1,4 @@
+import { money } from "./format";
 import type { UsageLimit, UsageReport } from "./types";
 
 export type DeepSeekCurrency = "CNY" | "USD";
@@ -70,7 +71,7 @@ export function deepSeekUsageReport(
       scope: { provider: "deepseek", windowId: "balance" },
       amount: { remaining: balance.total, unit },
       status: available ? "ok" : "exhausted",
-      notes: [`${balance.currency} ${balance.total.toFixed(2)}`],
+      notes: [money(balance.total, balance.currency)],
     },
     {
       id: "deepseek:granted",
@@ -78,7 +79,7 @@ export function deepSeekUsageReport(
       scope: { provider: "deepseek", windowId: "balance" },
       amount: { remaining: balance.granted, unit },
       status: "ok",
-      notes: [`${balance.currency} ${balance.granted.toFixed(2)}`],
+      notes: [money(balance.granted, balance.currency)],
     },
   ];
 

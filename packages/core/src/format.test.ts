@@ -10,9 +10,13 @@ import {
 } from "./format";
 
 describe("format helpers", () => {
-  test("formats money amounts with currency symbols", () => {
+  test("formats money amounts with currency symbols case-insensitively", () => {
     expect(money(110, "cny")).toBe("¥110.00");
+    expect(money(110, "CNY")).toBe("¥110.00");
     expect(money(25.5, "usd")).toBe("$25.50");
+    expect(money(25.5, "USD")).toBe("$25.50");
+    expect(money(50, " cny ")).toBe("¥50.00");
+    expect(money(100, "unknown")).toBe("100.00");
     expect(money(undefined, "cny")).toBe("—");
     expect(money(Number.NaN, "cny")).toBe("—");
   });
