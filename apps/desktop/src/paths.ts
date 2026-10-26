@@ -93,8 +93,9 @@ export function resolveCheckout(
   ].filter((p): p is string => Boolean(p && p.trim().length > 0));
 
   for (const candidate of candidates) {
-    const probe = path.join(candidate, "scripts", "orca-monitor.ts");
-    if (isRegularFile(probe)) {
+    const probe = path.join(candidate, "scripts", "monitor", "orca-monitor.ts");
+    const legacyProbe = path.join(candidate, "scripts", "orca-monitor.ts");
+    if (isRegularFile(probe) || isRegularFile(legacyProbe)) {
       return path.resolve(candidate);
     }
   }

@@ -29,7 +29,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
       - run: bun run build
-      - run: bun scripts/install.ts --dry-run
+      - run: bun scripts/install/install.ts --dry-run
   installer:
     needs: check
     strategy:

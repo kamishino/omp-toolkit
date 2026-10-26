@@ -311,7 +311,6 @@ omp-toolkit/
     │   ├── color.ts                       # OKLCH and APCA color calculation utilities
     │   ├── color.test.ts                  # Color math unit tests
     │   └── check-tokens.ts                # Audits APCA contrast (|Lc| >= 60) for design tokens
-    └── [root bridges]                     # Re-export bridge files (build.ts, widget.ts, monitor.ts, etc.) for zero broken imports
 ```
 
 ---
@@ -382,7 +381,7 @@ Grouping 1–2 arbitrary files into a standalone subdirectory is strictly forbid
 
 ### Scripts Feature Organization
 
-Scripts are organized into cohesive feature subfolders under `scripts/`, paired with root-level re-export bridges to preserve 100% backwards compatibility and zero broken import links:
+Scripts are organized strictly into cohesive feature subfolders under `scripts/`:
 - `scripts/build/`: Bundling (`build.ts`) and icon rasterization (`build-tray-icons.ts`).
 - `scripts/desktop/`: Desktop widget runtime (`widget.ts`) and cross-platform desktop shortcut generation (`create-desktop-shortcut.ts`, `.ps1`).
 - `scripts/eval/`: 2x2 empirical model role evaluation harness (`eval-model-roles.ts`), tasks (`eval-tasks.ts`), and metrics (`eval-metrics.ts`).
@@ -406,16 +405,16 @@ Scripts are organized into cohesive feature subfolders under `scripts/`, paired 
 
 ### Essential Development Commands
 
-| Command                       | Purpose                                                                                              |
-| :---------------------------- | :--------------------------------------------------------------------------------------------------- |
-| `bun run check`               | **Standard Check Gate:** Runs Biome check, TypeScript check, unit tests, and token validation.       |
-| `bun test`                    | Executes all 219+ unit tests across the monorepo.                                                    |
-| `bun run format`              | Auto-formats all codebase files with Biome.                                                          |
-| `bun run build`               | Unified workspace bundler: compiles `omp-extension`, `provider-usage`, and `desktop` in one command. |
-| `bun run build:desktop`       | Packages `apps/desktop` Electron bundles and assets only.                                            |
-| `bun run install:omp`         | Builds non-desktop targets and installs the extension into `~/.omp/agent/`.                          |
-| `bun run monitor`             | Runs the terminal provider usage monitor in development.                                             |
-| `bun scripts/check-tokens.ts` | Validates APCA contrast compliance for all design tokens.                                            |
+| Command                              | Purpose                                                                                              |
+| :----------------------------------- | :--------------------------------------------------------------------------------------------------- |
+| `bun run check`                      | **Standard Check Gate:** Runs Biome check, TypeScript check, unit tests, and token validation.       |
+| `bun test`                           | Executes all 219+ unit tests across the monorepo.                                                    |
+| `bun run format`                     | Auto-formats all codebase files with Biome.                                                          |
+| `bun run build`                      | Unified workspace bundler: compiles `omp-extension`, `provider-usage`, and `desktop` in one command. |
+| `bun run build:desktop`              | Packages `apps/desktop` Electron bundles and assets only.                                            |
+| `bun run install:omp`                | Builds non-desktop targets and installs the extension into `~/.omp/agent/`.                          |
+| `bun run monitor`                    | Runs the terminal provider usage monitor in development.                                             |
+| `bun scripts/tokens/check-tokens.ts` | Validates APCA contrast compliance for all design tokens.                                            |
 
 ---
 
@@ -424,13 +423,13 @@ Scripts are organized into cohesive feature subfolders under `scripts/`, paired 
 The unified build pipeline compiles TypeScript packages into optimized, standalone bundles:
 
 ```text
-scripts/build.ts
+scripts/build/build.ts
   ├── apps/provider-usage/src/index.ts  ──►  apps/provider-usage/dist/index.js (CLI bundle)
   ├── apps/omp-extension/src/index.ts   ──►  apps/omp-extension/dist/index.js  (OMP plugin bundle)
   └── apps/desktop/                     ──►  apps/desktop/dist/ (Electron executable package)
 ```
 
-- **Unified Orchestrator:** `scripts/build.ts` serves as the single build entry point for all workspace packages. Supports `--desktop` for desktop-only builds and `--no-desktop` / `--targets` for extension and CLI only.
+- **Unified Orchestrator:** `scripts/build/build.ts` serves as the single build entry point for all workspace packages. Supports `--desktop` for desktop-only builds and `--no-desktop` / `--targets` for extension and CLI only.
 - **Output Directories (`dist/`):** All generated bundles are compiled into `apps/*/dist/` and ignored by `.gitignore`.
 - **Packaging:** Bun's built-in bundler (`Bun.build`) is used for single-file CLI/extension outputs with externalized Node built-ins.
 
@@ -539,5 +538,5 @@ Codebase organization is continuously enforced via automated gates:
 
 1. **Biome Check:** `biome check .` validates code formatting, import order, and lint rules across all 100+ project files.
 2. **TypeScript Compilation:** Root `tsc --noEmit` and `tsc -p apps/desktop/tsconfig.json --noEmit` enforce zero type regressions and strict module imports.
-3. **Contrast Gate:** `bun scripts/check-tokens.ts` enforces WCAG/APCA contrast (|Lc| >= 60) for all text and threshold tokens.
+3. **Contrast Gate:** `bun scripts/tokens/check-tokens.ts` enforces WCAG/APCA contrast (|Lc| >= 60) for all text and threshold tokens.
 4. **Continuous Integration (`.github/workflows/check.yml`):** Automatically executes `bun run check` on every pull request across `windows-latest`, `ubuntu-latest`, and `macos-latest`.

@@ -7,6 +7,6 @@
     "@omp-toolkit/core": "workspace:*"
   },
   "scripts": {
-    "build": "bun scripts/build.ts"
+    "build": "bun scripts/build/build.ts"
   }
 }

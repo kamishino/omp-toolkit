@@ -121,7 +121,7 @@ shows Minimize to tray / Show panel. The panel follows the OS light/dark theme.
 From the repo root, `.\omp-widget.cmd` on Windows or `./omp-widget.sh` on
 macOS/Linux opens the panel immediately; the same launcher works by full path
 from any directory. Both call `bun run desktop:preview`. On Windows, run
-`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1`
+`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/create-desktop-shortcut.ps1`
 to create a desktop shortcut.
 
 

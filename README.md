@@ -103,7 +103,7 @@ bun run install:omp
 To preview installation actions without modifying the filesystem:
 
 ```bash
-bun scripts/install.ts --dry-run
+bun scripts/install/install.ts --dry-run
 ```
 
 `install:omp` creates atomic backups under `~/.omp/agent/backups/`, installs `gemini-health.js` into `~/.omp/agent/extensions`, and installs `omp-provider-usage.js` into `~/.omp/agent/scripts`.
@@ -198,7 +198,7 @@ Create a desktop shortcut to launch the widget with one click:
 bun run desktop:shortcut
 ```
 
-On Windows, `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-desktop-shortcut.ps1` can also be executed directly.
+On Windows, `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/create-desktop-shortcut.ps1` can also be executed directly.
 
 The desktop panel includes a `Warm up all` header control and per-account `Warm up` and `Check` buttons. Warm-up sends minimal model prompts to eligible accounts (skipping non-OK rows) while enforcing a 60-second cooldown per account and cross-process single-flight locking.
 
