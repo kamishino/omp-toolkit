@@ -1,9 +1,11 @@
-import type { Dashboard } from "@omp-toolkit/core";
+import type { Dashboard, WarmUpRequest } from "@omp-toolkit/core";
+import { supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
+import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { fetchDashboard } from "./data";
 import type { PanelState } from "./ipc";
 import { logError } from "./logger";
 import type { LoginItem } from "./login-item";
-import { findBun, resolveMonitorScript } from "./paths";
+import { findBun, resolveHealthScript, resolveMonitorScript } from "./paths";
 import {
   type DesktopSettings,
   loadDesktopSettings,
@@ -11,12 +13,52 @@ import {
   validateDesktopSettings,
 } from "./settings";
 import { computePanelState } from "./state";
+import { executeWarmUp } from "./warmup";
+
+export interface DialogHost {
+  showErrorBox(title: string, message: string): void;
+  showMessageBox(
+    window: BrowserWindow | null | undefined,
+    options: MessageBoxOptions,
+  ): Promise<{ response: number }>;
+}
+
+export const defaultDialogHost: DialogHost = {
+  showErrorBox: (title, message) => {
+    try {
+      const electron = require("electron");
+      if (electron?.dialog?.showErrorBox) {
+        electron.dialog.showErrorBox(title, message);
+      }
+    } catch {
+      // headless fallback
+    }
+  },
+  showMessageBox: async (window, options) => {
+    try {
+      const electron = require("electron");
+      if (electron?.dialog?.showMessageBox) {
+        return window
+          ? electron.dialog.showMessageBox(window, options)
+          : electron.dialog.showMessageBox(options);
+      }
+    } catch {
+      // headless fallback
+    }
+    return { response: 0 };
+  },
+};
 
 export interface DesktopRuntimeOptions {
   userDataDir: string;
   checkoutRoot: string;
   loginItem?: LoginItem | null;
   fetchDashboardFn?: (source?: { bun?: string; script?: string }) => Promise<Dashboard>;
+  executeWarmUpFn?: (
+    source: { bun: string; script: string },
+    request: WarmUpRequest,
+  ) => Promise<{ success: boolean; message: string }>;
+  dialogHost?: DialogHost;
   argv?: string[];
   env?: NodeJS.ProcessEnv;
 }
@@ -42,9 +84,11 @@ export class DesktopRuntime {
   private warmupRunning = false;
   private warmupMessage: string | null = null;
   private refreshTimer: NodeJS.Timeout | null = null;
+  private readonly dialogHost: DialogHost;
   private readonly listeners = new Set<RuntimeListener>();
 
   constructor(private readonly options: DesktopRuntimeOptions) {
+    this.dialogHost = options.dialogHost ?? defaultDialogHost;
     this.settings = loadDesktopSettings({
       userDataDir: options.userDataDir,
       argv: options.argv ?? process.argv,
@@ -176,6 +220,136 @@ export class DesktopRuntime {
       this.warmupMessage = message;
     }
     this.notify();
+  }
+
+  async handleWarmUp(request: WarmUpRequest, panelWindow?: BrowserWindow | null): Promise<void> {
+    if (this.warmupRunning || this.quitting) return;
+
+    if (!this.lastDashboard) {
+      this.dialogHost.showErrorBox(
+        "OMP Provider Usage",
+        "No usage data loaded yet. Please wait for initial refresh.",
+      );
+      return;
+    }
+
+    const provider = this.lastDashboard.providers.find((p) => p.id === request.provider);
+    if (!provider || !supportsWarmUp(provider.id)) {
+      this.dialogHost.showErrorBox(
+        "OMP Provider Usage",
+        `Warm-up is not supported for provider "${request.provider}".`,
+      );
+      return;
+    }
+
+    if ("all" in request) {
+      if (request.action !== "warm") return;
+      const eligibleCount = provider.rows.filter(
+        (r) => warmUpEligibility(provider.id, r.health) === "warm",
+      ).length;
+      const skippedNonOk = provider.rows.length - eligibleCount;
+
+      if (eligibleCount === 0) {
+        if (panelWindow) {
+          await this.dialogHost.showMessageBox(panelWindow, {
+            type: "info",
+            title: "Warm up all",
+            message: "No eligible accounts to warm up.",
+            detail: `${skippedNonOk} non-OK account(s) skipped; use Check per account to verify recovery.`,
+          });
+        }
+        return;
+      }
+
+      const staleNote =
+        this.lastDashboard.health?.stale === true || !this.lastDashboard.health?.checkedAt
+          ? " Health data is stale or missing; known non-OK accounts are still skipped."
+          : "";
+
+      const boxOpts: MessageBoxOptions = {
+        type: "question",
+        buttons: ["Cancel", "Warm up"],
+        defaultId: 1,
+        cancelId: 0,
+        title: "Warm up all",
+        message: `Warm up ${eligibleCount} account(s) in ${provider.name}?`,
+        detail: `${skippedNonOk} non-OK account(s) will be skipped.${staleNote} Each account receives one minimal model request.`,
+      };
+
+      const { response } = await this.dialogHost.showMessageBox(panelWindow, boxOpts);
+      if (response !== 1) return;
+    } else {
+      const row = provider.rows.find((r) => r.account === request.account);
+      if (!row) {
+        this.dialogHost.showErrorBox(
+          "OMP Provider Usage",
+          `Account "${request.account}" not found in current dashboard.`,
+        );
+        return;
+      }
+      const eligibility = warmUpEligibility(provider.id, row.health);
+      if (request.action === "warm" && eligibility !== "warm") {
+        this.dialogHost.showErrorBox(
+          "OMP Provider Usage",
+          `Account "${row.displayAccount}" is ${row.route.text}; use Check instead.`,
+        );
+        return;
+      }
+      if (request.action === "check" && eligibility !== "check") {
+        this.dialogHost.showErrorBox(
+          "OMP Provider Usage",
+          `Account "${row.displayAccount}" is already OK; use Warm up instead.`,
+        );
+        return;
+      }
+    }
+
+    const bun = findBun();
+    const healthScript =
+      this.options.executeWarmUpFn !== undefined
+        ? "mock-health.js"
+        : resolveHealthScript(this.options.env ?? process.env, this.options.checkoutRoot);
+
+    if (!bun) {
+      this.dialogHost.showErrorBox(
+        "OMP Provider Usage",
+        "Bun not found. Install Bun or set BUN_BIN.",
+      );
+      return;
+    }
+    if (!healthScript) {
+      this.dialogHost.showErrorBox(
+        "OMP Provider Usage",
+        'gemini-health.js was not found. Run "bun run install:omp".',
+      );
+      return;
+    }
+
+    this.setWarmUp(true, "Warming up...");
+
+    let finalMessage: string | undefined;
+    try {
+      const executeFn = this.options.executeWarmUpFn ?? executeWarmUp;
+      const result = await executeFn({ bun, script: healthScript }, request);
+      if (result.success) {
+        finalMessage = result.message;
+        await this.refresh();
+      } else {
+        finalMessage = `Warm-up failed: ${result.message}`;
+        if (panelWindow) {
+          await this.dialogHost.showMessageBox(panelWindow, {
+            type: "error",
+            title: "OMP Provider Usage",
+            message: "Warm-up failed",
+            detail: result.message,
+          });
+        } else {
+          this.dialogHost.showErrorBox("OMP Provider Usage", result.message);
+        }
+      }
+    } finally {
+      this.setWarmUp(false, finalMessage);
+    }
   }
 
   startTimer(): void {
