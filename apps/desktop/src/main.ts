@@ -5,12 +5,18 @@ import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron"
 import tokens from "../../../design/tokens.json";
 import { launchOrcaTab, launchTerminalMonitor } from "./actions";
 import { fetchDashboard } from "./data";
-import { parseInterval } from "./interval";
 import { IPC, type PanelState } from "./ipc";
 import { logError } from "./logger";
 import { createLoginItem, type LoginItem } from "./login-item";
 import { DesktopPanel } from "./panel";
 import { findBun, panelPaths, resolveMonitorScript } from "./paths";
+import {
+  DEFAULT_DESKTOP_SETTINGS,
+  type DesktopSettings,
+  loadDesktopSettings,
+  saveDesktopSettings,
+  validateDesktopSettings,
+} from "./settings";
 import { computePanelState } from "./state";
 import { DesktopTray } from "./tray";
 import { handleWarmUpRequest } from "./warmup-handler";
@@ -38,6 +44,7 @@ let refreshing = false;
 let quitting = false;
 let warmupRunning = false;
 let warmupMessage: string | null = null;
+let currentSettings: DesktopSettings = { ...DEFAULT_DESKTOP_SETTINGS };
 
 const desktopTokens = tokens.desktop;
 const panelWidth = desktopTokens.size.panelWidth.$value;
@@ -63,13 +70,14 @@ process.on("SIGINT", () => {
   app.quit();
 });
 
-function currentState(intervalSeconds: number): PanelState {
+function currentState(): PanelState {
   return computePanelState({
-    intervalSeconds,
+    intervalSeconds: currentSettings.intervalSeconds,
     lastDashboard,
     refreshing,
     lastError,
     warmup: { running: warmupRunning, message: warmupMessage },
+    settings: currentSettings,
   });
 }
 
@@ -84,13 +92,25 @@ void app.whenReady().then(async () => {
   const assetsDir = path.join(distDir, "assets");
   const iconPath = path.join(assetsDir, "app-icon.png");
 
-  const intervalArg = process.argv.find((arg) => arg.startsWith("--interval="));
-  const intervalSeconds = parseInterval(intervalArg?.slice("--interval=".length), process.env);
+  loginItem = createLoginItem({
+    platform: process.platform,
+    home: os.homedir(),
+    electronPath: process.execPath,
+    appPath: app.getAppPath(),
+    iconPath,
+  });
+
+  currentSettings = loadDesktopSettings({
+    userDataDir: app.getPath("userData"),
+    argv: process.argv,
+    env: process.env,
+    loginItemEnabled: loginItem.isEnabled(),
+  });
 
   const preview = process.argv.includes("--preview");
 
   function sendState(): void {
-    panel?.sendState(currentState(intervalSeconds));
+    panel?.sendState(currentState());
   }
 
   function updateTray(): void {
@@ -113,18 +133,10 @@ void app.whenReady().then(async () => {
     }
   }
 
-  loginItem = createLoginItem({
-    platform: process.platform,
-    home: os.homedir(),
-    electronPath: process.execPath,
-    appPath: app.getAppPath(),
-    iconPath,
-  });
-
   const openTerminalMonitor = () =>
     launchTerminalMonitor({
       checkoutRoot,
-      intervalSeconds,
+      intervalSeconds: currentSettings.intervalSeconds,
       panelWindow: panel?.window,
     });
 
@@ -221,6 +233,37 @@ void app.whenReady().then(async () => {
   ipcMain.on(IPC.ready, () => {
     sendState();
   });
+  ipcMain.on(IPC.saveSettings, (_event, newSettings: DesktopSettings) => {
+    const validation = validateDesktopSettings(newSettings);
+    if (!validation.valid) {
+      logError(new Error(`Invalid settings received: ${validation.errors.join(", ")}`));
+      return;
+    }
+
+    saveDesktopSettings(app.getPath("userData"), newSettings);
+    const intervalChanged = currentSettings.intervalSeconds !== newSettings.intervalSeconds;
+    currentSettings = newSettings;
+
+    try {
+      loginItem?.setEnabled(newSettings.openAtLogin);
+    } catch (error) {
+      logError(error);
+    }
+
+    if (intervalChanged) {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
+      }
+      refreshTimer = setInterval(() => {
+        void refresh();
+      }, currentSettings.intervalSeconds * 1000);
+    }
+
+    sendState();
+    updateTray();
+    rebuildMenu();
+  });
   ipcMain.on(IPC.warmup, async (_event, request: WarmUpRequest) => {
     await handleWarmUpRequest(request, {
       panelWindow: panel?.window ?? null,
@@ -281,7 +324,7 @@ void app.whenReady().then(async () => {
   void refresh();
   refreshTimer = setInterval(() => {
     void refresh();
-  }, intervalSeconds * 1000);
+  }, currentSettings.intervalSeconds * 1000);
 
   powerMonitor.on("resume", () => {
     void refresh();

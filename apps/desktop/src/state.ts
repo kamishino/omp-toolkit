@@ -1,5 +1,6 @@
 import type { Dashboard } from "@omp-toolkit/core";
 import type { PanelState, WarmUpState } from "./ipc";
+import type { DesktopSettings } from "./settings";
 
 export interface PanelStateOptions {
   intervalSeconds: number;
@@ -7,10 +8,11 @@ export interface PanelStateOptions {
   refreshing: boolean;
   lastError: string | null;
   warmup: WarmUpState;
+  settings: DesktopSettings;
 }
 
 export function computePanelState(options: PanelStateOptions): PanelState {
-  const { intervalSeconds, lastDashboard, refreshing, lastError, warmup } = options;
+  const { intervalSeconds, lastDashboard, refreshing, lastError, warmup, settings } = options;
 
   if (refreshing) {
     return {
@@ -18,6 +20,7 @@ export function computePanelState(options: PanelStateOptions): PanelState {
       data: lastDashboard,
       intervalSeconds,
       warmup,
+      settings,
     };
   }
 
@@ -28,6 +31,7 @@ export function computePanelState(options: PanelStateOptions): PanelState {
       message: lastError,
       intervalSeconds,
       warmup,
+      settings,
     };
   }
 
@@ -37,6 +41,7 @@ export function computePanelState(options: PanelStateOptions): PanelState {
       data: lastDashboard,
       intervalSeconds,
       warmup,
+      settings,
     };
   }
 
@@ -45,5 +50,6 @@ export function computePanelState(options: PanelStateOptions): PanelState {
     data: null,
     intervalSeconds,
     warmup,
+    settings,
   };
 }

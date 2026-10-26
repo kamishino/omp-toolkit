@@ -1,6 +1,7 @@
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type OmpApi, type PanelState } from "./ipc";
+import type { DesktopSettings } from "./settings";
 
 const api: OmpApi = {
   onState(callback: (state: PanelState) => void): () => void {
@@ -28,6 +29,9 @@ const api: OmpApi = {
   },
   warmup(request: WarmUpRequest): void {
     ipcRenderer.send(IPC.warmup, request);
+  },
+  saveSettings(settings: DesktopSettings): void {
+    ipcRenderer.send(IPC.saveSettings, settings);
   },
 };
 

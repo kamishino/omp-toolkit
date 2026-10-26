@@ -1,7 +1,14 @@
 import tokens from "../../../../design/tokens.json";
+import type { DesktopTheme } from "../settings";
 
 function kebab(str: string): string {
   return str.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+let activeThemePreference: DesktopTheme = "system";
+
+export function getActiveThemePreference(): DesktopTheme {
+  return activeThemePreference;
 }
 
 export function applyTheme(mode: "light" | "dark"): void {
@@ -32,5 +39,15 @@ export function applyTheme(mode: "light" | "dark"): void {
 
   for (const [key, token] of Object.entries(desktop.size)) {
     root.style.setProperty(`--size-${kebab(key)}`, `${token.$value}px`);
+  }
+}
+
+export function applyThemePreference(theme: DesktopTheme): void {
+  activeThemePreference = theme;
+  if (theme === "system") {
+    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    applyTheme(isDark ? "dark" : "light");
+  } else {
+    applyTheme(theme);
   }
 }
