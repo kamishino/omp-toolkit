@@ -1,22 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import type { AutoHealCoordinator } from "./auto-heal";
-import {
-  applyHeal,
-  checkAll,
-  loadAccounts,
-  maybeRestoreManaged,
-  PROVIDER,
-  RESTORE_STREAK,
-  readPolicies,
-  readPoliciesForWrite,
-  readSnapshot,
-  recordHealth,
-  recordHistory,
-  removeAccountExclusion,
-  restoreManaged,
-  short,
-} from "./circuit-breaker";
+import { PROVIDER, RESTORE_STREAK, recordHistory, short } from "./circuit-breaker";
+import { healthManager } from "./health-manager";
 import { runWarmUp, type WarmUpDependencies } from "./warmup";
 import { publish, setWidgetEnabled, table, widgetEnabled } from "./widget";
 
@@ -57,10 +43,10 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
       }
       coordinator.setRunning(true);
       try {
-        const results = await checkAll(confirm);
-        recordHealth(results);
-        const restored = await maybeRestoreManaged();
-        const policies = await readPolicies();
+        const results = await healthManager.checkAll(confirm);
+        healthManager.recordHealth(results);
+        const restored = await healthManager.maybeRestoreManaged();
+        const policies = await healthManager.readPolicies();
         publish(ctx, results, policies);
         const text = table(results, policies);
         const restoredNote =
@@ -123,7 +109,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         if (all) {
           request = { provider: PROVIDER, action: "warm", all: true };
         } else {
-          const accounts = await loadAccounts();
+          const accounts = await healthManager.loadAccounts();
           const matches = accounts.filter(
             (a) =>
               a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
@@ -143,8 +129,8 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         }
 
         const run = await runWarmUp(warmUpDeps, request);
-        const policies = await readPolicies();
-        const snapshotResults = readSnapshot()?.results ?? run.results;
+        const policies = await healthManager.readPolicies();
+        const snapshotResults = healthManager.readSnapshot()?.results ?? run.results;
         publish(ctx, snapshotResults, policies);
 
         if ("all" in request) {
@@ -202,7 +188,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
       }
       coordinator.setRunning(true);
       try {
-        const accounts = await loadAccounts();
+        const accounts = await healthManager.loadAccounts();
         const matches = accounts.filter(
           (a) => a.email.toLowerCase() === needle || a.email.toLowerCase().split("@")[0] === needle,
         );
@@ -224,8 +210,8 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           account: matches[0].email,
         });
 
-        const policies = await readPolicies();
-        const snapshotResults = readSnapshot()?.results ?? run.results;
+        const policies = await healthManager.readPolicies();
+        const snapshotResults = healthManager.readSnapshot()?.results ?? run.results;
         publish(ctx, snapshotResults, policies);
 
         const res = run.report.results[0];
@@ -250,10 +236,10 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
       }
       coordinator.setRunning(true);
       try {
-        const results = await checkAll(true);
-        recordHealth(results);
-        const restored = dryRun ? [] : await maybeRestoreManaged();
-        const policies = await readPolicies();
+        const results = await healthManager.checkAll(true);
+        healthManager.recordHealth(results);
+        const restored = dryRun ? [] : await healthManager.maybeRestoreManaged();
+        const policies = await healthManager.readPolicies();
         publish(ctx, results, policies);
         if (dryRun) {
           recordHistory([
@@ -275,8 +261,8 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           );
           return;
         }
-        const action = await applyHeal(results, "heal");
-        const nextPolicies = await readPolicies();
+        const action = await healthManager.applyHeal(results, "heal");
+        const nextPolicies = await healthManager.readPolicies();
         publish(ctx, results, nextPolicies);
         recordHistory([
           {
@@ -314,7 +300,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     description: "Remove only the Antigravity account exclusions added by /gemini-heal",
     handler: async (_args, ctx) => {
       try {
-        const removed = await restoreManaged();
+        const removed = await healthManager.restoreManaged();
         recordHistory([
           {
             at: Date.now(),
@@ -361,7 +347,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         return;
       }
       try {
-        const policies = await readPoliciesForWrite();
+        const policies = await healthManager.readPolicies();
         const matches = policies.filter(
           (policy) =>
             policy?.provider === PROVIDER &&
@@ -386,9 +372,9 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           return;
         }
         const target = [...emails][0];
-        const latest = readSnapshot()?.results.find(
-          (result) => result.email.toLowerCase() === target?.toLowerCase(),
-        );
+        const latest = healthManager
+          .readSnapshot()
+          ?.results.find((result) => result.email.toLowerCase() === target?.toLowerCase());
         if (latest && latest.status !== "ok" && !force) {
           ctx.ui.notify(
             `Refusing to enable ${latest.email}: latest check is ${latest.status.toUpperCase()}. Run /gemini-health, or use --force.`,
@@ -403,7 +389,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           );
         }
         if (target) {
-          await removeAccountExclusion(target, "gemini-enable");
+          await healthManager.removeExclusion(target, "gemini-enable");
         }
         const message = `Enabled ${[...emails].join(", ")}`;
         ctx.ui.notify(message, "info");
@@ -438,18 +424,18 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     loadMode: "essential",
     approval: "write",
     async execute(_id, params, _signal, _onUpdate, ctx) {
-      const results = await checkAll(params.confirm);
-      recordHealth(results);
-      const restored = params.heal ? await maybeRestoreManaged() : [];
-      const policies = await readPolicies();
+      const results = await healthManager.checkAll(params.confirm);
+      healthManager.recordHealth(results);
+      const restored = params.heal ? await healthManager.maybeRestoreManaged() : [];
+      const policies = await healthManager.readPolicies();
       publish(ctx, results, policies);
       let note =
         restored.length > 0
           ? `\nRestored after ${RESTORE_STREAK} healthy checks: ${restored.join(", ")}`
           : "";
       if (params.heal) {
-        const action = await applyHeal(results, "tool");
-        const nextPolicies = await readPolicies();
+        const action = await healthManager.applyHeal(results, "tool");
+        const nextPolicies = await healthManager.readPolicies();
         publish(ctx, results, nextPolicies);
         note += `\nHeal: ${action.reason}${
           action.changed.length > 0 ? `; excluded ${action.changed.join(", ")}` : ""

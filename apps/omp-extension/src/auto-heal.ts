@@ -1,16 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import {
-  AUTO_HEAL_COOLDOWN_MS,
-  applyHeal,
-  checkAll,
-  maybeRestoreManaged,
-  PROVIDER,
-  RESTORE_STREAK,
-  readPolicies,
-  recordHealth,
-  recordHistory,
-} from "./circuit-breaker";
+import { AUTO_HEAL_COOLDOWN_MS, PROVIDER, RESTORE_STREAK, recordHistory } from "./circuit-breaker";
 import { short } from "./fs-util";
+import { healthManager } from "./health-manager";
 import { closeHistory } from "./history-store";
 import { publish, summary, widgetEnabled } from "./widget";
 
@@ -72,10 +63,10 @@ export class AutoHealCoordinator {
     if (this.running) return;
     this.running = true;
     try {
-      const results = await checkAll(false);
-      recordHealth(results);
-      const restored = await maybeRestoreManaged();
-      const policies = await readPolicies();
+      const results = await healthManager.checkAll(false);
+      healthManager.recordHealth(results);
+      const restored = await healthManager.maybeRestoreManaged();
+      const policies = await healthManager.readPolicies();
       publish(ctx, results, policies);
       if (restored.length > 0) {
         ctx.ui.notify(
@@ -100,13 +91,13 @@ export class AutoHealCoordinator {
     if (this.running) return;
     this.running = true;
     try {
-      const results = await checkAll(true);
-      recordHealth(results);
-      const restored = await maybeRestoreManaged();
-      const policies = await readPolicies();
+      const results = await healthManager.checkAll(true);
+      healthManager.recordHealth(results);
+      const restored = await healthManager.maybeRestoreManaged();
+      const policies = await healthManager.readPolicies();
       publish(ctx, results, policies);
-      const action = await applyHeal(results, "auto-heal");
-      const nextPolicies = await readPolicies();
+      const action = await healthManager.applyHeal(results, "auto-heal");
+      const nextPolicies = await healthManager.readPolicies();
       publish(ctx, results, nextPolicies);
       const restoredNote = restored.length > 0 ? ` Restored ${restored.join(", ")}.` : "";
       if (action.changed.length > 0) {
