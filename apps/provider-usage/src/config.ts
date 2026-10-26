@@ -13,6 +13,24 @@ export interface MonitorCliConfig {
 
 export const DEFAULT_MONITOR_INTERVAL = 300;
 
+export interface AlternateScreenOptions {
+  watch: boolean;
+  isTTY: boolean;
+  json: boolean;
+  noAltScreen: boolean;
+  term?: string;
+}
+
+export function useAlternateScreen(options: AlternateScreenOptions): boolean {
+  return (
+    options.watch &&
+    options.isTTY &&
+    !options.json &&
+    !options.noAltScreen &&
+    options.term !== "dumb"
+  );
+}
+
 export function parseThreshold(envValue: string | undefined, fallback: number): number {
   const value = Number(envValue);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
