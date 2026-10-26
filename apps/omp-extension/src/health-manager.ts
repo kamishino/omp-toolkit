@@ -107,3 +107,5 @@ export class AntigravityHealthManager {
     return this.policyStore.writePolicies(policies);
   }
 }
+
+export const healthManager = new AntigravityHealthManager();

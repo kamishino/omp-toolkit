@@ -1,14 +1,6 @@
 import type { WarmUpRequest } from "@omp-toolkit/core";
-import {
-  checkAll,
-  maybeRestoreManaged,
-  PROVIDER,
-  RESTORE_STREAK,
-  readPolicies,
-  recordHealth,
-  short,
-  sleep,
-} from "./circuit-breaker";
+import { PROVIDER, RESTORE_STREAK, short, sleep } from "./circuit-breaker";
+import { healthManager } from "./health-manager";
 import { closeHistory } from "./history-store";
 import { runWarmUp, type WarmUpDependencies } from "./warmup";
 import { table } from "./widget";
@@ -90,10 +82,10 @@ export async function runExtensionCli(
   const interval = Math.max(10, Number(intervalArg?.slice("--interval=".length) ?? 60) || 60);
 
   const runOnce = async (): Promise<boolean> => {
-    const results = await checkAll(confirm);
-    recordHealth(results);
-    const restored = await maybeRestoreManaged();
-    const policies = await readPolicies();
+    const results = await healthManager.checkAll(confirm);
+    healthManager.recordHealth(results);
+    const restored = await healthManager.maybeRestoreManaged();
+    const policies = await healthManager.readPolicies();
     if (json) {
       console.log(JSON.stringify({ results, policies, restored }, null, 2));
     } else {
