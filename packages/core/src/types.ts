@@ -1,4 +1,9 @@
-export type Status = "ok" | "hang" | "error" | "auth" | "model-error";
+export const STATUS_VALUES = ["ok", "hang", "error", "auth", "model-error"] as const;
+export type Status = (typeof STATUS_VALUES)[number];
+
+export function isStatus(value: unknown): value is Status {
+  return typeof value === "string" && (STATUS_VALUES as readonly string[]).includes(value);
+}
 
 export interface Account {
   index: number;

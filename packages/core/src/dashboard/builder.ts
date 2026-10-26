@@ -14,6 +14,7 @@ import {
   type DashboardLimit,
   type DashboardProvider,
   type DashboardRow,
+  type DashboardSummary,
   DEFAULT_STALE_MINUTES,
   DEFAULT_USAGE_THRESHOLDS,
   type UsageLevel,
@@ -124,18 +125,40 @@ export function buildDashboard(
 
   const allRows = providers.flatMap((provider) => provider.rows);
   const summary = calculateSummary(providers, sections.length, options.thresholds.above);
+  const health = options.showHealth
+    ? buildDashboardHealth(options.checkedAt, options.now, options.staleMinutes)
+    : null;
+  const balance = extractDeepSeekBalance(providers);
+  const tooltip = buildDashboardTooltip(summary, allRows, balance, providers);
+  const iconLevel = computeWorstUsageLevel(allRows);
 
-  const checkedAt = options.checkedAt;
-  let health: DashboardHealth | null = null;
-  if (options.showHealth) {
-    const ts = checkedAt ?? 0;
-    health = {
-      checkedAt: ts,
-      ageMs: ts > 0 ? Math.max(0, options.now - ts) : 0,
-      stale: ts > 0 && options.now - ts > options.staleMinutes * 60_000,
-    };
-  }
+  return {
+    fetchedAt: options.fetchedAt,
+    providers,
+    summary,
+    health,
+    balance,
+    tooltip,
+    iconLevel,
+  };
+}
 
+export function buildDashboardHealth(
+  checkedAt: number | undefined,
+  now: number,
+  staleMinutes: number,
+): DashboardHealth {
+  const ts = checkedAt ?? 0;
+  return {
+    checkedAt: ts,
+    ageMs: ts > 0 ? Math.max(0, now - ts) : 0,
+    stale: ts > 0 && now - ts > staleMinutes * 60_000,
+  };
+}
+
+export function extractDeepSeekBalance(
+  providers: readonly DashboardProvider[],
+): DashboardBalance | null {
   let balance: DashboardBalance | null = null;
   for (const provider of providers) {
     for (const row of provider.rows) {
@@ -152,7 +175,15 @@ export function buildDashboard(
       }
     }
   }
+  return balance;
+}
 
+export function buildDashboardTooltip(
+  summary: DashboardSummary,
+  allRows: readonly DashboardRow[],
+  balance: DashboardBalance | null,
+  providers: readonly DashboardProvider[],
+): string {
   const badCount = allRows.filter((row) => row.health === "hang" || row.health === "error").length;
   const parts: string[] = [];
   if (summary.tightest) {
@@ -168,35 +199,30 @@ export function buildDashboard(
   if (activePricing) {
     parts.push(activePricing.isPeak ? "Peak" : "Off-Peak");
   }
-  const tooltip = parts.length > 0 ? `OMP: ${parts.join(" · ")}` : "OMP: no usage data";
+  return parts.length > 0 ? `OMP: ${parts.join(" · ")}` : "OMP: no usage data";
+}
 
-  const rank: Record<UsageLevel, number> = {
-    unknown: 0,
-    ok: 1,
-    warn: 2,
-    hot: 3,
-    critical: 4,
-  };
+const USAGE_LEVEL_RANK: Record<UsageLevel, number> = {
+  unknown: 0,
+  ok: 1,
+  warn: 2,
+  hot: 3,
+  critical: 4,
+};
 
-  let iconLevel: UsageLevel = allRows.length === 0 ? "unknown" : "ok";
-  if (allRows.length > 0) {
-    for (const row of allRows) {
-      if (row.route.level !== "unknown" && rank[row.route.level] > rank[iconLevel]) {
-        iconLevel = row.route.level;
-      }
-      if (rank[row.level] > rank[iconLevel]) {
-        iconLevel = row.level;
-      }
+export function computeWorstUsageLevel(allRows: readonly DashboardRow[]): UsageLevel {
+  if (allRows.length === 0) return "unknown";
+  let iconLevel: UsageLevel = "ok";
+  for (const row of allRows) {
+    if (
+      row.route.level !== "unknown" &&
+      USAGE_LEVEL_RANK[row.route.level] > USAGE_LEVEL_RANK[iconLevel]
+    ) {
+      iconLevel = row.route.level;
+    }
+    if (USAGE_LEVEL_RANK[row.level] > USAGE_LEVEL_RANK[iconLevel]) {
+      iconLevel = row.level;
     }
   }
-
-  return {
-    fetchedAt: options.fetchedAt,
-    providers,
-    summary,
-    health,
-    balance,
-    tooltip,
-    iconLevel,
-  };
+  return iconLevel;
 }
