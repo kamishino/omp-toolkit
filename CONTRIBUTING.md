@@ -30,7 +30,7 @@ Run before every pull request:
 ```powershell
 bun run check
 bun run build
-bun scripts/install.ts --dry-run
+bun scripts/install/install.ts --dry-run
 ```
 
 `bun run check` runs Biome, `tsc --noEmit` (including `apps/desktop`), the full unit

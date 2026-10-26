@@ -174,10 +174,10 @@ describe("paths helpers", () => {
     ).toBeNull();
   });
 
-  test("resolveCheckout respects precedence and requires scripts/orca-monitor.ts", () => {
+  test("resolveCheckout respects precedence and requires scripts/monitor/orca-monitor.ts or legacy scripts/orca-monitor.ts", () => {
     const custom = path.join(tmpDir, "custom-checkout");
-    fs.mkdirSync(path.join(custom, "scripts"), { recursive: true });
-    fs.writeFileSync(path.join(custom, "scripts", "orca-monitor.ts"), "// ok\n");
+    fs.mkdirSync(path.join(custom, "scripts", "monitor"), { recursive: true });
+    fs.writeFileSync(path.join(custom, "scripts", "monitor", "orca-monitor.ts"), "// ok\n");
 
     const res = resolveCheckout({ OMP_TOOLKIT_HOME: custom }, tmpDir, tmpDir);
     expect(res).toBe(path.resolve(custom));

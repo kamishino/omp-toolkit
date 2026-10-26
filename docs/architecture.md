@@ -60,7 +60,7 @@ single-file bundle is the stable deployment unit. The source still follows the
 same layering: the extension app imports shared domain logic and contains only
 the OMP adapter, persistence, and probe transport.
 
-`scripts/build.ts` bundles both apps with Bun:
+`scripts/build/build.ts` bundles both apps with Bun:
 
 ```mermaid
 flowchart LR
@@ -69,7 +69,7 @@ flowchart LR
         UsageSrc["apps/provider-usage/src/index.ts"]
     end
 
-    subgraph BuildStep["⚙️ Bun Bundler (scripts/build.ts)"]
+    subgraph BuildStep["⚙️ Bun Bundler (scripts/build/build.ts)"]
         BunBuild["Bun.build(target: bun, format: esm)"]
     end
 
@@ -78,7 +78,7 @@ flowchart LR
         UsageDist["apps/provider-usage/dist/index.js"]
     end
 
-    subgraph InstallStep["🚀 Installer (scripts/install.ts)"]
+    subgraph InstallStep["🚀 Installer (scripts/install/install.ts)"]
         Installer["install:omp<br/><code>atomic copy + backup</code>"]
     end
 

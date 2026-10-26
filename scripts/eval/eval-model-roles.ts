@@ -8,7 +8,7 @@
  *   bun scripts/eval/eval-model-roles.ts --list
  *   bun scripts/eval/eval-model-roles.ts --dry-run
  *   bun scripts/eval/eval-model-roles.ts --live --task=T1 --report
- *   bun scripts/eval-model-roles.ts --pair=B --report
+ *   bun scripts/eval/eval-model-roles.ts --pair=B --report
  */
 
 import { spawn } from "node:child_process";

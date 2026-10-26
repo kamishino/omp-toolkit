@@ -66,7 +66,7 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
 - Tokens: defined in `design/tokens.json` under `desktop.color.light`, `desktop.color.dark`, `desktop.space`, `desktop.font`, and `desktop.size`.
 - Spacing scale: `xs: 4`, `sm: 8`, `md: 12`, `lg: 16`, `xl: 24`, `2xl: 32`.
 - Typography: Inter Variable (UI headings, labels, button text) + JetBrains Mono Variable (account, route, limits, numeric data), self-hosted as WOFF2. Scale: `xs: 12`, `sm: 13`, `md: 14`, `lg: 16`, `xl: 20`.
-- Contrast gate: all body, label, and status text meet APCA |Lc| >= 60 against both `surface` and `surfaceRaised`, checked via `scripts/check-tokens.ts`.
+- Contrast gate: all body, label, and status text meet APCA |Lc| >= 60 against both `surface` and `surfaceRaised`, checked via `scripts/tokens/check-tokens.ts`.
 - Layout:
   - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh (`mdiRefresh`), Minimize (`mdiWindowMinimize`), and Close (`mdiClose`) vector icon buttons from Material Design Icons (`@mdi/js`).
   - Summary: provider count, account count, >=80% count, maxed count, tightest provider:account.
