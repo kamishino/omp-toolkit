@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   resolveAgentDir,
   resolveHealthScriptCandidates,
+  resolveHeartbeatPath,
   resolveHistoryDbPath,
   resolveInstalledScript,
   resolveMonitorScriptCandidates,
@@ -30,6 +31,11 @@ describe("AgentEnvironment path resolver", () => {
     expect(resolveSnapshotPath({}, fakeHome)).toBe(path.join(dir, "gemini-health-latest.json"));
     expect(resolveStatePath({}, fakeHome)).toBe(path.join(dir, "gemini-health-state.json"));
     expect(resolveStreakPath({}, fakeHome)).toBe(path.join(dir, "gemini-health-streaks.json"));
+  });
+
+  test("resolveHeartbeatPath resolves monitor json under agent directory", () => {
+    const dir = path.join(fakeHome, ".omp", "agent");
+    expect(resolveHeartbeatPath({}, fakeHome)).toBe(path.join(dir, "omp-toolkit-monitor.json"));
   });
 
   test("resolveHistoryDbPath defaults to db under agentDir or respects env override", () => {

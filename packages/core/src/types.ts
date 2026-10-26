@@ -90,6 +90,12 @@ export interface UsageBalance {
   available?: boolean;
 }
 
+export interface MonitorHeartbeat {
+  at: number;
+  hostname: string;
+  pid: number;
+}
+
 export interface UsageReport {
   provider: string;
   fetchedAt?: number;

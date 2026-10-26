@@ -1,13 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { type MonitorHeartbeat, resolveHeartbeatPath } from "@omp-toolkit/core";
 
-function agentDir(): string {
-  return process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".omp", "agent");
-}
-
-export function heartbeatPath(): string {
-  return path.join(agentDir(), "omp-toolkit-monitor.json");
+export function heartbeatPath(env = process.env): string {
+  return resolveHeartbeatPath(env);
 }
 
 function writeFileAtomic(file: string, content: string): void {
@@ -26,9 +23,11 @@ function writeFileAtomic(file: string, content: string): void {
   }
 }
 
-export function writeHeartbeat(): void {
-  writeFileAtomic(
-    heartbeatPath(),
-    `${JSON.stringify({ at: Date.now(), hostname: os.hostname(), pid: process.pid }, null, 2)}\n`,
-  );
+export function writeHeartbeat(env = process.env): void {
+  const payload: MonitorHeartbeat = {
+    at: Date.now(),
+    hostname: os.hostname(),
+    pid: process.pid,
+  };
+  writeFileAtomic(heartbeatPath(env), `${JSON.stringify(payload, null, 2)}\n`);
 }
