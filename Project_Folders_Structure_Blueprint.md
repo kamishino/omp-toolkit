@@ -285,8 +285,10 @@ omp-toolkit/
     ├── color.ts                           # OKLCH and APCA color calculation utilities
     ├── color.test.ts                      # Color math unit tests
     ├── create-desktop-shortcut.ps1        # Generates Windows desktop shortcut
-    ├── eval-model-roles.ts                # 2x2 empirical model role evaluation harness
+    ├── eval-model-roles.ts                # 2x2 empirical model role evaluation runner and CLI
     ├── eval-model-roles.test.ts           # Model evaluation harness unit tests
+    ├── eval-metrics.ts                    # Evaluation metric calculators, pair configs, and scorecards
+    ├── eval-tasks.ts                      # Benchmark task definitions and prompt templates
     ├── install.ts                         # Installs bundled extension into ~/.omp/agent/
     ├── monitor.ts                         # Unified monitor runner, CLI argument parser, and script path resolver
     ├── monitor.test.ts                    # Monitor launcher and argument parsing unit tests
