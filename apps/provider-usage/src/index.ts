@@ -1,10 +1,9 @@
 import { DashboardEngine, getAllTimeWindowPolicies } from "@omp-toolkit/core";
 import { renderProviderUsage, renderScheduleView } from "@omp-toolkit/tui";
-import { parseMonitorCliConfig } from "./config";
+import { parseMonitorCliConfig, useAlternateScreen } from "./config";
 import { writeHeartbeat } from "./heartbeat";
 import { InteractiveMonitor } from "./interactive-monitor";
 import { jsonPayload } from "./json";
-import { useAlternateScreen } from "./terminal";
 import { fetchUsage, readSnapshot } from "./usage";
 
 function sleep(ms: number): Promise<void> {

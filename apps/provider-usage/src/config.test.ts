@@ -4,6 +4,7 @@ import {
   DEFAULT_MONITOR_INTERVAL,
   parseMonitorCliConfig,
   parseThreshold,
+  useAlternateScreen,
 } from "./config";
 
 describe("parseMonitorCliConfig", () => {
@@ -69,5 +70,30 @@ describe("buildCliArgs", () => {
     expect(flags).toContain("--interval=20");
     expect(flags).toContain("--health");
     expect(flags).toContain("--no-alt-screen");
+  });
+});
+
+describe("useAlternateScreen", () => {
+  const base = {
+    watch: true,
+    isTTY: true,
+    json: false,
+    term: "xterm-256color",
+    noAltScreen: false,
+  };
+
+  test("returns true when watching interactively in a capable terminal", () => {
+    expect(useAlternateScreen(base)).toBe(true);
+  });
+
+  test("returns false when watch is false or not a TTY", () => {
+    expect(useAlternateScreen({ ...base, watch: false })).toBe(false);
+    expect(useAlternateScreen({ ...base, isTTY: false })).toBe(false);
+  });
+
+  test("returns false when json or noAltScreen is set or terminal is dumb", () => {
+    expect(useAlternateScreen({ ...base, json: true })).toBe(false);
+    expect(useAlternateScreen({ ...base, noAltScreen: true })).toBe(false);
+    expect(useAlternateScreen({ ...base, term: "dumb" })).toBe(false);
   });
 });
