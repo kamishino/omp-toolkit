@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { monitorCommandArgs, parseMonitorArgs, resolveMonitorScript } from "./monitor-target";
+import { monitorCommandArgs, parseMonitorArgs, resolveMonitorScript } from "./monitor";
 
 describe("monitor launcher options", () => {
   test("defaults to a 300 s health-enabled alternate-screen watch", () => {

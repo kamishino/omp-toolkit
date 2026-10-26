@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { buildDesktop } from "./build-desktop";
 
 const root = path.resolve(import.meta.dir, "..");
 const targets = [
@@ -15,17 +16,37 @@ const targets = [
   },
 ];
 
-for (const target of targets) {
-  fs.rmSync(target.outdir, { recursive: true, force: true });
-  const result = await Bun.build({
-    entrypoints: [target.entry],
-    outdir: target.outdir,
-    target: "bun",
-    format: "esm",
-  });
-  if (!result.success) {
-    for (const log of result.logs) console.error(log);
-    process.exit(1);
+export async function buildTargets(): Promise<void> {
+  for (const target of targets) {
+    fs.rmSync(target.outdir, { recursive: true, force: true });
+    const result = await Bun.build({
+      entrypoints: [target.entry],
+      outdir: target.outdir,
+      target: "bun",
+      format: "esm",
+    });
+    if (!result.success) {
+      for (const log of result.logs) console.error(log);
+      process.exit(1);
+    }
+    console.log(`built ${path.relative(root, target.outdir)}/index.js`);
   }
-  console.log(`built ${path.relative(root, target.outdir)}/index.js`);
+}
+
+export async function buildAll(options: { desktop?: boolean } = {}): Promise<void> {
+  await buildTargets();
+  if (options.desktop !== false) {
+    await buildDesktop();
+  }
+}
+
+if (import.meta.main) {
+  const desktopOnly = process.argv.includes("--desktop");
+  const noDesktop = process.argv.includes("--no-desktop") || process.argv.includes("--targets");
+
+  if (desktopOnly) {
+    await buildDesktop();
+  } else {
+    await buildAll({ desktop: !noDesktop });
+  }
 }
