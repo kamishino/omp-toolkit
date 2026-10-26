@@ -160,7 +160,9 @@ export function renderProviderUsageFromDashboard(
     line(
       paint(
         `Source: omp usage${healthNote} · ${
-          options.watch ? `refresh ${options.interval}s · Ctrl+C to stop` : "one-shot"
+          options.watch
+            ? `refresh ${options.interval}s · [q] quit  [r] refresh  [Tab] schedule`
+            : "one-shot"
         }`,
         ANSI.muted,
       ),

@@ -10,10 +10,20 @@ export function renderSettingsView(
   const container = document.createElement("div");
   container.className = "settings-view";
 
+  const titleRow = document.createElement("div");
+  titleRow.className = "settings-header-row";
+
   const title = document.createElement("h2");
   title.className = "settings-title";
-  title.textContent = "Widget Settings";
-  container.appendChild(title);
+  title.textContent = "Settings";
+  titleRow.appendChild(title);
+
+  const escHint = document.createElement("span");
+  escHint.className = "esc-hint";
+  escHint.textContent = "Esc to cancel";
+  titleRow.appendChild(escHint);
+
+  container.appendChild(titleRow);
 
   const form = document.createElement("form");
   form.className = "settings-form";
@@ -29,143 +39,235 @@ export function renderSettingsView(
     openAtLogin: initialSettings.openAtLogin,
   };
 
-  // 1. Refresh Interval
+  // ── Section 1: Display & Timing ───────────────────────────────────
+  const timingSection = document.createElement("fieldset");
+  timingSection.className = "settings-section";
+
+  const timingLegend = document.createElement("legend");
+  timingLegend.textContent = "Timing & Appearance";
+  timingSection.appendChild(timingLegend);
+
+  // Interval
   const intervalGroup = document.createElement("div");
   intervalGroup.className = "form-group";
   const intervalLabel = document.createElement("label");
-  intervalLabel.textContent = "Refresh Interval (seconds)";
+  intervalLabel.textContent = "Refresh Interval";
   intervalLabel.htmlFor = "setting-interval";
+
+  const intervalInputWrapper = document.createElement("div");
+  intervalInputWrapper.className = "input-with-unit";
+
   const intervalInput = document.createElement("input");
   intervalInput.id = "setting-interval";
   intervalInput.type = "number";
   intervalInput.min = String(MIN_INTERVAL_SECONDS);
   intervalInput.max = String(MAX_INTERVAL_SECONDS);
   intervalInput.value = String(draft.intervalSeconds);
+
+  const intervalUnit = document.createElement("span");
+  intervalUnit.className = "unit-suffix";
+  intervalUnit.textContent = "seconds";
+
+  intervalInputWrapper.appendChild(intervalInput);
+  intervalInputWrapper.appendChild(intervalUnit);
+
   const intervalHelp = document.createElement("span");
   intervalHelp.className = "form-help";
-  intervalHelp.textContent = `Between ${MIN_INTERVAL_SECONDS} and ${MAX_INTERVAL_SECONDS} seconds (default: 300)`;
-  intervalGroup.appendChild(intervalLabel);
-  intervalGroup.appendChild(intervalInput);
-  intervalGroup.appendChild(intervalHelp);
-  form.appendChild(intervalGroup);
+  intervalHelp.textContent = `Auto-refresh frequency (${MIN_INTERVAL_SECONDS}s – ${MAX_INTERVAL_SECONDS}s, default: 300s)`;
 
-  // 2. Balance Alert CNY
+  intervalGroup.appendChild(intervalLabel);
+  intervalGroup.appendChild(intervalInputWrapper);
+  intervalGroup.appendChild(intervalHelp);
+  timingSection.appendChild(intervalGroup);
+
+  // Theme Segmented Control
+  const themeGroup = document.createElement("div");
+  themeGroup.className = "form-group";
+  const themeLabel = document.createElement("label");
+  themeLabel.textContent = "Theme";
+  themeGroup.appendChild(themeLabel);
+
+  const segmented = document.createElement("div");
+  segmented.className = "segmented-control";
+  segmented.setAttribute("role", "radiogroup");
+  segmented.setAttribute("aria-label", "Theme preference");
+
+  const themes: Array<{ value: DesktopTheme; label: string }> = [
+    { value: "system", label: "System" },
+    { value: "light", label: "Light" },
+    { value: "dark", label: "Dark" },
+  ];
+
+  const themeButtons: HTMLButtonElement[] = [];
+
+  for (const t of themes) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `segmented-item${t.value === draft.theme ? " active" : ""}`;
+    btn.setAttribute("role", "radio");
+    btn.setAttribute("aria-checked", String(t.value === draft.theme));
+    btn.textContent = t.label;
+
+    btn.addEventListener("click", () => {
+      draft.theme = t.value;
+      for (const b of themeButtons) {
+        b.className = "segmented-item";
+        b.setAttribute("aria-checked", "false");
+      }
+      btn.className = "segmented-item active";
+      btn.setAttribute("aria-checked", "true");
+      applyThemePreference(draft.theme);
+    });
+
+    themeButtons.push(btn);
+    segmented.appendChild(btn);
+  }
+
+  themeGroup.appendChild(segmented);
+  timingSection.appendChild(themeGroup);
+  form.appendChild(timingSection);
+
+  // ── Section 2: Balance Alerts ──────────────────────────────────────
+  const balanceSection = document.createElement("fieldset");
+  balanceSection.className = "settings-section";
+
+  const balanceLegend = document.createElement("legend");
+  balanceLegend.textContent = "Low-Balance Alerts";
+  balanceSection.appendChild(balanceLegend);
+
+  const balanceHelp = document.createElement("p");
+  balanceHelp.className = "section-help";
+  balanceHelp.textContent = "Show a red LOW indicator when provider balance falls to or below:";
+  balanceSection.appendChild(balanceHelp);
+
+  const balanceGrid = document.createElement("div");
+  balanceGrid.className = "form-grid-2";
+
+  // CNY
   const cnyGroup = document.createElement("div");
   cnyGroup.className = "form-group";
   const cnyLabel = document.createElement("label");
-  cnyLabel.textContent = "DeepSeek Balance Alert (CNY)";
+  cnyLabel.textContent = "Chinese Yuan (CNY)";
   cnyLabel.htmlFor = "setting-cny";
+
+  const cnyWrapper = document.createElement("div");
+  cnyWrapper.className = "input-with-unit";
   const cnyInput = document.createElement("input");
   cnyInput.id = "setting-cny";
   cnyInput.type = "number";
   cnyInput.min = "0";
   cnyInput.step = "1";
   cnyInput.value = String(draft.balanceAlert.cny);
-  const cnyHelp = document.createElement("span");
-  cnyHelp.className = "form-help";
-  cnyHelp.textContent = "Shows red LOW label when balance falls to or below this amount";
-  cnyGroup.appendChild(cnyLabel);
-  cnyGroup.appendChild(cnyInput);
-  cnyGroup.appendChild(cnyHelp);
-  form.appendChild(cnyGroup);
+  const cnyUnit = document.createElement("span");
+  cnyUnit.className = "unit-suffix";
+  cnyUnit.textContent = "¥";
+  cnyWrapper.appendChild(cnyUnit);
+  cnyWrapper.appendChild(cnyInput);
 
-  // 3. Balance Alert USD
+  cnyGroup.appendChild(cnyLabel);
+  cnyGroup.appendChild(cnyWrapper);
+  balanceGrid.appendChild(cnyGroup);
+
+  // USD
   const usdGroup = document.createElement("div");
   usdGroup.className = "form-group";
   const usdLabel = document.createElement("label");
-  usdLabel.textContent = "DeepSeek Balance Alert (USD)";
+  usdLabel.textContent = "US Dollar (USD)";
   usdLabel.htmlFor = "setting-usd";
+
+  const usdWrapper = document.createElement("div");
+  usdWrapper.className = "input-with-unit";
   const usdInput = document.createElement("input");
   usdInput.id = "setting-usd";
   usdInput.type = "number";
   usdInput.min = "0";
   usdInput.step = "1";
   usdInput.value = String(draft.balanceAlert.usd);
-  const usdHelp = document.createElement("span");
-  usdHelp.className = "form-help";
-  usdHelp.textContent = "Shows red LOW label when USD balance falls to or below this amount";
+  const usdUnit = document.createElement("span");
+  usdUnit.className = "unit-suffix";
+  usdUnit.textContent = "$";
+  usdWrapper.appendChild(usdUnit);
+  usdWrapper.appendChild(usdInput);
+
   usdGroup.appendChild(usdLabel);
-  usdGroup.appendChild(usdInput);
-  usdGroup.appendChild(usdHelp);
-  form.appendChild(usdGroup);
+  usdGroup.appendChild(usdWrapper);
+  balanceGrid.appendChild(usdGroup);
 
-  // 4. Theme
-  const themeGroup = document.createElement("div");
-  themeGroup.className = "form-group";
-  const themeLabel = document.createElement("label");
-  themeLabel.textContent = "Appearance Theme";
-  themeLabel.htmlFor = "setting-theme";
-  const themeSelect = document.createElement("select");
-  themeSelect.id = "setting-theme";
+  balanceSection.appendChild(balanceGrid);
+  form.appendChild(balanceSection);
 
-  const themeOptions: Array<{ value: DesktopTheme; label: string }> = [
-    { value: "system", label: "System (follows OS)" },
-    { value: "dark", label: "Dark mode" },
-    { value: "light", label: "Light mode" },
-  ];
+  // ── Section 3: System Integration ──────────────────────────────────
+  const systemSection = document.createElement("fieldset");
+  systemSection.className = "settings-section";
 
-  for (const opt of themeOptions) {
-    const optEl = document.createElement("option");
-    optEl.value = opt.value;
-    optEl.textContent = opt.label;
-    if (opt.value === draft.theme) {
-      optEl.selected = true;
-    }
-    themeSelect.appendChild(optEl);
-  }
+  const systemLegend = document.createElement("legend");
+  systemLegend.textContent = "System";
+  systemSection.appendChild(systemLegend);
 
-  themeSelect.addEventListener("change", () => {
-    draft.theme = themeSelect.value as DesktopTheme;
-    applyThemePreference(draft.theme);
+  const toggleWrapper = document.createElement("label");
+  toggleWrapper.className = "toggle-row";
+  toggleWrapper.htmlFor = "setting-login";
+
+  const toggleText = document.createElement("div");
+  toggleText.className = "toggle-text";
+  const toggleTitle = document.createElement("span");
+  toggleTitle.className = "toggle-title";
+  toggleTitle.textContent = "Start at login";
+  const toggleDesc = document.createElement("span");
+  toggleDesc.className = "form-help";
+  toggleDesc.textContent = "Launch the widget automatically when signing in to OS";
+  toggleText.appendChild(toggleTitle);
+  toggleText.appendChild(toggleDesc);
+
+  const toggleInput = document.createElement("input");
+  toggleInput.id = "setting-login";
+  toggleInput.type = "checkbox";
+  toggleInput.className = "toggle-checkbox";
+  toggleInput.checked = draft.openAtLogin;
+  toggleInput.addEventListener("change", () => {
+    draft.openAtLogin = toggleInput.checked;
   });
 
-  themeGroup.appendChild(themeLabel);
-  themeGroup.appendChild(themeSelect);
-  form.appendChild(themeGroup);
+  const toggleTrack = document.createElement("span");
+  toggleTrack.className = "toggle-track";
+  const toggleThumb = document.createElement("span");
+  toggleThumb.className = "toggle-thumb";
+  toggleTrack.appendChild(toggleThumb);
 
-  // 5. Open at Login
-  const loginGroup = document.createElement("div");
-  loginGroup.className = "form-group form-checkbox";
-  const loginLabel = document.createElement("label");
-  loginLabel.htmlFor = "setting-login";
-  const loginInput = document.createElement("input");
-  loginInput.id = "setting-login";
-  loginInput.type = "checkbox";
-  loginInput.checked = draft.openAtLogin;
-  loginInput.addEventListener("change", () => {
-    draft.openAtLogin = loginInput.checked;
-  });
-  const loginText = document.createElement("span");
-  loginText.textContent = "Start at login";
-  loginLabel.appendChild(loginInput);
-  loginLabel.appendChild(loginText);
-  loginGroup.appendChild(loginLabel);
-  form.appendChild(loginGroup);
+  toggleWrapper.appendChild(toggleText);
+  toggleWrapper.appendChild(toggleInput);
+  toggleWrapper.appendChild(toggleTrack);
+  systemSection.appendChild(toggleWrapper);
 
-  // Validation message container
+  form.appendChild(systemSection);
+
+  // ── Validation Errors ──────────────────────────────────────────────
   const errorContainer = document.createElement("div");
   errorContainer.className = "form-errors";
   errorContainer.style.display = "none";
   form.appendChild(errorContainer);
 
-  // Actions
+  // ── Action Buttons ─────────────────────────────────────────────────
   const actionsGroup = document.createElement("div");
   actionsGroup.className = "form-actions";
-
-  const saveBtn = document.createElement("button");
-  saveBtn.type = "submit";
-  saveBtn.className = "button button-primary";
-  saveBtn.textContent = "Save Settings";
 
   const cancelBtn = document.createElement("button");
   cancelBtn.type = "button";
   cancelBtn.className = "button button-secondary";
   cancelBtn.textContent = "Cancel";
-  cancelBtn.addEventListener("click", () => {
-    // Revert theme preview on cancel
+
+  const handleCancel = () => {
     applyThemePreference(initialSettings.theme);
+    window.removeEventListener("keydown", keyHandler);
     onCancel();
-  });
+  };
+
+  cancelBtn.addEventListener("click", handleCancel);
+
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit";
+  saveBtn.className = "button button-primary";
+  saveBtn.textContent = "Save Changes";
 
   actionsGroup.appendChild(cancelBtn);
   actionsGroup.appendChild(saveBtn);
@@ -175,8 +277,7 @@ export function renderSettingsView(
     draft.intervalSeconds = Number(intervalInput.value);
     draft.balanceAlert.cny = Number(cnyInput.value);
     draft.balanceAlert.usd = Number(usdInput.value);
-    draft.theme = themeSelect.value as DesktopTheme;
-    draft.openAtLogin = loginInput.checked;
+    draft.openAtLogin = toggleInput.checked;
 
     const res = validateDesktopSettings(draft);
     if (!res.valid) {
@@ -196,9 +297,18 @@ export function renderSettingsView(
   cnyInput.addEventListener("input", validate);
   usdInput.addEventListener("input", validate);
 
+  const keyHandler = (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      handleCancel();
+    }
+  };
+  window.addEventListener("keydown", keyHandler);
+
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     if (validate()) {
+      window.removeEventListener("keydown", keyHandler);
       onSave(draft);
     }
   });

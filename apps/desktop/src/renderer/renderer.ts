@@ -161,13 +161,29 @@ function buildPanel(state: PanelState): HTMLElement {
     content.setAttribute("aria-busy", state.status === "loading" ? "true" : "false");
 
     if (!state.data) {
-      const emptyP = document.createElement("p");
-      emptyP.className = state.status === "error" ? "empty status-error" : "empty";
-      emptyP.textContent =
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = state.status === "error" ? "empty status-error" : "empty";
+
+      const msgP = document.createElement("p");
+      msgP.className = "empty-message";
+      msgP.textContent =
         state.status === "error"
           ? `Refresh failed: ${state.message ?? "Unknown error"}`
-          : "Loading...";
-      content.appendChild(emptyP);
+          : "Loading usage data...";
+      emptyDiv.appendChild(msgP);
+
+      if (state.status === "error") {
+        const retryBtn = document.createElement("button");
+        retryBtn.type = "button";
+        retryBtn.className = "button button-secondary";
+        retryBtn.textContent = "Retry";
+        retryBtn.addEventListener("click", () => {
+          window.omp.refresh();
+        });
+        emptyDiv.appendChild(retryBtn);
+      }
+
+      content.appendChild(emptyDiv);
     } else {
       const hasAnyRoute = state.data.providers.some((p) => p.rows.some((r) => r.health !== null));
 
