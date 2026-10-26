@@ -38,12 +38,12 @@ remains on Windows.
 
 ## Phase table
 
-| Phase | Days | Theme | Effort | Exit gate |
-|---|---:|---|---:|---|
-| 0 | 1–14 | Instrument the truth | 12–16 h | 7 days of history rows and a working weekly report |
-| 1 | 15–35 | Hands-off recovery | 18–24 h | Opt-in restore and conditional timer pass tests; 7 days on machine 1 |
-| 2 | 36–50 | Safe concurrency | 12–18 h | Two concurrent writers cannot lose policy updates; lock tests pass |
-| 3 | 51–90 | Alert and prove | 20–28 h | 30 consecutive days, both machines, report exit 0 |
+| Phase |  Days | Theme                |  Effort | Exit gate                                                            |
+| ----- | ----: | -------------------- | ------: | -------------------------------------------------------------------- |
+| 0     |  1–14 | Instrument the truth | 12–16 h | 7 days of history rows and a working weekly report                   |
+| 1     | 15–35 | Hands-off recovery   | 18–24 h | Opt-in restore and conditional timer pass tests; 7 days on machine 1 |
+| 2     | 36–50 | Safe concurrency     | 12–18 h | Two concurrent writers cannot lose policy updates; lock tests pass   |
+| 3     | 51–90 | Alert and prove      | 20–28 h | 30 consecutive days, both machines, report exit 0                    |
 
 Dependencies are strict: Phase 1 starts only after Phase 0's report works;
 Phase 2 starts only after Phase 1's acceptance; Phase 3 starts only after
@@ -56,6 +56,7 @@ Phase 2's lock is in use by every mutating path.
 ### Work items
 
 1. Add `packages/core/src/history.ts` with pure types only:
+
    ```ts
    export type HistoryEventKind =
      | "route_check"
@@ -78,6 +79,7 @@ Phase 2's lock is in use by every mutating path.
      detail?: string;
    }
    ```
+
    Export it from `packages/core/src/index.ts`.
 
 2. Add `apps/omp-extension/src/history.ts` using `bun:sqlite`. It owns all
@@ -87,6 +89,7 @@ Phase 2's lock is in use by every mutating path.
    `OMP_TOOLKIT_HISTORY_DB`.
 
    Schema, created with `CREATE TABLE IF NOT EXISTS`:
+
    ```sql
    events(
      id INTEGER PRIMARY KEY,
@@ -100,6 +103,7 @@ Phase 2's lock is in use by every mutating path.
      detail TEXT
    );
    ```
+
    Add indexes on `events(at)`, `events(kind, at)`, and
    `events(incident_id)`. Set `PRAGMA journal_mode = WAL` and
    `PRAGMA busy_timeout = 5000`. Delete rows older than 30 days on open, once
@@ -107,9 +111,11 @@ Phase 2's lock is in use by every mutating path.
 
 3. Add machine identity. On first history open, create
    `~/.omp/agent/omp-toolkit-machine.json` atomically:
+
    ```json
    { "id": "<crypto.randomUUID()>", "hostname": "<os.hostname()>", "createdAt": 0 }
    ```
+
    Read it on every process start; never regenerate while the file exists.
    If the file is corrupt, throw and surface the path; do not overwrite it.
 
@@ -120,13 +126,15 @@ Phase 2's lock is in use by every mutating path.
    - `/gemini-enable`, `/gemini-heal`, `/gemini-restore` write
      `manual_intervention` with the command name.
    - `session_start` writes `session_start`.
-   History failures must not fail a health check, heal, or restore; catch and
-   emit a single warning per process.
+     History failures must not fail a health check, heal, or restore; catch and
+     emit a single warning per process.
 
 5. Add `scripts/reliability-report.ts` and the package script:
+
    ```json
    "reliability:report": "bun scripts/reliability-report.ts"
    ```
+
    Flags: `--days=<n>` default 30, `--machine=<id|all>` default `all`.
    With independent per-machine state, run the report on each machine;
    `--machine all` means all machine ids present in that machine's local
@@ -144,9 +152,11 @@ Phase 2's lock is in use by every mutating path.
 6. Add a monitor heartbeat. `apps/provider-usage/src/index.ts` writes
    `~/.omp/agent/omp-toolkit-monitor.json` atomically on every successful
    `runOnce()`:
+
    ```json
    { "at": 0, "hostname": "<os.hostname()>", "pid": 0 }
    ```
+
    The report matches the heartbeat to the machine by hostname and treats a
    heartbeat older than 10 minutes as stale; it prints `monitor-age=stale`.
 
@@ -180,9 +190,10 @@ without operator commands.
    - `/gemini-auto-restore off <email-or-local-part>`: remove the email.
    - `/gemini-auto-restore` with no args: list opted-in accounts and current
      manual exclusions.
-   Each successful change writes a `policy_change` history event.
+     Each successful change writes a `policy_change` history event.
 
 3. Change `restorableEmails` in `packages/core/src/health.ts` to:
+
    ```ts
    export function restorableEmails(
      state: HealthState,
@@ -199,6 +210,7 @@ without operator commands.
      );
    }
    ```
+
    Managed exclusions need no opt-in; manual exclusions require it.
 
 4. Update `maybeRestoreManaged` in `apps/omp-extension/src/index.ts`:
@@ -313,9 +325,9 @@ policy update when they overlap.
    2. WinRT `Windows.UI.Notifications.ToastNotificationManager` with
       `CreateToastNotifier("OMP Toolkit")`;
    3. exit 0 without a toast, after printing `toast_unavailable`.
-   The extension calls it with `powershell.exe -NoProfile -ExecutionPolicy
+      The extension calls it with `powershell.exe -NoProfile -ExecutionPolicy
    Bypass -File <path> -Title "OMP Toolkit" -Message <text>`. Toast failures
-   must not fail a health check.
+      must not fail a health check.
 
 2. Add incident recording in the extension:
    - `HealthSnapshot` gains optional

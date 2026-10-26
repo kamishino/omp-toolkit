@@ -25,13 +25,13 @@ bun run doctor
 ```
 Interpretation:
 
-| Route | Meaning | Action |
-|---|---|---|
-| `OK` | First SSE event within 15 s | None |
-| `HANG` | No first event within 15 s | Account is circuit-broken |
-| `ERR` | HTTP 5xx | Account is circuit-broken |
-| `AUTH` | 401/403; token cache cleared | Re-login the account |
-| `MODEL` | 404 / wire model mismatch | Update the probe model id |
+| Route   | Meaning                      | Action                    |
+| ------- | ---------------------------- | ------------------------- |
+| `OK`    | First SSE event within 15 s  | None                      |
+| `HANG`  | No first event within 15 s   | Account is circuit-broken |
+| `ERR`   | HTTP 5xx                     | Account is circuit-broken |
+| `AUTH`  | 401/403; token cache cleared | Re-login the account      |
+| `MODEL` | 404 / wire model mismatch    | Update the probe model id |
 
 `health ... (stale)` means the snapshot is older than 15 minutes. Run
 `/gemini-health` or the health CLI.
@@ -202,14 +202,14 @@ The custom **OMP Provider Usage** tab is unaffected.
 
 ## Token cost
 
-| Action | Tokens |
-|---|---:|
-| `omp-provider-usage.js --watch` | 0 |
-| Desktop widget (`bun run desktop`) | 0 (quota read) |
-| `omp usage --json` | 0 (quota read) |
-| Snapshot read | 0 |
-| Health sweep | ~66 per six accounts |
-| Failed/hung probe | ~6 prompt tokens or none |
+| Action                             |                   Tokens |
+| ---------------------------------- | -----------------------: |
+| `omp-provider-usage.js --watch`    |                        0 |
+| Desktop widget (`bun run desktop`) |           0 (quota read) |
+| `omp usage --json`                 |           0 (quota read) |
+| Snapshot read                      |                        0 |
+| Health sweep                       |     ~66 per six accounts |
+| Failed/hung probe                  | ~6 prompt tokens or none |
 
 ## Troubleshooting
 

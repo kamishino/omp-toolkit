@@ -1,9 +1,9 @@
 # Model selection, Gemini prompt sensitivity, and the agent harness
 
-*Research note, 2026-10-22. Primary sources: Artificial Analysis (AA) model
+_Research note, 2026-10-22. Primary sources: Artificial Analysis (AA) model
 pages and methodology, Google/Gemini docs, Meta/Muse docs, OMP docs/source, and
 planning/agent research. Community reports are labeled. `[INFERENCE]` marks
-judgment.*
+judgment._
 
 ## Short answers
 
@@ -48,11 +48,11 @@ judgment.*
 
 ### Evaluation criteria
 
-| Phase | Primary criteria | Useful evidence | Failure modes to measure |
-|---|---|---|---|
-| Planning | Plan feasibility, decision completeness, constraint/dependency discovery, grounding, context synthesis, risk identification | PlanBench/o1 results; AA agentic/coding/long-context sub-scores; repository-specific plan eval | Missing constraints, infeasible order, vague steps, hallucinated files/APIs, executor must invent decisions |
-| Execution | Tool schema validity, instruction/policy adherence, code correctness, test pass, error recovery, latency/cost | Terminal-Bench, SWE-bench, τ-bench, AA coding/agentic; repository tests | Wrong tool/API, syntax/edit errors, ignored plan, loop, policy drift, silent wrong patch |
-| Verification | Error detection, false-positive rate, ability to use tests/compiler/runtime | Sound external verifier, tests, smoke runs | Passes weak tests; self-critique false negatives |
+| Phase        | Primary criteria                                                                                                            | Useful evidence                                                                                | Failure modes to measure                                                                                    |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Planning     | Plan feasibility, decision completeness, constraint/dependency discovery, grounding, context synthesis, risk identification | PlanBench/o1 results; AA agentic/coding/long-context sub-scores; repository-specific plan eval | Missing constraints, infeasible order, vague steps, hallucinated files/APIs, executor must invent decisions |
+| Execution    | Tool schema validity, instruction/policy adherence, code correctness, test pass, error recovery, latency/cost               | Terminal-Bench, SWE-bench, τ-bench, AA coding/agentic; repository tests                        | Wrong tool/API, syntax/edit errors, ignored plan, loop, policy drift, silent wrong patch                    |
+| Verification | Error detection, false-positive rate, ability to use tests/compiler/runtime                                                 | Sound external verifier, tests, smoke runs                                                     | Passes weak tests; self-critique false negatives                                                            |
 
 A practical funnel:
 
@@ -70,13 +70,13 @@ A practical funnel:
 
 ### Composite comparison (AA v4.3.2)
 
-| Model | AA `int` | Cost/task | Speed | Context | Note |
-|---|---:|---:|---:|---:|---|
-| Muse Wonder Full (Max) | **56** [A5] | N/A | N/A | 1M | Highest; price/speed not public on AA |
-| Muse Wonder (Max) | **52** [A4] | $4.52 | 142 tok/s | 1M | Strong but expensive |
-| Muse Spark 1.3 (Max) | **48** [A3] | $1.60 | 98 tok/s | 1M | Deprecated; newer Muse Wonder exists |
-| DeepSeek V4.1 Flash 1017 (Max) | **45** [A1] | $0.26 | 203 tok/s | 1M | Cheapest/fastest in this set |
-| Gemini 3.8 Flash (High) | **41** [A2] | $1.24 | 137 tok/s | 1M | Multimodal; strong agentic/coding |
+| Model                          |    AA `int` | Cost/task |     Speed | Context | Note                                  |
+| ------------------------------ | ----------: | --------: | --------: | ------: | ------------------------------------- |
+| Muse Wonder Full (Max)         | **56** [A5] |       N/A |       N/A |      1M | Highest; price/speed not public on AA |
+| Muse Wonder (Max)              | **52** [A4] |     $4.52 | 142 tok/s |      1M | Strong but expensive                  |
+| Muse Spark 1.3 (Max)           | **48** [A3] |     $1.60 |  98 tok/s |      1M | Deprecated; newer Muse Wonder exists  |
+| DeepSeek V4.1 Flash 1017 (Max) | **45** [A1] |     $0.26 | 203 tok/s |      1M | Cheapest/fastest in this set          |
+| Gemini 3.8 Flash (High)        | **41** [A2] |     $1.24 | 137 tok/s |      1M | Multimodal; strong agentic/coding     |
 
 This table is a screening prior, not a plan-quality ranking. AA's index weights
 Agents 30%, Coding 20%, Scientific Reasoning 20%, General 30%; it has no
@@ -264,7 +264,7 @@ tokenizer [O7]. It is an 8-point global charter:
 
 - Safety/quality intent: verification, clean architecture, scoped imports,
   design-token discipline, human decisions.
-- Commit/tag conventions are useful *when the user asks for a commit/tag*.
+- Commit/tag conventions are useful _when the user asks for a commit/tag_.
 - Explicit verification is aligned with OMP's default harness [O3].
 
 ### What conflicts or overreaches
@@ -314,6 +314,7 @@ tokenizer [O7]. It is an 8-point global charter:
 Cross-project defaults. Project `.omp/AGENTS.md` overrides them.
 
 ## Safety and Git
+
 - Never commit, push, tag, install dependencies, or rewrite history unless the
   user explicitly asks.
 - Ask before destructive or irreversible actions; never delete unrelated code.
@@ -321,6 +322,7 @@ Cross-project defaults. Project `.omp/AGENTS.md` overrides them.
   <=72 chars, imperative). Tag only when asked.
 
 ## Work
+
 - Read the project's instructions and follow its existing patterns; never add a
   second convention.
 - Keep changes scoped; no unrelated refactors.
@@ -338,15 +340,19 @@ Cross-project defaults. Project `.omp/AGENTS.md` overrides them.
 # Project Rules
 
 ## Architecture
+
 - <package boundaries / public entrypoints>
 
 ## Style
+
 - <layout / exports / import order / formatter command>
 
 ## Design
+
 - <tokens / OKLCH / APCA / raw-literal policy; only for UI projects>
 
 ## Verification
+
 - <test command / TDD policy / smoke command / known slow checks>
 ```
 

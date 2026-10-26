@@ -1,7 +1,7 @@
 # Model intelligence, planning, and planning-vs-execution models
 
-*Research note, 2026-10-22. Primary sources are papers, vendor engineering docs,
-and OMP source/docs. `[INFERENCE]` marks judgment; vendor claims are labeled.*
+_Research note, 2026-10-22. Primary sources are papers, vendor engineering docs,
+and OMP source/docs. `[INFERENCE]` marks judgment; vendor claims are labeled._
 
 ## Short answer
 
@@ -17,7 +17,7 @@ and OMP source/docs. `[INFERENCE]` marks judgment; vendor claims are labeled.*
 - **Planning helps only when the plan is grounded, feasible, and matches the
   executor's actual affordances.** A trained planner lifts a base executor
   from 9.85% to 29.63% and dynamic replanning to 44.24% on WebArena-Lite; a
-  zero-shot planner can *hurt* a trained executor (23.63% vs 36.97% with no
+  zero-shot planner can _hurt_ a trained executor (23.63% vs 36.97% with no
   planner) [S3].
 - **Planning vs execution is primarily an information/error-surface split,
   not automatically a model-tier split.** The planner owns global
@@ -33,22 +33,22 @@ and OMP source/docs. `[INFERENCE]` marks judgment; vendor claims are labeled.*
 
 ## Definitions
 
-| Term | Operational meaning here | What it predicts | Main caveat |
-|---|---|---|---|
+| Term                          | Operational meaning here                                                                                                                                                              | What it predicts                                                                                                                 | Main caveat                                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Composite benchmark score** | Artificial Analysis Intelligence Index v4.3.2: 10 evaluations weighted Agents 30%, Coding 20%, Scientific Reasoning 20%, General 30%; primarily text/English; zero-shot, pass@1 [S17] | Broad capability triage; a somewhat better prior for agentic execution than knowledge-only indices because 50% is agentic/coding | Not planning-specific; mixes knowledge, long context, science, and hallucination; weights/versions change; AA says it “may not apply directly to every use case” [S17] |
-| **Reasoning capability** | RL-trained long chain-of-thought / deliberative inference, e.g. o1 [S2] | Short/medium plan generation; some obfuscated planning; unsolvable detection | Collapses on longer/complex problems; can be less efficient than standard models on easy tasks [S2][S26] |
-| **Test-time compute** | Extra inference tokens, search, repeated sampling, or verifier-guided selection [S6][S25] | Problems where the model already has non-trivial success; reliability with a good verifier | Diminishing returns and verifier bottleneck; hardest prompts still favor larger models [S6] |
-| **Instruction following** | Ability to satisfy explicit constraints and policies | Plan adherence and executor policy compliance | Degrades as constraints accumulate; not the same as knowing the right action |
-| **Tool use** | Correct schema use, API calls, command execution, GUI grounding | Execution success and error recovery | Agent-computer interface/scaffold can matter as much as the model [S10][S12][S14] |
-| **Context length** | Advertised vs usable context | Retrieval and synthesis if information is usable | Long context degrades in the middle and without literal matches |
-| **Cost/latency** | Dollars, tokens, wall-clock per task | Feasibility of an architecture, not quality | Cost per *success* is the useful metric; large spreads at similar scores |
+| **Reasoning capability**      | RL-trained long chain-of-thought / deliberative inference, e.g. o1 [S2]                                                                                                               | Short/medium plan generation; some obfuscated planning; unsolvable detection                                                     | Collapses on longer/complex problems; can be less efficient than standard models on easy tasks [S2][S26]                                                               |
+| **Test-time compute**         | Extra inference tokens, search, repeated sampling, or verifier-guided selection [S6][S25]                                                                                             | Problems where the model already has non-trivial success; reliability with a good verifier                                       | Diminishing returns and verifier bottleneck; hardest prompts still favor larger models [S6]                                                                            |
+| **Instruction following**     | Ability to satisfy explicit constraints and policies                                                                                                                                  | Plan adherence and executor policy compliance                                                                                    | Degrades as constraints accumulate; not the same as knowing the right action                                                                                           |
+| **Tool use**                  | Correct schema use, API calls, command execution, GUI grounding                                                                                                                       | Execution success and error recovery                                                                                             | Agent-computer interface/scaffold can matter as much as the model [S10][S12][S14]                                                                                      |
+| **Context length**            | Advertised vs usable context                                                                                                                                                          | Retrieval and synthesis if information is usable                                                                                 | Long context degrades in the middle and without literal matches                                                                                                        |
+| **Cost/latency**              | Dollars, tokens, wall-clock per task                                                                                                                                                  | Feasibility of an architecture, not quality                                                                                      | Cost per _success_ is the useful metric; large spreads at similar scores                                                                                               |
 
 **Which are predictive of planning quality?**
 
 - **Strongest:** task-specific planning/agentic evaluations on the target
   distribution (PlanBench-style planning, WebArena, SWE-bench, policy-heavy
   τ-bench), plus instruction/tool reliability. These measure the actual phase.
-- **Moderate:** reasoning capability and test-time compute, *if* the task is
+- **Moderate:** reasoning capability and test-time compute, _if_ the task is
   in the regime where the model has non-trivial success. They are not
   monotonic with task length [S2][S26][S6].
 - **Weak alone:** composite index, parameter count, advertised context length,
@@ -85,7 +85,7 @@ better planning” model and supports difficulty-aware routing.
 Planning-before-code also helps when the plan is grounded:
 
 - Plan-and-Act separates a Planner from an Executor and uses dynamic
-  replanning; a *base* zero-shot planner with a synthetic-trained executor
+  replanning; a _base_ zero-shot planner with a synthetic-trained executor
   scores 23.63%, worse than 36.97% with no planner, while a trained planner
   with a base executor lifts 9.85% to 29.63% and dynamic replanning to 44.24%
   [S3, Table 1, §5.2–5.3]. This is direct evidence that a bad plan can hurt a
@@ -156,38 +156,38 @@ executed consistently.”
 
 ### Evidence table
 
-| Evidence | Type | Key result | Bearing |
-|---|---|---|---|
-| PlanBench + o1 [S2] | Empirical benchmark | 97.8% small Blocksworld; 23.63% long plans; 52.8% Mystery; 27% unsolvable detection | Reasoning helps planning, but not robustly; length/representation matter |
-| Plan-and-Act [S3] | Empirical benchmark | No planner 36.97%; base planner 23.63%; trained planner + base executor 29.63%; dynamic 44.24%; 53.94% without CoT, 57.58% with CoT | Planner quality/fit is a bottleneck; bad plans can hurt good executors |
-| LLM+P [S4] | Empirical | Classical planner optimal on most; LLM infeasible on most | Sound planning can be externalized |
-| Plan-and-Solve [S7] | Empirical | Zero-shot plan-then-solve beats zero-shot CoT across 10 datasets | One model can plan and execute |
-| ReAct [S8] | Empirical | Interleaved reasoning/actions improves interactive decision making | Planning/execution can be iterative, not one-shot |
-| τ-bench [S10] | Empirical | GPT-4o-class agents <50%; pass^8 <25% retail | Plan-following consistency is poor |
-| Agentless [S11] | Empirical | 32.00% SWE-bench Lite at $0.70, no agent loop | Complex planning is not always necessary |
-| SWE-bench+ [S12] | Empirical critique | 32.67% leakage; 31.08% weak tests; 12.47% → 3.97% after filtering | Verification can dominate apparent capability |
-| Anthropic multi-agent [S13] | Vendor internal eval | 90.2% over single Opus; 15× tokens; 80% variance from tokens | Stronger lead + cheaper subagents can help, but confounded |
-| Anthropic think tool [S15] | Vendor benchmark | Improved pass^1/pass^k on τ-bench; later recommends extended thinking | Execution-time reasoning improves adherence |
-| Snell [S6] | Empirical | Test-time compute beats 14× model on easier prompts; >4× efficiency | Compute can substitute for size only in a regime |
-| Large Monkeys [S25] | Empirical | 15.9%→56% SWE-bench Lite with 250 samples | Verifier is the scaling bottleneck |
-| Stechly [S23] | Empirical | Self-critique collapses; sound verifier gains | Do not use the planner as its own verifier |
+| Evidence                    | Type                 | Key result                                                                                                                          | Bearing                                                                  |
+| --------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| PlanBench + o1 [S2]         | Empirical benchmark  | 97.8% small Blocksworld; 23.63% long plans; 52.8% Mystery; 27% unsolvable detection                                                 | Reasoning helps planning, but not robustly; length/representation matter |
+| Plan-and-Act [S3]           | Empirical benchmark  | No planner 36.97%; base planner 23.63%; trained planner + base executor 29.63%; dynamic 44.24%; 53.94% without CoT, 57.58% with CoT | Planner quality/fit is a bottleneck; bad plans can hurt good executors   |
+| LLM+P [S4]                  | Empirical            | Classical planner optimal on most; LLM infeasible on most                                                                           | Sound planning can be externalized                                       |
+| Plan-and-Solve [S7]         | Empirical            | Zero-shot plan-then-solve beats zero-shot CoT across 10 datasets                                                                    | One model can plan and execute                                           |
+| ReAct [S8]                  | Empirical            | Interleaved reasoning/actions improves interactive decision making                                                                  | Planning/execution can be iterative, not one-shot                        |
+| τ-bench [S10]               | Empirical            | GPT-4o-class agents <50%; pass^8 <25% retail                                                                                        | Plan-following consistency is poor                                       |
+| Agentless [S11]             | Empirical            | 32.00% SWE-bench Lite at $0.70, no agent loop                                                                                       | Complex planning is not always necessary                                 |
+| SWE-bench+ [S12]            | Empirical critique   | 32.67% leakage; 31.08% weak tests; 12.47% → 3.97% after filtering                                                                   | Verification can dominate apparent capability                            |
+| Anthropic multi-agent [S13] | Vendor internal eval | 90.2% over single Opus; 15× tokens; 80% variance from tokens                                                                        | Stronger lead + cheaper subagents can help, but confounded               |
+| Anthropic think tool [S15]  | Vendor benchmark     | Improved pass^1/pass^k on τ-bench; later recommends extended thinking                                                               | Execution-time reasoning improves adherence                              |
+| Snell [S6]                  | Empirical            | Test-time compute beats 14× model on easier prompts; >4× efficiency                                                                 | Compute can substitute for size only in a regime                         |
+| Large Monkeys [S25]         | Empirical            | 15.9%→56% SWE-bench Lite with 250 samples                                                                                           | Verifier is the scaling bottleneck                                       |
+| Stechly [S23]               | Empirical            | Self-critique collapses; sound verifier gains                                                                                       | Do not use the planner as its own verifier                               |
 
 ## Planning model vs execution model
 
 ### Functional distinction
 
-| Dimension | Planner | Executor |
-|---|---|---|
-| **Objective** | Feasible, complete, ordered plan; resolve ambiguity and dependencies | Grounded task success; correct tools/edits; policy adherence |
-| **Input** | Goal, broad repo/world context, constraints, prior attempts | Plan artifact, local observation, tool outputs |
-| **Output** | Plan contract: steps, decisions, assumptions, verification criteria | Actions, edits, tool calls, patches |
-| **Error surface** | Global: wrong approach, missing dependency, infeasible order | Local: wrong API, syntax, context loss, policy drift, loop |
-| **Recoverability** | Errors often irreversible without replanning | Errors often recoverable from environment feedback |
-| **Call pattern** | Few calls; can be expensive and slow | Many calls; latency/cost sensitive |
-| **Context** | Broad, long, ambiguous; must synthesize | Narrow, fresh, high-signal; too much context hurts |
-| **Verification** | Hard; no sound oracle in general; self-critique unreliable | Tests, compiler, runtime, environment feedback |
-| **Model traits** | Reasoning, decomposition, world knowledge, uncertainty handling | Instruction following, tool schema fidelity, code precision, adaptation |
-| **Typical failure** | Plausible but wrong direction; missing steps | Executes a bad plan perfectly; tool/syntax/policy errors |
+| Dimension           | Planner                                                              | Executor                                                                |
+| ------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Objective**       | Feasible, complete, ordered plan; resolve ambiguity and dependencies | Grounded task success; correct tools/edits; policy adherence            |
+| **Input**           | Goal, broad repo/world context, constraints, prior attempts          | Plan artifact, local observation, tool outputs                          |
+| **Output**          | Plan contract: steps, decisions, assumptions, verification criteria  | Actions, edits, tool calls, patches                                     |
+| **Error surface**   | Global: wrong approach, missing dependency, infeasible order         | Local: wrong API, syntax, context loss, policy drift, loop              |
+| **Recoverability**  | Errors often irreversible without replanning                         | Errors often recoverable from environment feedback                      |
+| **Call pattern**    | Few calls; can be expensive and slow                                 | Many calls; latency/cost sensitive                                      |
+| **Context**         | Broad, long, ambiguous; must synthesize                              | Narrow, fresh, high-signal; too much context hurts                      |
+| **Verification**    | Hard; no sound oracle in general; self-critique unreliable           | Tests, compiler, runtime, environment feedback                          |
+| **Model traits**    | Reasoning, decomposition, world knowledge, uncertainty handling      | Instruction following, tool schema fidelity, code precision, adaptation |
+| **Typical failure** | Plausible but wrong direction; missing steps                         | Executes a bad plan perfectly; tool/syntax/policy errors                |
 
 ### Four ways to separate planning from execution
 
@@ -262,7 +262,7 @@ stronger planner that emits an elegant but under-specified plan is not.
 ### Economics and context
 
 - Planning calls are few; execution calls are many. `[INFERENCE]` This favors
-  spending on the planner *if* planning quality is the bottleneck. But
+  spending on the planner _if_ planning quality is the bottleneck. But
   reasoning tokens can dominate: o1-preview costs 65× GPT-4o per 100 PlanBench
   instances [S2, Table 4].
 - Multi-agent systems use ~15× chat tokens [S13]; cost per success, not cost
@@ -281,14 +281,14 @@ stronger planner that emits an elegant but under-specified plan is not.
 
 OMP exposes distinct mechanisms; do not conflate them.
 
-| Mechanism | Exact behavior | Source |
-|---|---|---|
-| **`plan` model role** | Built-in chat role among `default`, `smol`, `slow`, `vision`, `plan`, `commit`, `tiny`, `memory`, `task`, `advisor`. Configured under `modelRoles` in `config.yml`, not `models.yml`. Assigning `plan` does **not** enter plan mode; calling `todo` does not select the plan model. While plan mode is active, changing the `plan` role reapplies its model. Values can append `:minimal`/`:low`/`:medium`/`:high`. | [S18] |
-| **Plan-mode transition** | Plan mode drives the active session model from the `plan` role: it switches to the plan model on entry and restores the pre-plan model on exit. The same policy runs when the `plan` role is reassigned mid-planning; a mid-stream switch is deferred to the turn boundary. It can apply only a thinking-level change. | [S20] |
-| **`prewalk`** | Optional, off by default, one-shot handoff from the active model to a faster/cheaper target after planning reaches implementation. Default target `@smol`. Injects a planning nudge; when `todo` is active, a successful `todo` call opens the gate; switches at the completed assistant turn containing the first eligible `edit`/`write`. Disarms after the handoff and changes the active model/thinking level without rewriting role assignments. | [S19] |
-| **Auto-prewalk** | Native judge classifies each new top-level task by *where expensive reasoning belongs*: `prewalk` (hard thinking first, implementation bounded), `primary` (strong reasoning still needed during implementation), or `direct` (no up-front phase). It is explicitly **not a difficulty rating or general model router**; it never picks a different planning model. Arms only when `prewalk` wins and probability ≥ 0.70. “A wrong handoff costs more than a missed one,” so ties favor `primary` and small tasks favor `direct`. Fails open. | [S19] |
-| **`--plan-yolo`** | Starts in read-only plan mode, auto-approves the model's plan proposal, then switches to the execution target to implement it. `--plan-yolo-into` chooses the target; default is the `smol` role. | [S21] |
-| **Settings** | `modelRoles.plan` / `PI_PLAN_MODEL`; `plan.enabled` default true; `plan.defaultOnStartup` default false; `prewalk.enabled` default false. | [S19][S22] |
+| Mechanism                | Exact behavior                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Source     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **`plan` model role**    | Built-in chat role among `default`, `smol`, `slow`, `vision`, `plan`, `commit`, `tiny`, `memory`, `task`, `advisor`. Configured under `modelRoles` in `config.yml`, not `models.yml`. Assigning `plan` does **not** enter plan mode; calling `todo` does not select the plan model. While plan mode is active, changing the `plan` role reapplies its model. Values can append `:minimal`/`:low`/`:medium`/`:high`.                                                                                                                           | [S18]      |
+| **Plan-mode transition** | Plan mode drives the active session model from the `plan` role: it switches to the plan model on entry and restores the pre-plan model on exit. The same policy runs when the `plan` role is reassigned mid-planning; a mid-stream switch is deferred to the turn boundary. It can apply only a thinking-level change.                                                                                                                                                                                                                        | [S20]      |
+| **`prewalk`**            | Optional, off by default, one-shot handoff from the active model to a faster/cheaper target after planning reaches implementation. Default target `@smol`. Injects a planning nudge; when `todo` is active, a successful `todo` call opens the gate; switches at the completed assistant turn containing the first eligible `edit`/`write`. Disarms after the handoff and changes the active model/thinking level without rewriting role assignments.                                                                                         | [S19]      |
+| **Auto-prewalk**         | Native judge classifies each new top-level task by _where expensive reasoning belongs_: `prewalk` (hard thinking first, implementation bounded), `primary` (strong reasoning still needed during implementation), or `direct` (no up-front phase). It is explicitly **not a difficulty rating or general model router**; it never picks a different planning model. Arms only when `prewalk` wins and probability ≥ 0.70. “A wrong handoff costs more than a missed one,” so ties favor `primary` and small tasks favor `direct`. Fails open. | [S19]      |
+| **`--plan-yolo`**        | Starts in read-only plan mode, auto-approves the model's plan proposal, then switches to the execution target to implement it. `--plan-yolo-into` chooses the target; default is the `smol` role.                                                                                                                                                                                                                                                                                                                                             | [S21]      |
+| **Settings**             | `modelRoles.plan` / `PI_PLAN_MODEL`; `plan.enabled` default true; `plan.defaultOnStartup` default false; `prewalk.enabled` default false.                                                                                                                                                                                                                                                                                                                                                                                                     | [S19][S22] |
 
 **What this means**
 
@@ -355,15 +355,15 @@ OMP exposes distinct mechanisms; do not conflate them.
 
 ### Decision matrix
 
-| Symptom | First lever | Why |
-|---|---|---|
-| Wrong approach, missing dependencies, infeasible order | Stronger planner / more planning time | Global errors are not recoverable by a better executor [S3] |
-| Plan is good but steps fail | Stronger executor / better ACI / execution-time reasoning | Execution and tool fidelity are the bottleneck [S12][S15] |
-| Plan ignored, policy drift, inconsistent behavior | Stronger instruction-following executor + verifier | τ-bench consistency failure [S10] |
-| Tests pass but patch is wrong | Better verifier/tests | Silent verification failure [S12] |
-| Long context lost | Context isolation/retrieval, not a higher IQ | Usable context ≠ advertised context `[INFERENCE]` |
-| Cost too high | Routing/cascade/one-shot handoff | RouteLLM and prewalk [S9][S19] |
-| Simple, well-scoped fix | No plan mode; direct execution | Planning overhead is unnecessary [S11] |
+| Symptom                                                | First lever                                               | Why                                                         |
+| ------------------------------------------------------ | --------------------------------------------------------- | ----------------------------------------------------------- |
+| Wrong approach, missing dependencies, infeasible order | Stronger planner / more planning time                     | Global errors are not recoverable by a better executor [S3] |
+| Plan is good but steps fail                            | Stronger executor / better ACI / execution-time reasoning | Execution and tool fidelity are the bottleneck [S12][S15]   |
+| Plan ignored, policy drift, inconsistent behavior      | Stronger instruction-following executor + verifier        | τ-bench consistency failure [S10]                           |
+| Tests pass but patch is wrong                          | Better verifier/tests                                     | Silent verification failure [S12]                           |
+| Long context lost                                      | Context isolation/retrieval, not a higher IQ              | Usable context ≠ advertised context `[INFERENCE]`           |
+| Cost too high                                          | Routing/cascade/one-shot handoff                          | RouteLLM and prewalk [S9][S19]                              |
+| Simple, well-scoped fix                                | No plan mode; direct execution                            | Planning overhead is unnecessary [S11]                      |
 
 ### What to measure rather than assume
 
@@ -386,14 +386,14 @@ OMP exposes distinct mechanisms; do not conflate them.
 
 ## Caveats and conflicts
 
-| Conflict | Evidence for | Evidence against | Resolution |
-|---|---|---|---|
-| **More reasoning improves planning** | o1 97.8% small Blocksworld vs GPT-4 34.6% [S2] | o1 23.63% long plans, 52.8% Mystery; Apple collapse at high complexity [S2][S26] | True on short/medium, in-distribution planning; not a general planner |
-| **Self-correction helps** | Self-Refine reports ~20% average gains on open-ended refinement [S29] | Planning self-critique collapses; sound external verifier gains [S23][S24] | Task- and feedback-dependent; for plans, use external sound verification |
-| **Multi-agent/role split helps** | Anthropic 90.2% over single Opus [S13] | Vendor internal eval; 15× tokens; coding less parallelizable | Promising for breadth-first, parallelizable work; not a default for coding |
-| **Higher benchmark score = better agent** | Higher scores correlate with capability on the measured benchmark | Benchmarks vary; Agentless simple pipeline wins on SWE-bench Lite [S11] | Benchmark-specific; use the benchmark that matches the task |
-| **Test-time compute substitutes for model size** | 14× larger model beaten on easier prompts [S6] | Hardest prompts still favor larger models [S6]; verifier bottleneck [S25] | Regime-dependent; allocate compute adaptively |
-| **Long context solves context** | Larger windows are available | Lost-in-the-middle and NoLiMa degradation | Usable context ≠ advertised context; isolate/compress |
+| Conflict                                         | Evidence for                                                          | Evidence against                                                                 | Resolution                                                                 |
+| ------------------------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **More reasoning improves planning**             | o1 97.8% small Blocksworld vs GPT-4 34.6% [S2]                        | o1 23.63% long plans, 52.8% Mystery; Apple collapse at high complexity [S2][S26] | True on short/medium, in-distribution planning; not a general planner      |
+| **Self-correction helps**                        | Self-Refine reports ~20% average gains on open-ended refinement [S29] | Planning self-critique collapses; sound external verifier gains [S23][S24]       | Task- and feedback-dependent; for plans, use external sound verification   |
+| **Multi-agent/role split helps**                 | Anthropic 90.2% over single Opus [S13]                                | Vendor internal eval; 15× tokens; coding less parallelizable                     | Promising for breadth-first, parallelizable work; not a default for coding |
+| **Higher benchmark score = better agent**        | Higher scores correlate with capability on the measured benchmark     | Benchmarks vary; Agentless simple pipeline wins on SWE-bench Lite [S11]          | Benchmark-specific; use the benchmark that matches the task                |
+| **Test-time compute substitutes for model size** | 14× larger model beaten on easier prompts [S6]                        | Hardest prompts still favor larger models [S6]; verifier bottleneck [S25]        | Regime-dependent; allocate compute adaptively                              |
+| **Long context solves context**                  | Larger windows are available                                          | Lost-in-the-middle and NoLiMa degradation                                        | Usable context ≠ advertised context; isolate/compress                      |
 
 Additional caveats:
 

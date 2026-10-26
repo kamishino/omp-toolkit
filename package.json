@@ -33,21 +33,21 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun scripts/build.ts",
-    "build:desktop": "bun scripts/build.ts --desktop",
-    "desktop": "bun scripts/widget.ts",
-    "desktop:preview": "bun scripts/widget.ts --preview",
-    "desktop:once": "bun scripts/widget.ts --once",
-    "desktop:shortcut": "bun scripts/create-desktop-shortcut.ts",
+    "build": "bun scripts/build/build.ts",
+    "build:desktop": "bun scripts/build/build.ts --desktop",
+    "desktop": "bun scripts/desktop/widget.ts",
+    "desktop:preview": "bun scripts/desktop/widget.ts --preview",
+    "desktop:once": "bun scripts/desktop/widget.ts --once",
+    "desktop:shortcut": "bun scripts/desktop/create-desktop-shortcut.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit && tsc -p apps/desktop/tsconfig.json --noEmit",
     "format": "biome format --write .",
-    "check": "biome check . && tsc --noEmit && tsc -p apps/desktop/tsconfig.json --noEmit && bun test && bun scripts/check-tokens.ts",
-    "widget": "bun scripts/widget.ts",
-    "install:omp": "bun scripts/build.ts --no-desktop && bun scripts/install.ts",
-    "monitor": "bun scripts/monitor.ts",
-    "monitor:orca": "bun scripts/orca-monitor.ts",
-    "reliability:report": "bun scripts/reliability-report.ts"
+    "check": "biome check . && tsc --noEmit && tsc -p apps/desktop/tsconfig.json --noEmit && bun test && bun scripts/tokens/check-tokens.ts",
+    "widget": "bun scripts/desktop/widget.ts",
+    "install:omp": "bun scripts/build/build.ts --no-desktop && bun scripts/install/install.ts",
+    "monitor": "bun scripts/monitor/monitor.ts",
+    "monitor:orca": "bun scripts/monitor/orca-monitor.ts",
+    "reliability:report": "bun scripts/reliability/reliability-report.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",
