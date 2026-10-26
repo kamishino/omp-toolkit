@@ -108,6 +108,7 @@ export interface ProviderRow {
   account: string;
   health?: HealthResult;
   max: number;
+  primary?: number;
 }
 
 export interface ProviderSection {
