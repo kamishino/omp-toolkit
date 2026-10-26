@@ -7,7 +7,8 @@ import {
   DashboardEngine,
   type HealthSnapshot,
   isDashboard,
-  resolveSnapshotPath,
+  UsageDataSource,
+  type UsageDataSourceAdapter,
   type UsageReport,
 } from "@omp-toolkit/core";
 
@@ -20,36 +21,30 @@ export interface DataSource {
   agentDir?: string;
 }
 
+const desktopAdapter: UsageDataSourceAdapter = {
+  execFile: async (file, args, options) => {
+    return execFileAsync(file, args, {
+      encoding: "utf8",
+      timeout: options?.timeout,
+      windowsHide: options?.windowsHide,
+      maxBuffer: options?.maxBuffer,
+      signal: options?.signal,
+    });
+  },
+  readFile: (path) => fs.readFileSync(path, "utf8"),
+};
+
 export function readHealthSnapshot(agentDir?: string): HealthSnapshot | null {
-  const snapshotFile = resolveSnapshotPath(
-    agentDir ? { PI_CODING_AGENT_DIR: agentDir } : process.env,
-  );
-  try {
-    const raw = fs.readFileSync(snapshotFile, "utf8");
-    const parsed = JSON.parse(raw) as HealthSnapshot;
-    if (parsed && Array.isArray(parsed.results)) return parsed;
-    return null;
-  } catch {
-    return null;
-  }
+  const source = new UsageDataSource(desktopAdapter, { agentDir });
+  return source.readSnapshot();
 }
 
 export async function fetchRawUsage(
   ompBin = process.env.OMP_BIN || "omp",
   options?: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<UsageReport[]> {
-  const { stdout } = await execFileAsync(ompBin, ["usage", "--json"], {
-    encoding: "utf8",
-    timeout: options?.timeoutMs ?? 25_000,
-    windowsHide: true,
-    maxBuffer: 2 * 1024 * 1024,
-    signal: options?.signal,
-  });
-  const parsed = JSON.parse(String(stdout));
-  if (!parsed || !Array.isArray(parsed.reports)) {
-    throw new Error("omp usage returned an unexpected payload");
-  }
-  return parsed.reports as UsageReport[];
+  const source = new UsageDataSource(desktopAdapter, { ompBin });
+  return source.fetchReports(options);
 }
 export function parseMonitorPayload(text: string): Dashboard {
   let parsed: unknown;

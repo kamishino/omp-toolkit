@@ -1,11 +1,17 @@
 import { padPercent, padResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
 import {
+  createLine,
+  createSpan,
   createStyle,
+  createText,
   indexedColor,
+  type Line,
   Modifier,
+  type Span,
   type Style,
   styleAddModifier,
   styleFg,
+  type Text,
 } from "terminui";
 import tokens from "../../../design/tokens.json";
 
@@ -131,4 +137,55 @@ export function percent(value: number | undefined): string {
 
 export function resetInAt(resetsAt: number | undefined): string {
   return padResetCompact(resetsAt);
+}
+
+export function ansiToText(raw: string): Text {
+  const lines: Line[] = [];
+  const rawLines = raw.split("\n");
+
+  for (const rawLine of rawLines) {
+    const spans: Span[] = [];
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequence parser
+    const regex = /\x1b\[([0-9;]+)m/g;
+    let lastIndex = 0;
+    let currentStyle = createStyle();
+    let match: RegExpExecArray | null = regex.exec(rawLine);
+
+    while (match !== null) {
+      const textBefore = rawLine.slice(lastIndex, match.index);
+      if (textBefore.length > 0) {
+        spans.push(createSpan(textBefore, currentStyle));
+      }
+      lastIndex = regex.lastIndex;
+
+      const code = match[1];
+      if (code === "0" || code === "") {
+        currentStyle = createStyle();
+      } else if (code === "1") {
+        currentStyle = styleAddModifier(currentStyle, Modifier.BOLD);
+      } else if (code.startsWith("38;5;")) {
+        const idx = Number.parseInt(code.slice(5), 10);
+        currentStyle = styleFg(currentStyle, indexedColor(idx));
+      } else if (code === "31") {
+        currentStyle = styleFg(currentStyle, indexedColor(1));
+      } else if (code === "32") {
+        currentStyle = styleFg(currentStyle, indexedColor(2));
+      } else if (code === "33") {
+        currentStyle = styleFg(currentStyle, indexedColor(3));
+      } else if (code === "36") {
+        currentStyle = styleFg(currentStyle, indexedColor(6));
+      } else if (code === "90") {
+        currentStyle = styleFg(currentStyle, indexedColor(8));
+      }
+      match = regex.exec(rawLine);
+    }
+
+    const trailing = rawLine.slice(lastIndex);
+    if (trailing.length > 0 || spans.length === 0) {
+      spans.push(createSpan(trailing, currentStyle));
+    }
+    lines.push(createLine(spans));
+  }
+
+  return createText(lines);
 }
