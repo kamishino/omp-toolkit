@@ -11,6 +11,7 @@ import {
   type WarmUpSkip,
   warmUpEligibility,
 } from "@omp-toolkit/core";
+import { short, writeFileAtomic } from "./fs-util";
 
 export interface WarmUpAdapter {
   readonly provider: string;
@@ -37,27 +38,6 @@ export interface WarmUpRun {
 
 export const WARMUP_COOLDOWN_MS = 60_000;
 export const WARMUP_LOCK_STALE_MS = 5 * 60_000;
-
-function short(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/\s+/g, " ").slice(0, 180);
-}
-
-function writeFileAtomic(file: string, content: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(temp, content);
-  try {
-    fs.renameSync(temp, file);
-  } catch {
-    fs.writeFileSync(file, content);
-    try {
-      fs.rmSync(temp, { force: true });
-    } catch {
-      // Best effort temp cleanup
-    }
-  }
-}
 
 export function readWarmUpCooldowns(agentDir: string): {
   lastWarmupAt: Record<string, number>;
@@ -87,7 +67,7 @@ export function writeWarmUpCooldowns(
   state: { lastWarmupAt: Record<string, number> },
 ): void {
   const filePath = path.join(agentDir, "gemini-warmup-state.json");
-  writeFileAtomic(filePath, JSON.stringify(state, null, 2) + "\n");
+  writeFileAtomic(filePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
 export async function withWarmUpLock<T>(agentDir: string, fn: () => Promise<T>): Promise<T> {
