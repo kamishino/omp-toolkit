@@ -9,8 +9,8 @@ import {
   readPolicies,
   recordHealth,
   recordHistory,
-  short,
 } from "./circuit-breaker";
+import { short } from "./fs-util";
 import { closeHistory } from "./history";
 import { publish, summary, widgetEnabled } from "./widget";
 

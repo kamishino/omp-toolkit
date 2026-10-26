@@ -6,7 +6,6 @@
  */
 
 import fs from "node:fs";
-import path from "node:path";
 import {
   type Account,
   excludedEmails,
@@ -24,8 +23,12 @@ import {
   restorableEmails,
   type StreakState,
 } from "@omp-toolkit/core";
+import { short, writeFileAtomic } from "./fs-util";
 import { type HistoryEventInput, recordEvents } from "./history";
 import { RoutingPolicyStore } from "./policy-store";
+
+export { short, writeFileAtomic } from "./fs-util";
+
 import {
   AntigravityProbeClient,
   DEFAULT_CONFIRM_DELAY_MS,
@@ -77,31 +80,10 @@ export function streakPath(): string {
   return resolveStreakPath();
 }
 
-export function short(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/\s+/g, " ").slice(0, 180);
-}
-
 export function sleep(ms: number): Promise<void> {
   const { promise, resolve } = Promise.withResolvers<void>();
   setTimeout(resolve, ms);
   return promise;
-}
-
-export function writeFileAtomic(file: string, content: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(temp, content);
-  try {
-    fs.renameSync(temp, file);
-  } catch {
-    fs.writeFileSync(file, content);
-    try {
-      fs.rmSync(temp, { force: true });
-    } catch {
-      // Temp cleanup is best-effort.
-    }
-  }
 }
 
 export function writeState(state: HealthState): void {

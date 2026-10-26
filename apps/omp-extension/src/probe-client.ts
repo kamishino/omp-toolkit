@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import type { Account, ProbeResult, Status } from "@omp-toolkit/core";
+import { short } from "./fs-util";
 
 const execFileAsync = promisify(execFile);
 
@@ -37,11 +38,6 @@ export interface ProbeClientOptions {
     options: typeof DEFAULT_EXEC_OPTS,
   ) => Promise<{ stdout: string | Buffer }>;
   fetchFn?: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
-}
-
-function short(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.replace(/\s+/g, " ").slice(0, 180);
 }
 
 function sleep(ms: number): Promise<void> {
