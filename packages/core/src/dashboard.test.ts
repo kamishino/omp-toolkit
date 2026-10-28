@@ -363,12 +363,53 @@ describe("isDashboard validator", () => {
 
     const antiProvider = dashboard.providers.find((p) => p.id === "google-antigravity");
     const antiWeekly = antiProvider?.rows[0].limits.find((l) => l.label === "Weekly");
-    expect(antiWeekly?.pacing).toBeUndefined();
+    expect(antiWeekly?.pacing).toEqual({
+      dayIndex: 2,
+      todayCeilingFraction: 3 / 7,
+      headroomFraction: 3 / 7 - 0.4,
+    });
 
     // Mutate pacing to be malformed (slices length 6) -> isDashboard must reject
     const malformed = JSON.parse(JSON.stringify(dashboard));
     const malformedMuseWeekly = malformed.providers[0].rows[0].limits[0];
     malformedMuseWeekly.pacing.dayIndex = 7;
     expect(isDashboard(malformed)).toBe(false);
+  });
+
+  test("omits pacing when a provider has multiple accounts", () => {
+    const now = 1_000_000_000_000;
+    const resetsAt = now + 400_000_000;
+    const reports: UsageReport[] = [
+      {
+        provider: "muse-code",
+        metadata: { email: "muse1@example.com" },
+        limits: [
+          {
+            label: "Weekly",
+            window: { label: "Weekly", resetsAt },
+            amount: { usedFraction: 0.3 },
+          },
+        ],
+      },
+      {
+        provider: "muse-code",
+        metadata: { email: "muse2@example.com" },
+        limits: [
+          {
+            label: "Weekly",
+            window: { label: "Weekly", resetsAt },
+            amount: { usedFraction: 0.3 },
+          },
+        ],
+      },
+    ];
+
+    const dashboard = DashboardEngine.compile(reports, null, { now });
+    const museProvider = dashboard.providers.find((p) => p.id === "muse-code");
+    expect(museProvider?.rows.length).toBe(2);
+    for (const row of museProvider?.rows ?? []) {
+      const weekly = row.limits.find((l) => l.label === "Weekly");
+      expect(weekly?.pacing).toBeUndefined();
+    }
   });
 });

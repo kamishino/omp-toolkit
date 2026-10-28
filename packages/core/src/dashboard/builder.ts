@@ -83,7 +83,7 @@ export function buildDashboard(
               : "ok"
             : usageLevel(usedFraction, options.thresholds);
         const pacing =
-          section.provider === "muse-code" &&
+          section.reports.length === 1 &&
           column.label.toLowerCase() === "weekly" &&
           usedFraction !== undefined &&
           typeof limit?.window?.resetsAt === "number"

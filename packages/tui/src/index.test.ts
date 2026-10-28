@@ -281,27 +281,27 @@ describe("provider usage view", () => {
         delete process.env.FORCE_COLOR;
       }
     }
-    // Without muse pacing (e.g. only google-antigravity reports)
+    // Single-account google-antigravity also receives pacing
     const antigravityOnly: UsageReport[] = [
       {
         provider: "google-antigravity",
         metadata: { email: "anti@example.com" },
         limits: [
-          { label: "Weekly", window: { label: "Weekly", resetsAt }, amount: { usedFraction: 0.1 } },
+          { label: "Gemini", window: { label: "Weekly", resetsAt }, amount: { usedFraction: 0.1 } },
         ],
       },
     ];
-    const dashboardWithoutPacing = DashboardEngine.compile(antigravityOnly, null, { now });
-    const viewWithoutPacing = renderProviderUsage(dashboardWithoutPacing, {
+    const dashboardWithAntiPacing = DashboardEngine.compile(antigravityOnly, null, { now });
+    const viewWithAntiPacing = renderProviderUsage(dashboardWithAntiPacing, {
       interval: 300,
       watch: false,
       showHealth: false,
     });
-    const antiLine = stripAnsi(viewWithoutPacing)
-      .split("\n")
-      .find((l) => l.includes("anti"));
+    const antiStripped = stripAnsi(viewWithAntiPacing);
+    expect(antiStripped).toContain("10/43%");
+    const antiLine = antiStripped.split("\n").find((l) => l.startsWith("│ anti"));
     const insideBorders = antiLine?.slice(1, -1) ?? "";
-    expect(insideBorders).not.toContain("│");
+    expect(insideBorders).toContain("│");
   });
   test("drawProviderUsage draws onto terminui terminal buffer via test backend", () => {
     const state = createTestBackendState(86, 20);
