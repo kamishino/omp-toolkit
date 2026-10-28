@@ -69,10 +69,20 @@ export interface ReliabilityReportData {
   lines: string[];
   allPass: boolean;
 }
-
 export type ReliabilityReportResult =
   | { status: "no_history" | "no_matching_records"; message: string }
   | { status: "success"; data: ReliabilityReportData };
+
+export interface ExecutionReportData {
+  columns: ReportColumn[];
+  lines: string[];
+  totalRuns: number;
+  pooledErrorRate: number;
+}
+
+export type ExecutionReportResult =
+  | { status: "no_history" | "no_matching_records"; message: string }
+  | { status: "success"; data: ExecutionReportData };
 
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
@@ -418,6 +428,170 @@ export class ReliabilityHistoryStore {
         columns,
         lines,
         allPass,
+      },
+    };
+  }
+  buildExecutionReport(
+    options: { days?: number; machineFilter?: string; now?: number } = {},
+  ): ExecutionReportResult {
+    if (!fs.existsSync(this.dbPath)) {
+      return { status: "no_history", message: "no execution data" };
+    }
+
+    const days = Math.min(366, Math.max(1, options.days ?? 14));
+    const machineFilter = options.machineFilter ?? "all";
+    const now = options.now ?? Date.now();
+    const windowStartUtc = now - days * 86_400_000;
+
+    let rows: EventRow[] = [];
+    try {
+      rows = this.queryEvents(windowStartUtc);
+    } catch {
+      return { status: "no_history", message: "no execution data" };
+    }
+
+    const filteredRows =
+      machineFilter === "all" ? rows : rows.filter((r) => r.machine_id.startsWith(machineFilter));
+
+    const agentRuns = filteredRows.filter((r) => r.kind === "agent_run");
+    if (agentRuns.length === 0) {
+      return { status: "no_matching_records", message: "no execution data" };
+    }
+
+    interface MachineExecStats {
+      machineId: string;
+      runs: number;
+      error: number;
+      sessions: number;
+      manual: number;
+      tokSum: number;
+      tokCount: number;
+    }
+
+    const statsByMachine = new Map<string, MachineExecStats>();
+    for (const row of filteredRows) {
+      let stats = statsByMachine.get(row.machine_id);
+      if (!stats) {
+        stats = {
+          machineId: row.machine_id,
+          runs: 0,
+          error: 0,
+          sessions: 0,
+          manual: 0,
+          tokSum: 0,
+          tokCount: 0,
+        };
+        statsByMachine.set(row.machine_id, stats);
+      }
+
+      if (row.kind === "agent_run") {
+        stats.runs++;
+        if (row.status === "error") {
+          stats.error++;
+        }
+        const tokMatch = row.detail?.match(/\btok=(\d+)\b/);
+        if (tokMatch && row.status !== "error") {
+          stats.tokSum += Number(tokMatch[1]) || 0;
+          stats.tokCount++;
+        }
+      } else if (row.kind === "session_start") {
+        stats.sessions++;
+      } else if (row.kind === "manual_intervention") {
+        stats.manual++;
+      }
+    }
+
+    let totalRuns = 0;
+    let totalError = 0;
+    let totalSessions = 0;
+    let totalManual = 0;
+    let totalTokSum = 0;
+    let totalTokCount = 0;
+
+    for (const stats of statsByMachine.values()) {
+      totalRuns += stats.runs;
+      totalError += stats.error;
+      totalSessions += stats.sessions;
+      totalManual += stats.manual;
+      totalTokSum += stats.tokSum;
+      totalTokCount += stats.tokCount;
+    }
+
+    const useTokens = totalTokCount >= totalRuns * 0.5;
+    const costLabel = useTokens ? "meanTok" : "runs/session";
+
+    const columns: ReportColumn[] = [
+      { label: "machine", width: 22 },
+      { label: "days", width: 6 },
+      { label: "runs", width: 7 },
+      { label: "error", width: 7 },
+      { label: "errorRate", width: 11 },
+      { label: "sessions", width: 10 },
+      { label: costLabel, width: 14 },
+      { label: "manual", width: 8 },
+    ];
+
+    const lines: string[] = [];
+    lines.push(columns.map((col) => col.label.padEnd(col.width)).join(" "));
+
+    const localMachine = this.readLocalMachine();
+
+    for (const stats of statsByMachine.values()) {
+      const isLocal = localMachine?.id === stats.machineId;
+      let label = stats.machineId.slice(0, 8);
+      if (isLocal && localMachine?.hostname) {
+        label = `${label} (${localMachine.hostname.slice(0, 10)})`;
+      }
+
+      const errorRate = stats.runs > 0 ? `${((stats.error / stats.runs) * 100).toFixed(1)}%` : "—";
+      let costVal = "—";
+      if (useTokens) {
+        costVal = stats.tokCount > 0 ? String(Math.round(stats.tokSum / stats.tokCount)) : "—";
+      } else {
+        costVal = stats.sessions > 0 ? (stats.runs / stats.sessions).toFixed(1) : "—";
+      }
+
+      const values = [
+        label.padEnd(22),
+        String(days).padEnd(6),
+        String(stats.runs).padEnd(7),
+        String(stats.error).padEnd(7),
+        errorRate.padEnd(11),
+        String(stats.sessions).padEnd(10),
+        costVal.padEnd(14),
+        String(stats.manual).padEnd(8),
+      ];
+      lines.push(values.join(" "));
+    }
+
+    const pooledErrorRateNum = totalRuns > 0 ? (totalError / totalRuns) * 100 : 0;
+    const pooledErrorRateStr = totalRuns > 0 ? `${pooledErrorRateNum.toFixed(1)}%` : "—";
+    let pooledCostVal = "—";
+    if (useTokens) {
+      pooledCostVal = totalTokCount > 0 ? String(Math.round(totalTokSum / totalTokCount)) : "—";
+    } else {
+      pooledCostVal = totalSessions > 0 ? (totalRuns / totalSessions).toFixed(1) : "—";
+    }
+
+    const pooledValues = [
+      "POOLED".padEnd(22),
+      String(days).padEnd(6),
+      String(totalRuns).padEnd(7),
+      String(totalError).padEnd(7),
+      pooledErrorRateStr.padEnd(11),
+      String(totalSessions).padEnd(10),
+      pooledCostVal.padEnd(14),
+      String(totalManual).padEnd(8),
+    ];
+    lines.push(pooledValues.join(" "));
+
+    return {
+      status: "success",
+      data: {
+        columns,
+        lines,
+        totalRuns,
+        pooledErrorRate: pooledErrorRateNum,
       },
     };
   }

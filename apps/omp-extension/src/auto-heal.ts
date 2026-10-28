@@ -29,6 +29,43 @@ function parseLastAssistantMessage(event: unknown): AssistantMessageDetails | nu
 
   return { role, stopReason, errorMessage, error };
 }
+export function extractTokenTotal(message: unknown): number | null {
+  if (!message || typeof message !== "object") return null;
+
+  function validNum(n: unknown): number | null {
+    return typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  // 1. Check usage sub-object
+  if ("usage" in message && message.usage && typeof message.usage === "object") {
+    const u = message.usage as Record<string, unknown>;
+    const total = validNum(u.totalTokens);
+    if (total !== null) return total;
+
+    const inTok = validNum(u.input);
+    const outTok = validNum(u.output);
+    if (inTok !== null && outTok !== null) return inTok + outTok;
+
+    const inTok2 = validNum(u.inputTokens);
+    const outTok2 = validNum(u.outputTokens);
+    if (inTok2 !== null && outTok2 !== null) return inTok2 + outTok2;
+  }
+
+  // 2. Check top-level fields
+  const top = message as Record<string, unknown>;
+  const totalTop = validNum(top.totalTokens);
+  if (totalTop !== null) return totalTop;
+
+  const inTop = validNum(top.input);
+  const outTop = validNum(top.output);
+  if (inTop !== null && outTop !== null) return inTop + outTop;
+
+  const inTop2 = validNum(top.inputTokens);
+  const outTop2 = validNum(top.outputTokens);
+  if (inTop2 !== null && outTop2 !== null) return inTop2 + outTop2;
+
+  return null;
+}
 
 function parseRetryEvent(event: unknown): { attempt?: number; errorMessage?: string } {
   if (!event || typeof event !== "object") return {};
@@ -208,8 +245,30 @@ export class AutoHealCoordinator {
     pi.on("agent_end", (event, ctx) => {
       if (ctx.agent.kind !== "main") return;
       const last = parseLastAssistantMessage(event);
-      if (last?.role !== "assistant" || last.stopReason !== "error") return;
 
+      if (ctx.mode === "tui") {
+        try {
+          const current = ctx.models.current();
+          const provider = current?.provider ?? "unknown";
+          const modelId = current?.id ? String(current.id) : "unknown";
+          const status = last?.stopReason === "error" ? "error" : "ok";
+          const tok = extractTokenTotal(event) ?? extractTokenTotal(last);
+          const detail = tok === null ? modelId : `${modelId} tok=${tok}`;
+          recordHistory([
+            {
+              at: Date.now(),
+              kind: "agent_run",
+              provider,
+              status,
+              detail,
+            },
+          ]);
+        } catch {
+          // recordHistory handles warn-once internally
+        }
+      }
+
+      if (last?.role !== "assistant" || last.stopReason !== "error") return;
       const current = ctx.models.current();
       if (
         !current ||

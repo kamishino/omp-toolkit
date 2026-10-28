@@ -48,6 +48,7 @@
     "monitor": "bun scripts/monitor/monitor.ts",
     "monitor:orca": "bun scripts/monitor/orca-monitor.ts",
     "reliability:report": "bun scripts/reliability/reliability-report.ts",
+    "execution:report": "bun scripts/reliability/execution-report.ts",
     "doctor": "bun scripts/doctor.ts"
   },
   "devDependencies": {
