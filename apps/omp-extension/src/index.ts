@@ -38,6 +38,7 @@ import {
 import { runExtensionCli } from "./cli";
 import { registerCommandsAndTools } from "./commands";
 import { registerGeminiNormalizer } from "./gemini-normalizer";
+import { registerTemplateCommands } from "./template-commands";
 import type { WarmUpAdapter, WarmUpDependencies } from "./warmup";
 
 export {
@@ -107,6 +108,10 @@ export default function geminiHealthExtension(pi: ExtensionAPI) {
   registerCommandsAndTools(pi, {
     warmUpDeps,
     coordinator,
+    reloadIfAvailable,
+  });
+
+  registerTemplateCommands(pi, {
     reloadIfAvailable,
   });
 }
