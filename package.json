@@ -47,7 +47,8 @@
     "install:omp": "bun scripts/build/build.ts --no-desktop && bun scripts/install/install.ts",
     "monitor": "bun scripts/monitor/monitor.ts",
     "monitor:orca": "bun scripts/monitor/orca-monitor.ts",
-    "reliability:report": "bun scripts/reliability/reliability-report.ts"
+    "reliability:report": "bun scripts/reliability/reliability-report.ts",
+    "doctor": "bun scripts/doctor.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",
