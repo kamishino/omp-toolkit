@@ -222,14 +222,40 @@ export function isDashboardSummary(s: unknown): boolean {
 
 export function isDashboardHealth(h: unknown): boolean {
   if (!h || typeof h !== "object") return false;
-  const health = h as { checkedAt?: unknown; ageMs?: unknown; stale?: unknown };
-  return (
-    typeof health.checkedAt === "number" &&
-    Number.isFinite(health.checkedAt) &&
-    typeof health.ageMs === "number" &&
-    Number.isFinite(health.ageMs) &&
-    typeof health.stale === "boolean"
-  );
+  const health = h as {
+    checkedAt?: unknown;
+    ageMs?: unknown;
+    stale?: unknown;
+    incident?: unknown;
+  };
+  if (
+    typeof health.checkedAt !== "number" ||
+    !Number.isFinite(health.checkedAt) ||
+    typeof health.ageMs !== "number" ||
+    !Number.isFinite(health.ageMs) ||
+    typeof health.stale !== "boolean"
+  ) {
+    return false;
+  }
+  if (health.incident !== null && health.incident !== undefined) {
+    if (typeof health.incident !== "object") return false;
+    const inc = health.incident as {
+      id?: unknown;
+      at?: unknown;
+      kind?: unknown;
+      detail?: unknown;
+    };
+    if (
+      typeof inc.id !== "string" ||
+      typeof inc.at !== "number" ||
+      !Number.isFinite(inc.at) ||
+      typeof inc.kind !== "string" ||
+      typeof inc.detail !== "string"
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function isDashboardBalance(b: unknown): boolean {

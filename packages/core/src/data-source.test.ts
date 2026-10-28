@@ -37,6 +37,38 @@ describe("UsageDataSource ports & adapters", () => {
     expect(parseHealthSnapshot("{ invalid")).toBeNull();
     expect(parseHealthSnapshot(JSON.stringify({ results: "not-array" }))).toBeNull();
   });
+  test("parseHealthSnapshot preserves valid incident and drops malformed incident without dropping snapshot", () => {
+    const validJson = JSON.stringify({
+      checkedAt: 1_700_000_000_000,
+      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+      incident: {
+        id: "inc-123",
+        at: 1_700_000_000_100,
+        kind: "all-failed",
+        detail: "3/3 accounts failing",
+      },
+    });
+    const withIncident = parseHealthSnapshot(validJson);
+    expect(withIncident?.incident).toEqual({
+      id: "inc-123",
+      at: 1_700_000_000_100,
+      kind: "all-failed",
+      detail: "3/3 accounts failing",
+    });
+
+    const malformedJson = JSON.stringify({
+      checkedAt: 1_700_000_000_000,
+      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+      incident: {
+        id: 123, // invalid type
+        at: "not-a-number",
+      },
+    });
+    const withoutIncident = parseHealthSnapshot(malformedJson);
+    expect(withoutIncident).not.toBeNull();
+    expect(withoutIncident?.checkedAt).toBe(1_700_000_000_000);
+    expect(withoutIncident?.incident).toBeUndefined();
+  });
 
   test("UsageDataSource coordinates fetching and compiling dashboard via injected adapter", async () => {
     const mockReports = [

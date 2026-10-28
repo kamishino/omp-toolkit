@@ -36,9 +36,17 @@ export interface HealthResult {
   checkedAt?: number;
 }
 
+export interface HealthIncident {
+  id: string;
+  at: number;
+  kind: "all-failed" | "restore-failed" | "lock-timeout" | "history-error";
+  detail: string;
+}
+
 export interface HealthSnapshot {
   checkedAt: number;
   results: HealthResult[];
+  incident?: HealthIncident;
 }
 
 export interface Policy {

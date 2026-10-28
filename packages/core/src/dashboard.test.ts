@@ -173,6 +173,7 @@ describe("buildDashboard", () => {
       checkedAt: now - 20 * 60_000,
       ageMs: 20 * 60_000,
       stale: true,
+      incident: null,
     });
 
     expect(dashboard.balance).toEqual({
@@ -243,6 +244,37 @@ describe("assembleDashboard high-leverage entry point", () => {
     expect(dashboard.health?.checkedAt).toBe(snapshot.checkedAt);
     expect(dashboard.iconLevel).toBe("ok");
     expect(isDashboard(dashboard)).toBe(true);
+  });
+  test("propagates snapshot incident to dashboard.health.incident or sets null", () => {
+    const reports: UsageReport[] = [
+      {
+        provider: "google-antigravity",
+        metadata: { email: "user@example.com" },
+        limits: [{ id: "l1", label: "Gemini", amount: { usedFraction: 0.1 } }],
+      },
+    ];
+    const snapshotWithIncident: HealthSnapshot = {
+      checkedAt: 1_700_000_000_000,
+      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      incident: {
+        id: "inc-99",
+        at: 1_700_000_000_000,
+        kind: "all-failed",
+        detail: "hang detected",
+      },
+    };
+
+    const withInc = assembleDashboard(reports, snapshotWithIncident);
+    expect(withInc.health?.incident).toEqual(snapshotWithIncident.incident);
+    expect(isDashboard(withInc)).toBe(true);
+
+    const snapshotWithout: HealthSnapshot = {
+      checkedAt: 1_700_000_000_000,
+      results: [{ email: "user@example.com", status: "ok", ms: 50 }],
+    };
+    const withoutInc = assembleDashboard(reports, snapshotWithout);
+    expect(withoutInc.health?.incident).toBeNull();
+    expect(isDashboard(withoutInc)).toBe(true);
   });
 });
 

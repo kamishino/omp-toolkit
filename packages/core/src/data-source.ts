@@ -1,7 +1,7 @@
 import { type DashboardCompileOptions, DashboardEngine } from "./dashboard/engine";
 import type { Dashboard } from "./dashboard/types";
 import { resolveSnapshotPath } from "./environment";
-import type { HealthSnapshot, UsageReport } from "./types";
+import type { HealthIncident, HealthSnapshot, UsageReport } from "./types";
 
 export function parseRawUsage(stdout: string): UsageReport[] {
   let parsed: unknown;
@@ -31,7 +31,29 @@ export function parseHealthSnapshot(rawJson: string): HealthSnapshot | null {
         typeof result.status === "string" &&
         typeof result.ms === "number",
     );
-    return { checkedAt: Number(parsed.checkedAt) || 0, results };
+    let incident: HealthIncident | undefined;
+    if (parsed.incident && typeof parsed.incident === "object") {
+      const inc = parsed.incident;
+      if (
+        typeof inc.id === "string" &&
+        typeof inc.at === "number" &&
+        Number.isFinite(inc.at) &&
+        typeof inc.kind === "string" &&
+        typeof inc.detail === "string"
+      ) {
+        incident = {
+          id: inc.id,
+          at: inc.at,
+          kind: inc.kind as HealthIncident["kind"],
+          detail: inc.detail,
+        };
+      }
+    }
+    return {
+      checkedAt: Number(parsed.checkedAt) || 0,
+      results,
+      ...(incident ? { incident } : {}),
+    };
   } catch {
     return null;
   }

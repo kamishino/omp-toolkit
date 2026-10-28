@@ -6,8 +6,8 @@ export type HistoryEventKind =
   | "incident"
   | "incident_resolved"
   | "alert"
-  | "session_start";
-
+  | "session_start"
+  | "agent_run";
 export interface HistoryEvent {
   at: number;
   machineId: string;

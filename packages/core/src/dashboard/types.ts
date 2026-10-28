@@ -1,7 +1,7 @@
 import type { WeeklyPacing } from "../pacing";
 import type { WindowEvaluation } from "../schedule";
 import type { BalanceAlertThresholds } from "../settings";
-import type { Status } from "../types";
+import type { HealthIncident, Status } from "../types";
 export type UsageLevel = "ok" | "warn" | "hot" | "critical" | "unknown";
 export type RouteText = "OK" | "HANG" | "AUTH" | "MODEL" | "ERR" | "—";
 export const DASHBOARD_SCHEMA_VERSION = 2 as const;
@@ -56,6 +56,7 @@ export interface DashboardHealth {
   checkedAt: number;
   ageMs: number;
   stale: boolean;
+  incident: HealthIncident | null;
 }
 
 export interface DashboardBalance {
@@ -79,6 +80,7 @@ export interface BuildDashboardOptions {
   now: number;
   showHealth: boolean;
   checkedAt?: number;
+  incident?: HealthIncident | null;
   thresholds: { warm: number; hot: number; critical: number; above: number };
   staleMinutes: number;
   balanceAlert: BalanceAlertThresholds;

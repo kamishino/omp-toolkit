@@ -2,7 +2,13 @@ import { money } from "../format";
 import { computeWeeklyPacing } from "../pacing";
 import { scheduleRegistry } from "../schedule";
 import { DEFAULT_BALANCE_ALERT } from "../settings";
-import type { HealthResult, HealthSnapshot, ProviderSection, UsageReport } from "../types";
+import type {
+  HealthIncident,
+  HealthResult,
+  HealthSnapshot,
+  ProviderSection,
+  UsageReport,
+} from "../types";
 import { limitFor, local, providerName, sectionsFor, usedPercent } from "../usage";
 import { isLowBalance, routeFor, usageLevel } from "./mappers";
 import { calculateSummary } from "./summary";
@@ -38,6 +44,7 @@ export function assembleDashboard(
     now,
     showHealth,
     checkedAt: snapshot?.checkedAt,
+    incident: snapshot?.incident ?? null,
     thresholds: options.thresholds ?? DEFAULT_USAGE_THRESHOLDS,
     staleMinutes: options.staleMinutes ?? DEFAULT_STALE_MINUTES,
     balanceAlert: options.balanceAlert ?? DEFAULT_BALANCE_ALERT,
@@ -141,7 +148,12 @@ export function buildDashboard(
   const allRows = providers.flatMap((provider) => provider.rows);
   const summary = calculateSummary(providers, sections.length, options.thresholds.above);
   const health = options.showHealth
-    ? buildDashboardHealth(options.checkedAt, options.now, options.staleMinutes)
+    ? buildDashboardHealth(
+        options.checkedAt,
+        options.now,
+        options.staleMinutes,
+        options.incident ?? null,
+      )
     : null;
   const balance = extractDeepSeekBalance(providers);
   const tooltip = buildDashboardTooltip(summary, allRows, balance, providers);
@@ -162,15 +174,16 @@ export function buildDashboardHealth(
   checkedAt: number | undefined,
   now: number,
   staleMinutes: number,
+  incident: HealthIncident | null = null,
 ): DashboardHealth {
   const ts = checkedAt ?? 0;
   return {
     checkedAt: ts,
     ageMs: ts > 0 ? Math.max(0, now - ts) : 0,
     stale: ts > 0 && now - ts > staleMinutes * 60_000,
+    incident,
   };
 }
-
 export function extractDeepSeekBalance(
   providers: readonly DashboardProvider[],
 ): DashboardBalance | null {
