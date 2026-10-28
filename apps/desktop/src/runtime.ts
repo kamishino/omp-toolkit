@@ -62,6 +62,7 @@ export interface DesktopRuntimeOptions {
   dialogHost?: DialogHost;
   argv?: string[];
   env?: NodeJS.ProcessEnv;
+  home?: string;
 }
 
 export type RuntimeListener = (state: PanelState) => void;
@@ -377,9 +378,12 @@ export class DesktopRuntime {
   }
 
   async launchTerminal(panelWindow?: BrowserWindow | null): Promise<void> {
-    const bun = findBun();
-    const script = resolveMonitorScript(this.options.env ?? process.env, this.options.checkoutRoot);
-
+    const bun = findBun(this.options.env ?? process.env, process.platform, this.options.home);
+    const script = resolveMonitorScript(
+      this.options.env ?? process.env,
+      this.options.checkoutRoot,
+      this.options.home,
+    );
     if (!bun) {
       this.dialogHost.showErrorBox(
         "OMP Provider Usage",
@@ -415,8 +419,12 @@ export class DesktopRuntime {
   }
 
   launchOrca(): void {
-    const checkout = resolveCheckout(this.options.env ?? process.env, this.options.checkoutRoot);
-    const bun = findBun();
+    const checkout = resolveCheckout(
+      this.options.env ?? process.env,
+      this.options.checkoutRoot,
+      this.options.home,
+    );
+    const bun = findBun(this.options.env ?? process.env, process.platform, this.options.home);
     try {
       openOrca(checkout, bun);
     } catch (error) {

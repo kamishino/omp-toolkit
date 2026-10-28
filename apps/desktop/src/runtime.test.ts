@@ -249,6 +249,8 @@ describe("DesktopRuntime deep coordinator", () => {
       const runtime = new DesktopRuntime({
         userDataDir: tmpDir,
         checkoutRoot: tmpDir,
+        home: tmpDir,
+        env: {},
         dialogHost: mockDialogHost,
       });
 
@@ -273,6 +275,8 @@ describe("DesktopRuntime deep coordinator", () => {
       const runtime = new DesktopRuntime({
         userDataDir: tmpDir,
         checkoutRoot: tmpDir,
+        home: tmpDir,
+        env: {},
         dialogHost: mockDialogHost,
       });
 
