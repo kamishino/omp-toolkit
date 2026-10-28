@@ -7,6 +7,7 @@ export * from "./health";
 export * from "./history";
 export * from "./schedule";
 export * from "./settings";
+export * from "./templates";
 export * from "./types";
 export * from "./usage";
 export * from "./usage-providers";
