@@ -11,7 +11,8 @@ node_modules/
 
 # Build output
 dist/
-build/
+/build/
+!scripts/build/
 out/
 coverage/
 .nyc_output/
