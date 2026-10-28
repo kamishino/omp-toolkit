@@ -1,7 +1,7 @@
+import type { PacingSample, WeeklyPacing } from "../pacing";
 import type { WindowEvaluation } from "../schedule";
 import type { BalanceAlertThresholds } from "../settings";
 import type { Status } from "../types";
-
 export type UsageLevel = "ok" | "warn" | "hot" | "critical" | "unknown";
 export type RouteText = "OK" | "HANG" | "AUTH" | "MODEL" | "ERR" | "—";
 export const DASHBOARD_SCHEMA_VERSION = 2 as const;
@@ -15,6 +15,7 @@ export interface DashboardLimit {
   remaining?: number;
   low: boolean;
   level: UsageLevel;
+  pacing?: WeeklyPacing;
 }
 
 export interface DashboardRoute {
@@ -82,6 +83,7 @@ export interface BuildDashboardOptions {
   staleMinutes: number;
   balanceAlert: BalanceAlertThresholds;
   userTimeZone?: string;
+  pacingSamples?: Record<string, readonly PacingSample[]>;
 }
 
 export const DEFAULT_USAGE_THRESHOLDS = {
@@ -100,4 +102,5 @@ export interface AssembleDashboardOptions {
   staleMinutes?: number;
   balanceAlert?: BalanceAlertThresholds;
   userTimeZone?: string;
+  pacingSamples?: Record<string, readonly PacingSample[]>;
 }

@@ -1,4 +1,5 @@
 import { money } from "../format";
+import { computeWeeklyPacing } from "../pacing";
 import { scheduleRegistry } from "../schedule";
 import { DEFAULT_BALANCE_ALERT } from "../settings";
 import type { HealthResult, HealthSnapshot, ProviderSection, UsageReport } from "../types";
@@ -41,6 +42,7 @@ export function assembleDashboard(
     staleMinutes: options.staleMinutes ?? DEFAULT_STALE_MINUTES,
     balanceAlert: options.balanceAlert ?? DEFAULT_BALANCE_ALERT,
     userTimeZone: options.userTimeZone,
+    pacingSamples: options.pacingSamples,
   });
 }
 
@@ -81,6 +83,18 @@ export function buildDashboard(
               ? "critical"
               : "ok"
             : usageLevel(usedFraction, options.thresholds);
+        const pacing =
+          section.provider === "muse-code" &&
+          column.label.toLowerCase() === "weekly" &&
+          usedFraction !== undefined &&
+          typeof limit?.window?.resetsAt === "number"
+            ? computeWeeklyPacing({
+                usedFraction,
+                resetsAt: limit.window.resetsAt,
+                now: options.now,
+                samples: options.pacingSamples?.[row.account] ?? [],
+              })
+            : null;
 
         return {
           id: limit?.id,
@@ -95,9 +109,9 @@ export function buildDashboard(
             : {}),
           low,
           level,
+          ...(pacing ? { pacing } : {}),
         };
       });
-
       return {
         account: row.account,
         displayAccount: local(row.account),
