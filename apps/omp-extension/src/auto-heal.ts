@@ -40,18 +40,60 @@ function parseRetryEvent(event: unknown): { attempt?: number; errorMessage?: str
       : undefined;
   return { attempt, errorMessage };
 }
+export const RECOVERY_INTERVAL_MS = Math.max(
+  60_000,
+  (Number(process.env.GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS ?? 300) || 300) * 1000,
+);
 
 export class AutoHealCoordinator {
   private lastAutoHeal = 0;
   private running = false;
   private readonly cooldownMs: number;
   private readonly provider: string;
+  private readonly recoveryIntervalMs: number;
+  private recoveryTimer: NodeJS.Timeout | null = null;
+  private warnedNoIdle = false;
 
-  constructor(options: { cooldownMs?: number; provider?: string } = {}) {
+  constructor(
+    options: {
+      cooldownMs?: number;
+      provider?: string;
+      recoveryIntervalMs?: number;
+    } = {},
+  ) {
     this.cooldownMs = options.cooldownMs ?? AUTO_HEAL_COOLDOWN_MS;
     this.provider = options.provider ?? PROVIDER;
+    this.recoveryIntervalMs = options.recoveryIntervalMs ?? RECOVERY_INTERVAL_MS;
   }
 
+  getRecoveryTimer(): NodeJS.Timeout | null {
+    return this.recoveryTimer;
+  }
+
+  stopRecoveryTimer(): void {
+    if (this.recoveryTimer) {
+      clearInterval(this.recoveryTimer);
+      this.recoveryTimer = null;
+    }
+  }
+
+  async tickRecovery(ctx: ExtensionContext): Promise<void> {
+    if (this.running) return;
+    if (typeof ctx.isIdle === "function") {
+      if (!ctx.isIdle()) return;
+    } else {
+      if (!this.warnedNoIdle) {
+        this.warnedNoIdle = true;
+      }
+      return;
+    }
+    const hasExclusions = await healthManager.hasExclusionsToRecover();
+    if (!hasExclusions) return;
+
+    await this.runExclusive(ctx, "Recovery tick", async () => {
+      await this.refresh(ctx, false);
+    });
+  }
   isRunning(): boolean {
     return this.running;
   }
@@ -140,6 +182,12 @@ export class AutoHealCoordinator {
 
   registerEvents(pi: ExtensionAPI): void {
     pi.on("session_start", (_event, ctx) => {
+      this.stopRecoveryTimer();
+      if (ctx.agent.kind === "main") {
+        this.recoveryTimer = setInterval(() => {
+          void this.tickRecovery(ctx);
+        }, this.recoveryIntervalMs);
+      }
       if (ctx.agent.kind !== "main" || ctx.mode !== "tui") return;
       recordHistory([{ at: Date.now(), kind: "session_start", detail: "tui" }]);
       if (!widgetEnabled()) return;
@@ -153,6 +201,7 @@ export class AutoHealCoordinator {
     });
 
     pi.on("session_shutdown", () => {
+      this.stopRecoveryTimer();
       closeHistory();
     });
 

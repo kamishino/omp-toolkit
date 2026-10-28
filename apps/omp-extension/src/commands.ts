@@ -361,6 +361,129 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
       }
     },
   });
+  pi.registerCommand("gemini-auto-restore", {
+    description:
+      "Manage opt-in automatic restoration for manual Gemini account exclusions: /gemini-auto-restore [<email>|off <email>]",
+    handler: async (args, ctx) => {
+      const trimmed = args.trim();
+      try {
+        const sidecar = healthManager.readAutoRestore();
+        const policies = await healthManager.readPolicies();
+        const state = healthManager.readState();
+        const managed = new Set(state.excluded);
+        const manual = policies
+          .filter(
+            (p) =>
+              p?.provider === PROVIDER &&
+              typeof p?.account?.email === "string" &&
+              (p.reservePct ?? 0) >= 100 &&
+              !managed.has(p.account.email),
+          )
+          .map((p) => p.account?.email)
+          .filter((email): email is string => typeof email === "string");
+
+        // Case 1: no args -> list opted-in accounts and current manual exclusions
+        if (!trimmed) {
+          const optedInList = sidecar.enabled.length > 0 ? sidecar.enabled.join(", ") : "none";
+          const manualList = manual.length > 0 ? manual.join(", ") : "none";
+          const content = `Opted-in for auto-restore: ${optedInList}\nManual exclusions: ${manualList}`;
+          ctx.ui.notify(content, "info");
+          pi.sendMessage(
+            {
+              customType: "gemini-auto-restore",
+              content,
+              display: true,
+              attribution: "agent",
+            },
+            { triggerTurn: false },
+          );
+          return;
+        }
+
+        // Case 2: off <email-or-local-part>
+        if (trimmed.startsWith("off ") || trimmed === "off") {
+          const needle = trimmed.replace(/^off\s*/, "").trim();
+          if (!needle) {
+            ctx.ui.notify("Usage: /gemini-auto-restore off <email-or-local-part>", "warning");
+            return;
+          }
+          const resolution = await healthManager.resolveAccount(needle);
+          let targetEmail: string;
+          if (resolution.status === "ambiguous") {
+            ctx.ui.notify(resolution.error, "warning");
+            return;
+          }
+          if (resolution.status === "found") {
+            targetEmail = resolution.account.email;
+          } else {
+            const matchInSidecar = sidecar.enabled.find(
+              (e) =>
+                e.toLowerCase() === needle.toLowerCase() ||
+                e.toLowerCase().split("@")[0] === needle.toLowerCase(),
+            );
+            if (!matchInSidecar) {
+              ctx.ui.notify(`Account "${needle}" is not opted in to auto-restore`, "info");
+              return;
+            }
+            targetEmail = matchInSidecar;
+          }
+
+          if (!sidecar.enabled.some((e) => e.toLowerCase() === targetEmail.toLowerCase())) {
+            ctx.ui.notify(`Account ${targetEmail} is not opted in to auto-restore`, "info");
+            return;
+          }
+
+          sidecar.enabled = sidecar.enabled.filter(
+            (e) => e.toLowerCase() !== targetEmail.toLowerCase(),
+          );
+          healthManager.writeAutoRestore(sidecar);
+          recordHistory([
+            {
+              at: Date.now(),
+              kind: "policy_change",
+              provider: PROVIDER,
+              account: targetEmail,
+              detail: "gemini-auto-restore off",
+            },
+          ]);
+          ctx.ui.notify(`Removed ${targetEmail} from auto-restore`, "info");
+          return;
+        }
+
+        // Case 3: <email-or-local-part> -> opt in
+        const needle = trimmed;
+        const resolution = await healthManager.resolveAccount(needle);
+        if (resolution.status === "not_found") {
+          ctx.ui.notify(resolution.error, "warning");
+          return;
+        }
+        if (resolution.status === "ambiguous") {
+          ctx.ui.notify(resolution.error, "warning");
+          return;
+        }
+
+        const email = resolution.account.email;
+        if (!sidecar.enabled.some((e) => e.toLowerCase() === email.toLowerCase())) {
+          sidecar.enabled.push(email);
+          healthManager.writeAutoRestore(sidecar);
+          recordHistory([
+            {
+              at: Date.now(),
+              kind: "policy_change",
+              provider: PROVIDER,
+              account: email,
+              detail: "gemini-auto-restore",
+            },
+          ]);
+          ctx.ui.notify(`Enabled auto-restore for ${email}`, "info");
+        } else {
+          ctx.ui.notify(`${email} is already opted in to auto-restore`, "info");
+        }
+      } catch (error) {
+        ctx.ui.notify(`Gemini auto-restore failed: ${short(error)}`, "error");
+      }
+    },
+  });
 
   pi.registerTool({
     name: "gemini_health",

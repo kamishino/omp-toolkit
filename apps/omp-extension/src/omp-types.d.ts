@@ -51,6 +51,7 @@ declare module "@oh-my-pi/pi-coding-agent" {
     model?: ExtensionModel;
     models: ExtensionModels;
     setTimeout(callback: () => void, delayMs: number): unknown;
+    isIdle?(): boolean;
     reload?: () => Promise<void>;
   }
 
