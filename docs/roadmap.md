@@ -47,15 +47,22 @@
 - Eval-locked model pairing (Pair A `deepseek/deepseek-flash`) and versioned
   plan-to-executor handoff contract template (`templates/plan-exec-handoff/`).
 - Weekly pacing, multi-provider schedule, desktop tray widget, and TUI
-  monitor are shipped and maintain-only this cycle.
+monitor are shipped and maintain-only this cycle.
+- Doctor diagnostic CLI (`scripts/doctor.ts`, `bun run doctor`) verifying OMP
+  version, installed files, history DB, machine identity, lock, and Orca.
+- Incident lifecycle alerting: `HealthSnapshot.incident`, `incident` and
+  `incident_resolved` event logging, PowerShell toast dispatch
+  (`scripts/windows-toast.ps1`), and TUI incident banner.
+- Execution quality telemetry: `"agent_run"` history event recording on
+  `agent_end` and `bun run execution:report` reporting CLI.
+- Two-machine rollout architecture and Machine 2 checklist documented in
+  `docs/runbook.md`.
 - **Known gaps:**
-  - No `scripts/doctor.ts` or `bun run doctor` command exists in the tree
-    (yet `docs/runbook.md` references it).
-  - No production writer emits `incident` or `incident_resolved` events into
-    history; the report's `late` incident metric is currently vacuous.
-  - Two-machine rollout is undocumented in `docs/runbook.md`.
-  - Machine 2 is not yet installed.
-  - Account `<account>` still requires a manual `reservePct: 100` exclusion.
+  - Machine 2 is not yet installed (operator action, Phase 0 remainder).
+  - Account `<account>` is not yet opted in to auto-restore (sidecar absent;
+    operator action, Phase 0 remainder).
+  - No execution-quality baseline yet established (telemetry started accruing
+    on Cycle Day 1; see Status).
 
 > This roadmap is public. Personal machine names, account emails, and terminal
 > handles must not be added to it.
@@ -83,6 +90,86 @@
 
 ---
 
+## Status (as of 2026-10-28 — Cycle Day 1)
+
+Phase 0 and Phase 1 **code** was implemented and deployed live to Machine 1 on
+Cycle Day 1, ahead of the phase calendar. This early code deployment does not
+alter the 90-day phase calendar: baseline accrual began on Day 1, Phase 2
+menu interventions commence on Day 33, and the Day 51 system freeze and proof
+start remain immovable. No phase exit gate is fully met as of Day 1.
+
+### Phase verdict summary
+
+| Phase | Verdict | Evidence | Remaining |
+| ----- | ------- | -------- | --------- |
+| **0** | **Code complete (machine 1) — exit gate not met** | Commits `7796559`, `83bffe6`, `0cc1776`, `b3421f8`, `3dfa33b`; `bun run doctor` 6/6 PASS on machine 1; `bun run check` 346 tests pass | Machine 2 install + doctor verification (operator, runbook checklist); `/gemini-auto-restore <account>` opt-in; live forced-incident smoke (unit-tested only); probe-pin upstream audit |
+| **1** | **Implemented — baseline accruing, exit gate not met** | Commit `73eabd2`; live `bun run execution:report --days=14` operational | $\ge 14$ consecutive days accrual and $\ge 30$ pooled runs across both machines; baseline recorded in Monday review note; cost-proxy token validation |
+| **2** | **Not started** | Phase scheduled for Days 33–50 | Ranked intervention menu execution starting Day 33 |
+| **3** | **Not started** | Phase scheduled for Days 51–90 | Day 51 system freeze and 30-day proof window (Days 51–80) |
+
+### Day-1 metric snapshot
+
+The following metrics represent an initial Day-1 operational snapshot, **not**
+the finalized Phase 1 baseline:
+
+- **System Diagnostics (`bun run doctor`):**
+  - Machine 1: 6/6 PASS (`omp-version`, `installed-files`, `history-db`, `machine-id`, `lock-file`, `orca-terminal`), exit 0.
+- **Execution Quality (`bun run execution:report --days=14`):**
+  - Machine 1 / Pooled: 5 runs, 0 errors (`0.0%` error rate), 36 sessions, `costProxy = 1200` (`meanTok`), 0 manual interventions, exit 0.
+- **Route Reliability (`bun run reliability:report`):**
+  - `--days=1`: 35 checks, 35 ok, 0 hang, 0 error, 0 auth, 66 restores, 0 manual fixes, 0 incidents, 0 late, exit 0.
+  - `--days=7`: 224 checks, 198 ok, 18 hang, 7 error, 1 auth, 69 restores, 0 manual fixes, 0 incidents, 0 late, `monitor-age = stale`, exit 1 (6/7 days covered; pre-cycle history, not proof window).
+
+### Known issues
+
+- **costProxy validity unverified:** All initial 5 `agent_run` rows recorded
+  exactly `tok=1200`. While the token branch is active in `execution:report`,
+  a constant token value across diverse turns is unverified. Next action:
+  confirm which payload property `extractTokenTotal` matched in real OMP
+  turns before relying on `costProxy` for baseline decisions; error-rate
+  telemetry is unaffected. Until verified, `meanTok` values are provisional.
+- **Monitor heartbeat stale:** `reliability:report` indicates
+  `monitor-age = stale` on machine 1. Start continuous monitor
+  (`bun run monitor:orca`) per operating cadence.
+- **Probe pins unverified against upstream:** `DEFAULT_MODEL_WIRE = "gemini-3.8-flash-high"`
+  and `UA_VERSION = "2.24.0"` were left unchanged; no local upstream oracle was
+  available during implementation.
+
+### Deviations from spec (as-built)
+
+- **Snapshot file alignment:** Fixed snapshot producer in `health-manager.ts`
+  to write `gemini-health-latest.json` (aligning with `resolveSnapshotPath()`
+  and all consumers); the previous implementation wrote an unread
+  `gemini-health-snapshot.json`.
+- **Toast script deployment:** Added copy step in `scripts/install/install.ts`
+  to deploy `scripts/windows-toast.ps1` to `~/.omp/agent/scripts/windows-toast.ps1`
+  with timestamped backups.
+- **TUI mode gate for session telemetry:** `agent_run` recording in
+  `auto-heal.ts` is explicitly gated to `ctx.mode === "tui"` and `ctx.agent.kind === "main"`
+  to match the `session_start` recording gate and keep runs/session denominators
+  accurate.
+- **Doctor lock and Orca semantics:** `scripts/doctor.ts` passes a fresh lock
+  if its holding PID is currently active (avoiding false failures during active
+  healing) and accepts Orca's `{ ok: true, result: ... }` response envelope in
+  addition to raw JSON arrays.
+- **Execution report window:** `scripts/reliability/execution-report.ts`
+  evaluates a rolling `now - days * 86_400_000` window, whereas `reliability:report`
+  uses UTC calendar boundaries.
+
+### Pending operator actions
+
+1. **Install Machine 2:** Execute the 7-step checklist in `docs/runbook.md`
+   `## Two-machine rollout` on machine 2, then run `bun run doctor` and
+   `bun run reliability:report --days=1` there.
+2. **Opt in `<account>`:** Run `/gemini-auto-restore <account>` on machine 1 to
+   create `~/.omp/agent/gemini-health-auto-restore.json`.
+3. **Start background monitor:** Launch `bun run monitor:orca` to ensure fresh
+   heartbeat timestamps.
+4. **Begin review cadence:** Initialize the machine-local weekly review note on
+   Monday for tracking weekly reliability and execution reports.
+
+---
+
 ## Phase 0 — Close reliability gaps (Days 1–14)
 
 **Outcome:** the mandatory reliability proof becomes honest, complete, and
@@ -96,7 +183,7 @@ operable across both machines.
    - check installed extension and script files exist;
    - check history DB opens and schema version is current;
    - check machine id file (`omp-toolkit-machine.json`) exists and is valid;
-   - check lock file (`omp-toolkit.lock`) is either absent or stale;
+   - check lock file (`omp-toolkit.lock`) is absent, stale, or held by a live pid (FAIL only on corrupt or fresh orphaned lock);
    - check Orca floating selector with
      `orca terminal list --worktree id:global-floating-terminal --json`;
    - print PASS/FAIL per check and exit 1 on any FAIL.
@@ -175,7 +262,9 @@ from real sessions, establishing the auditable baseline for the cycle.
 2. Extend domain history types and wire session event recording:
    - Add `"agent_run"` to `HistoryEventKind` in `packages/core/src/history.ts`.
    - In `apps/omp-extension/src/auto-heal.ts`: on `agent_end` when
-     `ctx.agent.kind === "main"`, record one `agent_run` history event:
+     `ctx.agent.kind === "main"` and `ctx.mode === "tui"` (same gate as
+     `session_start` recording, so runs/session denominators match), record
+     one `agent_run` history event:
      - `provider`: current model provider from `ctx.models.current()`;
      - `status`: `"error"` if last assistant message `stopReason === "error"`,
        else `"ok"`;
