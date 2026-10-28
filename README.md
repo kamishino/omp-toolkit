@@ -181,6 +181,7 @@ Interact with the circuit breaker directly from inside OMP:
 /gemini-health-widget [on|off]               # Toggle TUI status widget visibility
 /gemini-warmup <account>|--all               # Send minimal warm-up request to OK accounts
 /gemini-check <account>                      # Probe specific account to verify route recovery
+/template save|apply|list|show|delete <name>  # Bundle global AGENTS.md + RULES.md into templates/<name>/ (see templates/README.md)
 ```
 
 ### Desktop Widget
