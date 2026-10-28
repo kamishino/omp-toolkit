@@ -3,7 +3,6 @@ import { type DashboardProvider, supportsWarmUp, warmUpEligibility } from "@omp-
 import type { PanelState } from "../ipc";
 import { icon } from "./icon";
 import { renderLimitCell } from "./limit-cell";
-import { renderPacingRow } from "./pacing-row";
 import { providerLogo } from "./provider-logos";
 
 export function renderProviderCard(
@@ -13,7 +12,6 @@ export function renderProviderCard(
   state: PanelState,
 ): HTMLElement {
   const hasWarmUp = supportsWarmUp(provider.id);
-  const colSpan = 1 + (hasAnyRoute ? 1 : 0) + provider.columns.length + (hasWarmUp ? 1 : 0);
   const card = document.createElement("section");
   card.className = "provider-card";
   const headerDiv = document.createElement("div");
@@ -172,10 +170,6 @@ export function renderProviderCard(
     }
 
     tbody.appendChild(tr);
-    const pacingLimit = row.limits.find((l) => l.pacing);
-    if (pacingLimit?.pacing) {
-      tbody.appendChild(renderPacingRow(pacingLimit.pacing, colSpan));
-    }
   }
 
   table.appendChild(tbody);

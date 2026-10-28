@@ -103,35 +103,13 @@ describe("renderer card module", () => {
     }
   });
 
-  test("renderProviderCard renders pacing row when limit carries pacing", () => {
+  test("renderProviderCard renders single row without sub-row when limit carries pacing", () => {
     mockDoc();
     try {
       const pacingStub: WeeklyPacing = {
-        windowStartAt: 1000,
-        resetsAt: 2000,
         dayIndex: 1,
-        usedFraction: 0.2,
-        remainingFraction: 0.8,
-        idealUsedFraction: 0.25,
-        paceDeltaFraction: -0.05,
-        status: "under",
-        level: "ok",
-        fixedDailyFraction: 1 / 7,
-        adaptiveDailyFraction: 0.15,
-        safeLeftTodayFraction: 0.08,
-        todayUsedFraction: 0.1,
-        todayLowerBound: false,
-        unobservedFraction: 0,
-        projectedExhaustionAt: null,
-        slices: Array.from({ length: 7 }, (_, i) => ({
-          index: i,
-          startAt: 1000 + i * 100,
-          endAt: 1100 + i * 100,
-          state: i === 1 ? "current" : i < 1 ? "past" : "future",
-          usedFraction: i <= 1 ? 0.1 : null,
-          lowerBound: false,
-          budgetFraction: i > 1 ? 0.15 : null,
-        })),
+        todayCeilingFraction: 2 / 7,
+        headroomFraction: 2 / 7 - 0.2,
       };
 
       const card = renderProviderCard(
@@ -181,9 +159,9 @@ describe("renderer card module", () => {
       const table = cardObj.children.find((c) => c.tagName === "table");
       const tbody = table?.children.find((c) => c.tagName === "tbody");
       const rows = tbody?.children ?? [];
-      // Primary row + Pacing row
-      expect(rows.length).toBe(2);
-      expect(rows[1].className).toBe("pacing-row");
+      // Exactly 1 row — no pacing sub-row
+      expect(rows.length).toBe(1);
+      expect(rows.some((r) => r.className.includes("pacing-row"))).toBe(false);
     } finally {
       restoreDoc();
     }

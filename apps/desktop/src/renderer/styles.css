@@ -377,6 +377,45 @@ progress::-webkit-progress-value {
   background: currentColor;
 }
 
+.limit-bar-wrap {
+  position: relative;
+  flex: none;
+  inline-size: var(--size-bar-width);
+  block-size: var(--size-bar-height);
+}
+
+.limit-bar-track {
+  position: absolute;
+  inset: 0;
+  background: var(--color-border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.limit-bar-fill {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  background: currentColor;
+}
+
+.limit-bar-over {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--color-danger);
+}
+
+.limit-bar-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--color-text);
+}
+
 .percent {
   display: inline-block;
   min-width: 6ch;
@@ -450,77 +489,6 @@ progress::-webkit-progress-value {
 
 .level-unknown {
   color: var(--color-muted);
-}
-
-/* Pacing Sub-Row */
-.pacing-row td.col-pacing {
-  padding-block: var(--space-xs) var(--space-sm);
-  padding-inline: var(--space-md);
-  background-color: var(--color-surface);
-  border-bottom: var(--size-border) solid var(--color-border);
-}
-
-.pacing-container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
-}
-
-.pacing-metrics {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-weight: 600;
-}
-
-.pacing-badge {
-  display: inline-block;
-  padding: 1px var(--space-xs);
-  background-color: var(--color-border);
-  color: var(--color-muted);
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-}
-
-.pacing-slices {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-.pacing-slice {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  color: var(--color-muted);
-}
-
-.pacing-slice.is-current {
-  font-weight: 700;
-}
-
-.pacing-slice progress {
-  inline-size: 24px;
-  block-size: var(--size-bar-height);
-}
-
-.slice-label {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-}
-
-.slice-value {
-  font-weight: 600;
-}
-
-.pacing-unobserved {
-  color: var(--color-muted);
-  font-style: italic;
 }
 
 /* Settings View */
