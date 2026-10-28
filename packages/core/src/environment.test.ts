@@ -7,6 +7,7 @@ import {
   resolveHistoryDbPath,
   resolveInstalledScript,
   resolveMonitorScriptCandidates,
+  resolvePacingSamplesPath,
   resolveSnapshotPath,
   resolveStatePath,
   resolveStreakPath,
@@ -36,6 +37,13 @@ describe("AgentEnvironment path resolver", () => {
   test("resolveHeartbeatPath resolves monitor json under agent directory", () => {
     const dir = path.join(fakeHome, ".omp", "agent");
     expect(resolveHeartbeatPath({}, fakeHome)).toBe(path.join(dir, "omp-toolkit-monitor.json"));
+  });
+
+  test("resolvePacingSamplesPath resolves samples json under agent directory", () => {
+    const dir = path.join(fakeHome, ".omp", "agent");
+    expect(resolvePacingSamplesPath({}, fakeHome)).toBe(
+      path.join(dir, "omp-toolkit-pacing-samples.json"),
+    );
   });
 
   test("resolveHistoryDbPath defaults to db under agentDir or respects env override", () => {

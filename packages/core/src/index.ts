@@ -5,6 +5,7 @@ export * from "./environment";
 export * from "./format";
 export * from "./health";
 export * from "./history";
+export * from "./pacing";
 export * from "./schedule";
 export * from "./settings";
 export * from "./templates";
