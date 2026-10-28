@@ -4,6 +4,7 @@ import {
   DashboardEngine,
   DEEPSEEK_POLICY,
   type HealthResult,
+  type HealthSnapshot,
   sectionsFor,
   type UsageReport,
 } from "@omp-toolkit/core";
@@ -302,6 +303,96 @@ describe("provider usage view", () => {
     const antiLine = antiStripped.split("\n").find((l) => l.startsWith("│ anti"));
     const insideBorders = antiLine?.slice(1, -1) ?? "";
     expect(insideBorders).toContain("│");
+  });
+  test("renders red incident banner when fresh incident exists, hides when older than 24h", () => {
+    const now = 1_700_000_000_000;
+    const dummyReports: UsageReport[] = [
+      {
+        provider: "google-antigravity",
+        metadata: { email: "user@example.com" },
+        limits: [{ id: "l1", label: "Gemini", amount: { usedFraction: 0.1 } }],
+      },
+    ];
+
+    // Fresh incident (10 mins ago)
+    const freshSnapshot: HealthSnapshot = {
+      checkedAt: now - 600_000,
+      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      incident: {
+        id: "inc-1",
+        at: now - 600_000,
+        kind: "all-failed",
+        detail: "all accounts failed to respond within timeout",
+      },
+    };
+
+    const freshDashboard = DashboardEngine.compile(dummyReports, freshSnapshot, {
+      now,
+      showHealth: true,
+    });
+    const freshView = renderProviderUsage(freshDashboard, {
+      interval: 300,
+      watch: false,
+      showHealth: true,
+    });
+    const freshStripped = stripAnsi(freshView);
+    const incidentLines = freshStripped
+      .split("\n")
+      .filter((l) => l.includes("INCIDENT all-failed"));
+    expect(incidentLines.length).toBe(1);
+    expect(incidentLines[0]).toContain("INCIDENT all-failed · 10m ago · all accounts failed");
+    for (const line of freshStripped.split("\n")) {
+      expect(line.length).toBeLessThanOrEqual(86);
+    }
+
+    // Stale incident (25 hours ago)
+    const staleSnapshot: HealthSnapshot = {
+      checkedAt: now - 25 * 3600_000,
+      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      incident: {
+        id: "inc-old",
+        at: now - 25 * 3600_000,
+        kind: "all-failed",
+        detail: "old incident",
+      },
+    };
+    const staleDashboard = DashboardEngine.compile(dummyReports, staleSnapshot, {
+      now,
+      showHealth: true,
+    });
+    const staleView = renderProviderUsage(staleDashboard, {
+      interval: 300,
+      watch: false,
+      showHealth: true,
+    });
+    expect(stripAnsi(staleView)).not.toContain("INCIDENT");
+
+    // Very long detail is truncated to fit width
+    const longSnapshot: HealthSnapshot = {
+      checkedAt: now - 60_000,
+      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      incident: {
+        id: "inc-long",
+        at: now - 60_000,
+        kind: "lock-timeout",
+        detail: "A".repeat(200),
+      },
+    };
+    const longDashboard = DashboardEngine.compile(dummyReports, longSnapshot, {
+      now,
+      showHealth: true,
+    });
+    const longView = renderProviderUsage(longDashboard, {
+      interval: 300,
+      watch: false,
+      showHealth: true,
+    });
+    const longStripped = stripAnsi(longView);
+    expect(longStripped).toContain("INCIDENT lock-timeout");
+    expect(longStripped).toContain("…");
+    for (const line of longStripped.split("\n")) {
+      expect(line.length).toBeLessThanOrEqual(86);
+    }
   });
   test("drawProviderUsage draws onto terminui terminal buffer via test backend", () => {
     const state = createTestBackendState(86, 20);

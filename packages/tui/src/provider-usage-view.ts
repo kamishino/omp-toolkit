@@ -125,7 +125,7 @@ export function renderProviderUsageFromDashboard(
     paint(time, ANSI.muted) +
     border("─╮");
 
-  const now = Date.now();
+  const now = dashboard.fetchedAt || Date.now();
 
   const summary = summaryText(dashboard.summary);
   const hasAnyRoute =
@@ -143,6 +143,14 @@ export function renderProviderUsageFromDashboard(
 
   const output: string[] = [top, line(paint(summary, ANSI.muted))];
 
+  if (options.showHealth && dashboard.health?.incident) {
+    const inc = dashboard.health.incident;
+    if (now - inc.at < 86_400_000) {
+      const age = formatAge(inc.at, now);
+      const bannerText = fit(`INCIDENT ${inc.kind} · ${age} · ${inc.detail}`, contentWidth);
+      output.push(line(paint(bannerText, ANSI.bold + ANSI.red)));
+    }
+  }
   for (const section of dashboard.providers) {
     output.push(border(`├${"─".repeat(inner)}┤`));
     const badge = section.timeWindow
