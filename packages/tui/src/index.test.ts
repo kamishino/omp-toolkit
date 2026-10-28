@@ -212,9 +212,10 @@ describe("provider usage view", () => {
     }
   });
 
-  test("renders pacing sub-row for muse-code when pacing is present", () => {
+  test("renders ceiling bar with marker and used/ceiling% for muse-code Weekly limit", () => {
     const now = Date.now();
-    const resetsAt = now + 400_000_000;
+    // 4.5 days remaining -> 2.5 days elapsed -> Day 3/7 (ceiling 3/7 ≈ 43%)
+    const resetsAt = now + 4.5 * 86_400_000;
     const museReports: UsageReport[] = [
       {
         provider: "muse-code",
@@ -223,28 +224,63 @@ describe("provider usage view", () => {
           {
             label: "Weekly",
             window: { label: "Weekly", resetsAt },
-            amount: { usedFraction: 0.25 },
+            amount: { usedFraction: 0.3 },
           },
         ],
       },
     ];
 
-    const dashboardWithPacing = DashboardEngine.compile(museReports, null, {
-      now,
-      pacingSamples: {
-        "muse@example.com": [{ at: resetsAt - 604_800_000, resetsAt, usedFraction: 0 }],
-      },
-    });
-
+    const dashboardWithPacing = DashboardEngine.compile(museReports, null, { now });
     const viewWithPacing = renderProviderUsage(dashboardWithPacing, {
       interval: 300,
       watch: false,
       showHealth: false,
     });
-    expect(viewWithPacing).toContain("PACE Day");
-    expect(viewWithPacing).toContain("D1 ");
-    expect(viewWithPacing).toContain("safe left");
 
+    const stripped = stripAnsi(viewWithPacing);
+    expect(stripped).toContain("30/43%");
+    expect(stripped).toContain("│");
+    expect(stripped).not.toContain("PACE");
+    expect(stripped).not.toContain("D1 ");
+
+    for (const line of viewWithPacing.split("\n")) {
+      expect(stripAnsi(line).length).toBeLessThanOrEqual(86);
+    }
+
+    // Over-ceiling fixture: 6.5 days remaining -> 0.5 days elapsed -> Day 1/7 (ceiling 1/7 ≈ 14%)
+    const overResetsAt = now + 6.5 * 86_400_000;
+    const overReports: UsageReport[] = [
+      {
+        provider: "muse-code",
+        metadata: { email: "muse@example.com" },
+        limits: [
+          {
+            label: "Weekly",
+            window: { label: "Weekly", resetsAt: overResetsAt },
+            amount: { usedFraction: 0.3 },
+          },
+        ],
+      },
+    ];
+    const overDashboard = DashboardEngine.compile(overReports, null, { now });
+    const prevForce = process.env.FORCE_COLOR;
+    process.env.FORCE_COLOR = "1";
+    try {
+      const overView = renderProviderUsage(overDashboard, {
+        interval: 300,
+        watch: false,
+        showHealth: false,
+      });
+      expect(stripAnsi(overView)).toContain("30/14%");
+      // Over-ceiling portion must contain red fill character
+      expect(overView).toContain(`${ANSI.red}█`);
+    } finally {
+      if (prevForce !== undefined) {
+        process.env.FORCE_COLOR = prevForce;
+      } else {
+        delete process.env.FORCE_COLOR;
+      }
+    }
     // Without muse pacing (e.g. only google-antigravity reports)
     const antigravityOnly: UsageReport[] = [
       {
@@ -261,7 +297,11 @@ describe("provider usage view", () => {
       watch: false,
       showHealth: false,
     });
-    expect(viewWithoutPacing).not.toContain("PACE Day");
+    const antiLine = stripAnsi(viewWithoutPacing)
+      .split("\n")
+      .find((l) => l.includes("anti"));
+    const insideBorders = antiLine?.slice(1, -1) ?? "";
+    expect(insideBorders).not.toContain("│");
   });
   test("drawProviderUsage draws onto terminui terminal buffer via test backend", () => {
     const state = createTestBackendState(86, 20);

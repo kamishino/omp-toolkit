@@ -6,11 +6,10 @@ import {
   type DashboardRoute,
   DEFAULT_BALANCE_ALERT,
   formatAge,
-  formatResetCompact,
   money,
   type ProviderSection,
   summaryText,
-  type WeeklyPacing,
+  type UsageLevel,
 } from "@omp-toolkit/core";
 import { createParagraph, type Frame, frameRenderWidget, renderParagraph } from "terminui";
 import {
@@ -52,6 +51,25 @@ function fit(text: string, width: number): string {
   return text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text;
 }
 
+function ceilingBar(value: number, ceiling: number, width: number, level: UsageLevel): string {
+  const clampedVal = Math.max(0, Math.min(1, value));
+  const filled = Math.round(clampedVal * width);
+  const tickIndex = ceiling >= 1 ? -1 : Math.min(width - 1, Math.floor(ceiling * width));
+
+  let result = "";
+  for (let i = 0; i < width; i++) {
+    if (i === tickIndex) {
+      result += paint("│", ANSI.bold + ANSI.cyan);
+    } else if (i < filled) {
+      const color =
+        tickIndex !== -1 && i > tickIndex ? colorForLevel("critical") : colorForLevel(level);
+      result += paint("█", color);
+    } else {
+      result += paint("░", colorForLevel(level));
+    }
+  }
+  return result;
+}
 function columnBlock(limit: DashboardLimit, width: number): string {
   const unit = limit.unit;
   if (unit === "cny" || unit === "usd") {
@@ -61,6 +79,14 @@ function columnBlock(limit: DashboardLimit, width: number): string {
   }
   const value = limit.usedFraction;
   if (width >= 15) {
+    if (limit.pacing && value !== undefined) {
+      const pctText = `${Math.round(value * 100)}/${Math.round(limit.pacing.todayCeilingFraction * 100)}%`;
+      const barWidth = Math.max(4, width - pctText.length - 8);
+      return padVisible(
+        `${ceilingBar(value, limit.pacing.todayCeilingFraction, barWidth, limit.level)} ${paint(pctText, colorForLevel(limit.level))} ${paint(resetInAt(limit.resetsAt), ANSI.muted)}`,
+        width,
+      );
+    }
     return padVisible(
       `${paint(bar(value, Math.max(1, width - 14)), colorForLevel(limit.level))} ${paint(percent(value), colorForLevel(limit.level))} ${paint(resetInAt(limit.resetsAt), ANSI.muted)}`,
       width,
@@ -73,62 +99,6 @@ function columnBlock(limit: DashboardLimit, width: number): string {
     );
   }
   return padVisible(paint(percent(value), colorForLevel(limit.level)), width);
-}
-
-function pacingLines(pacing: WeeklyPacing, indent = 2): string[] {
-  const prefix = " ".repeat(indent);
-  const {
-    dayIndex,
-    todayUsedFraction,
-    todayLowerBound,
-    safeLeftTodayFraction,
-    status,
-    paceDeltaFraction,
-    projectedExhaustionAt,
-    level,
-    slices,
-    unobservedFraction,
-  } = pacing;
-
-  let paceWord = "on pace";
-  let sign = "±";
-  if (status === "over") {
-    paceWord = "over";
-    sign = "+";
-  } else if (status === "under") {
-    paceWord = "under";
-    sign = "−";
-  }
-
-  const todayStr =
-    todayUsedFraction === null ? "—" : `${todayLowerBound ? "≥" : ""}${percent(todayUsedFraction)}`;
-  const deltaStr = `${paceWord} ${sign}${percent(Math.abs(paceDeltaFraction))}`;
-  const exhaustionStr = projectedExhaustionAt
-    ? `empty in ${formatResetCompact(projectedExhaustionAt, Date.now())}`
-    : "lasts to reset";
-
-  const metricsContent = `Day ${dayIndex + 1}/7 · today ${todayStr} · safe left ${percent(safeLeftTodayFraction)} · ${deltaStr} · ${exhaustionStr}`;
-  const metricsLine = `${prefix}${paint("PACE", ANSI.muted)} ${paint(metricsContent, colorForLevel(level))}`;
-
-  const sliceTokens = slices.map((slice) => {
-    let tokenVal = "—";
-    if (slice.state === "future") {
-      tokenVal = `[${percent(slice.budgetFraction ?? 0)}]`;
-    } else if (slice.usedFraction !== null) {
-      tokenVal = `${slice.lowerBound ? "≥" : ""}${percent(slice.usedFraction)}`;
-    }
-    const token = `D${slice.index + 1} ${tokenVal}`;
-    return slice.state === "current"
-      ? paint(token, colorForLevel(level))
-      : paint(token, ANSI.muted);
-  });
-
-  let slicesLine = `${prefix}${sliceTokens.join(" ")}`;
-  if (unobservedFraction > 0) {
-    slicesLine += ` ${paint(`· unobserved ${percent(unobservedFraction)}`, ANSI.muted)}`;
-  }
-
-  return [metricsLine, slicesLine];
 }
 
 export function renderProviderUsageFromDashboard(
@@ -207,12 +177,6 @@ export function renderProviderUsageFromDashboard(
         .map((limit) => columnBlock(limit, columnWidth))
         .join(" ".repeat(gap));
       output.push(line(`${account} ${route}${blocks}`));
-      const pacingLimit = row.limits.find((l) => l.pacing);
-      if (pacingLimit?.pacing) {
-        for (const pLine of pacingLines(pacingLimit.pacing, 2)) {
-          output.push(line(pLine));
-        }
-      }
     }
   }
 
