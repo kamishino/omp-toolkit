@@ -2,6 +2,7 @@ import {
   DashboardEngine,
   getAllTimeWindowPolicies,
   type HealthSnapshot,
+  type PacingSample,
   type UsageReport,
 } from "@omp-toolkit/core";
 import { renderProviderUsage, renderScheduleView } from "@omp-toolkit/tui";
@@ -9,6 +10,7 @@ import { type MonitorCliConfig, useAlternateScreen } from "./config";
 import { writeHeartbeat } from "./heartbeat";
 import { InteractiveMonitor } from "./interactive-monitor";
 import { jsonPayload } from "./json";
+import { recordAndLoadPacingSamples } from "./pacing-store";
 import { fetchUsage, readSnapshot } from "./usage";
 
 function sleep(ms: number): Promise<void> {
@@ -24,6 +26,7 @@ export interface MonitorRunnerDependencies {
   outputFn?: (text: string) => void;
   errorFn?: (error: string) => void;
   isTTY?: boolean;
+  recordPacingFn?: (reports: UsageReport[]) => Record<string, PacingSample[]>;
 }
 
 /**
@@ -41,6 +44,7 @@ export class MonitorRunner {
   private readonly outputFn: (text: string) => void;
   private readonly errorFn: (error: string) => void;
   private readonly isTTY: boolean;
+  private readonly recordPacingFn: (reports: UsageReport[]) => Record<string, PacingSample[]>;
 
   constructor(deps: MonitorRunnerDependencies = {}) {
     this.fetchReports = deps.fetchReports ?? fetchUsage;
@@ -49,22 +53,28 @@ export class MonitorRunner {
     this.outputFn = deps.outputFn ?? ((text) => console.log(text));
     this.errorFn = deps.errorFn ?? ((err) => console.error(err));
     this.isTTY = deps.isTTY ?? process.stdout.isTTY === true;
+    this.recordPacingFn = deps.recordPacingFn ?? recordAndLoadPacingSamples;
   }
 
   async executeCycle(config: MonitorCliConfig): Promise<{ output: string }> {
     const reports = await this.fetchReports();
     try {
       this.writeHeartbeatFn();
+    } catch {}
+
+    let pacingSamples: Record<string, PacingSample[]> = {};
+    try {
+      pacingSamples = this.recordPacingFn(reports);
     } catch {
-      // Monitor stays usable even if heartbeat write fails
+      // Best effort
     }
 
     const snapshot = config.health ? this.readSnapshotFn() : null;
     const dashboard = DashboardEngine.compile(reports, snapshot, {
       showHealth: config.health,
       balanceAlert: config.balanceAlert,
+      pacingSamples,
     });
-
     if (config.json) {
       const payload = jsonPayload(dashboard, {
         fetchedAt: dashboard.fetchedAt,

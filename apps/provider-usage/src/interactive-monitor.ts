@@ -2,6 +2,7 @@ import {
   DashboardEngine,
   getAllTimeWindowPolicies,
   type HealthSnapshot,
+  type PacingSample,
   type UsageReport,
 } from "@omp-toolkit/core";
 import {
@@ -14,6 +15,7 @@ import {
 } from "@omp-toolkit/tui";
 import type { MonitorCliConfig } from "./config";
 import { writeHeartbeat as defaultWriteHeartbeat } from "./heartbeat";
+import { recordAndLoadPacingSamples } from "./pacing-store";
 import { fetchUsage as defaultFetchUsage, readSnapshot as defaultReadSnapshot } from "./usage";
 
 export interface InteractiveMonitorOptions {
@@ -24,6 +26,7 @@ export interface InteractiveMonitorOptions {
   readSnapshot?: () => HealthSnapshot | null;
   writeHeartbeat?: () => void;
   terminal?: Terminal;
+  recordPacingFn?: (reports: UsageReport[]) => Record<string, PacingSample[]>;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -43,6 +46,7 @@ export class InteractiveMonitor {
   private readonly fetchReports: () => Promise<UsageReport[]>;
   private readonly readSnapshot: () => HealthSnapshot | null;
   private readonly writeHeartbeat: () => void;
+  private readonly recordPacingFn: (reports: UsageReport[]) => Record<string, PacingSample[]>;
 
   private activeView: "usage" | "schedule" = "usage";
   private running = false;
@@ -50,6 +54,7 @@ export class InteractiveMonitor {
   private rawModeActive = false;
   private currentReports: UsageReport[] = [];
   private currentSnapshot: HealthSnapshot | null = null;
+  private currentPacingSamples: Record<string, PacingSample[]> = {};
   private terminal: Terminal | null = null;
   private cleanupHandler: (() => void) | null = null;
 
@@ -61,6 +66,7 @@ export class InteractiveMonitor {
     this.readSnapshot = options.readSnapshot ?? defaultReadSnapshot;
     this.writeHeartbeat = options.writeHeartbeat ?? defaultWriteHeartbeat;
     this.terminal = options.terminal ?? null;
+    this.recordPacingFn = options.recordPacingFn ?? recordAndLoadPacingSamples;
   }
 
   getActiveView(): "usage" | "schedule" {
@@ -152,6 +158,7 @@ export class InteractiveMonitor {
           now,
           showHealth: this.config.health,
           balanceAlert: this.config.balanceAlert,
+          pacingSamples: this.currentPacingSamples,
         });
         drawProviderUsage(frame, dashboard, {
           interval: this.config.interval,
@@ -167,6 +174,11 @@ export class InteractiveMonitor {
   async refresh(): Promise<void> {
     try {
       this.currentReports = await this.fetchReports();
+      try {
+        this.currentPacingSamples = this.recordPacingFn(this.currentReports);
+      } catch {
+        // Keep previous reports/samples on error
+      }
     } catch {
       // Keep previous reports on error
     }

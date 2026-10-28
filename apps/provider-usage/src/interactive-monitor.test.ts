@@ -18,6 +18,7 @@ describe("InteractiveMonitor", () => {
       fetchReports: async () => [],
       readSnapshot: () => null,
       writeHeartbeat: () => {},
+      recordPacingFn: () => ({}),
     });
 
     expect(monitor.getActiveView()).toBe("usage");
@@ -49,6 +50,7 @@ describe("InteractiveMonitor", () => {
       writeHeartbeat: () => {
         heartbeatWritten = true;
       },
+      recordPacingFn: () => ({}),
     });
 
     await monitor.refresh();

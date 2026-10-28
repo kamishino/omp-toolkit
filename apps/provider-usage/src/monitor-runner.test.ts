@@ -22,6 +22,7 @@ describe("MonitorRunner deep execution coordinator", () => {
     const runner = new MonitorRunner({
       fetchReports: async () => dummyReports,
       readSnapshotFn: () => dummySnapshot,
+      recordPacingFn: () => ({}),
       writeHeartbeatFn: () => {
         heartbeatCalled = true;
       },
@@ -40,6 +41,7 @@ describe("MonitorRunner deep execution coordinator", () => {
     const runner = new MonitorRunner({
       fetchReports: async () => dummyReports,
       readSnapshotFn: () => dummySnapshot,
+      recordPacingFn: () => ({}),
     });
 
     const config = parseMonitorCliConfig([], {});
@@ -67,6 +69,7 @@ describe("MonitorRunner deep execution coordinator", () => {
     const runner = new MonitorRunner({
       fetchReports: async () => dummyReports,
       readSnapshotFn: () => dummySnapshot,
+      recordPacingFn: () => ({}),
       outputFn: (text) => {
         outputs.push(text);
       },
@@ -77,5 +80,35 @@ describe("MonitorRunner deep execution coordinator", () => {
     await runner.run(config);
     expect(outputs.length).toBe(1);
     expect(outputs[0]).toContain("GOOGLE ANTIGRAVITY");
+  });
+
+  test("executeCycle includes pacing in JSON payload for muse-code when samples are provided", async () => {
+    const now = Date.now();
+    const resetsAt = now + 400_000_000;
+    const museReports: UsageReport[] = [
+      {
+        provider: "muse-code",
+        metadata: { email: "muse@example.com" },
+        limits: [
+          { label: "Weekly", window: { label: "Weekly", resetsAt }, amount: { usedFraction: 0.3 } },
+        ],
+      },
+    ];
+
+    const runner = new MonitorRunner({
+      fetchReports: async () => museReports,
+      readSnapshotFn: () => null,
+      recordPacingFn: () => ({
+        "muse@example.com": [{ at: resetsAt - 604_800_000, resetsAt, usedFraction: 0 }],
+      }),
+    });
+
+    const config = parseMonitorCliConfig(["--json"], {});
+    const { output } = await runner.executeCycle(config);
+    const parsed = JSON.parse(output);
+    const weekly = parsed.dashboard.providers[0].rows[0].limits[0];
+    expect(weekly.pacing).toBeDefined();
+    expect(weekly.pacing.dayIndex).toBeDefined();
+    expect(weekly.pacing.slices).toHaveLength(7);
   });
 });
