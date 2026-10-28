@@ -43,13 +43,14 @@ export function renderLimitCell(limit: DashboardLimit): HTMLElement {
 
       const barFill = document.createElement("div");
       barFill.className = "limit-bar-fill";
-      barFill.setAttribute("style", `width:${Math.min(used, ceiling) * 100}%`);
+      barFill.style.width = `${Math.min(used, ceiling) * 100}%`;
       barTrack.appendChild(barFill);
 
       if (used > ceiling) {
         const barOver = document.createElement("div");
         barOver.className = "limit-bar-over";
-        barOver.setAttribute("style", `left:${ceiling * 100}%;width:${(used - ceiling) * 100}%`);
+        barOver.style.left = `${ceiling * 100}%`;
+        barOver.style.width = `${(used - ceiling) * 100}%`;
         barTrack.appendChild(barOver);
       }
       barWrap.appendChild(barTrack);
@@ -57,7 +58,7 @@ export function renderLimitCell(limit: DashboardLimit): HTMLElement {
       if (ceiling < 1) {
         const barTick = document.createElement("div");
         barTick.className = "limit-bar-tick";
-        barTick.setAttribute("style", `left:${ceiling * 100}%`);
+        barTick.style.left = `${ceiling * 100}%`;
         barWrap.appendChild(barTick);
       }
       container.appendChild(barWrap);
@@ -89,6 +90,7 @@ export function renderLimitCell(limit: DashboardLimit): HTMLElement {
       resetSpan.textContent = formatResetCompact(limit.resetsAt, Date.now());
       container.appendChild(resetSpan);
     }
+  } else {
     const emptySpan = document.createElement("span");
     emptySpan.className = "level-unknown";
     emptySpan.textContent = "—";

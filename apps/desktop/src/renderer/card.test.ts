@@ -15,6 +15,7 @@ describe("renderer card module", () => {
         const el: any = {
           tagName: tag,
           className: "",
+          style: {},
           children: [] as unknown[],
           appendChild: (c: unknown) => {
             el.children.push(c);

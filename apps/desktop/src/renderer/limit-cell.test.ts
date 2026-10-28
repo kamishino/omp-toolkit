@@ -11,6 +11,7 @@ describe("renderer limit-cell module", () => {
     textContent?: string;
     title?: string;
     attributes: Record<string, string>;
+    style: Record<string, string>;
     children: MockNode[];
     appendChild: (c: unknown) => unknown;
     setAttribute: (k: string, v: string) => void;
@@ -23,6 +24,7 @@ describe("renderer limit-cell module", () => {
           tagName: tag,
           className: "",
           attributes: {},
+          style: {},
           children: [],
           appendChild: (c: unknown) => {
             el.children.push(c as MockNode);
@@ -85,6 +87,11 @@ describe("renderer limit-cell module", () => {
       });
       expect(cell).toBeDefined();
       expect(cell.className).toBe("col-limit");
+      const cellNode = cell as unknown as MockNode;
+      const container = cellNode.children[0];
+      const emptySpan = container.children.find((c) => c.className === "level-unknown");
+      expect(emptySpan).toBeDefined();
+      expect(emptySpan?.textContent).toBe("—");
     } finally {
       restoreDoc();
     }
@@ -121,11 +128,14 @@ describe("renderer limit-cell module", () => {
       // Tick present at ceiling (3/7 ≈ 42.857%)
       const tick = barWrap?.children.find((c) => c.className === "limit-bar-tick");
       expect(tick).toBeDefined();
-      expect(tick?.attributes.style).toContain("42.857");
+      expect(tick?.style.left).toContain("42.857");
 
       // Percent span formatted as used/ceiling%
       const pctSpan = container.children.find((c) => c.className.includes("percent"));
       expect(pctSpan?.textContent).toBe("30/43%");
+
+      // No stray empty dash child
+      expect(container.children.some((c) => c.textContent === "—")).toBe(false);
     } finally {
       restoreDoc();
     }
@@ -153,8 +163,8 @@ describe("renderer limit-cell module", () => {
       const track = barWrap?.children.find((c) => c.className === "limit-bar-track");
       const overFill = track?.children.find((c) => c.className === "limit-bar-over");
       expect(overFill).toBeDefined();
-      expect(overFill?.attributes.style).toContain("left:14.285");
-      expect(overFill?.attributes.style).toContain("width:15.714");
+      expect(overFill?.style.left).toContain("14.285");
+      expect(overFill?.style.width).toContain("15.714");
     } finally {
       restoreDoc();
     }
