@@ -36,6 +36,58 @@ Interpretation:
 `health ... (stale)` means the snapshot is older than 15 minutes. Run
 `/gemini-health` or the health CLI.
 
+## Two-machine rollout
+
+The 90-day execution-quality and reliability roadmap requires two independent
+Windows machines running the toolkit concurrently. State is strictly
+independent:
+
+- Each machine has its own agent directory (`~/.omp/agent`), history database
+  (`omp-toolkit-history.db`), machine identity (`omp-toolkit-machine.json`),
+  and background monitor.
+- **Zero synchronization:** no shared database, no synced config, no
+  cross-machine lock.
+
+### Machine 2 operator checklist
+
+Follow these steps to bring machine 2 into the rollout:
+
+1. **Clone repository:**
+   ```bash
+   git clone https://github.com/kamishino/omp-toolkit.git
+   cd omp-toolkit
+   ```
+2. **Install dependencies and toolkit artifacts:**
+   ```bash
+   bun install
+   bun run install:omp
+   ```
+3. **Initialize machine identity:**
+   Start OMP once to generate `~/.omp/agent/omp-toolkit-machine.json` and create
+   the local history SQLite database:
+   ```bash
+   omp
+   ```
+4. **Run diagnostic health suite:**
+   Verify the installation reports all PASS:
+   ```bash
+   bun run doctor
+   ```
+5. **Verify independent history tracking:**
+   Confirm local history recording operates with its distinct machine id:
+   ```bash
+   bun run reliability:report --days=1
+   ```
+6. **Launch continuous background monitor:**
+   ```bash
+   bun run monitor:orca
+   ```
+7. **Manual account opt-in (if applicable):**
+   If machine 2 contains a manual reserve policy (`reservePct: 100`), opt in:
+   ```text
+   /gemini-auto-restore <account>
+   ```
+
 ## Balance alerts
 
 A DeepSeek `Balance` at or below `DEEPSEEK_BALANCE_ALERT_CNY` (default 10) or
