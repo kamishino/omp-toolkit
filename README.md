@@ -244,7 +244,7 @@ docs/
   adr/                  Architecture decision records (ADR 0001–0008)
   architecture.md       Layering, build pipelines, and Mermaid interaction diagrams
   design.md             Visual tokens, layout spacing, and threshold rules
-  roadmap.md            90-day reliability scaling and platform roadmap
+  roadmap.md            90-day execution-quality and reliability roadmap
   runbook.md            Operational diagnostics and incident runbooks
 scripts/                Unified build orchestrator, installer, monitor launcher, reliability report
 ```
@@ -266,6 +266,6 @@ bun run build:desktop   # Compile desktop bundles only
 - [Folder Structure Blueprint](Project_Folders_Structure_Blueprint.md)
 - [Design Tokens & UI System](docs/design.md)
 - [Operational Runbook](docs/runbook.md)
-- [Reliability Roadmap](docs/roadmap.md)
+- [Execution-Quality Roadmap](docs/roadmap.md)
 - [Architecture Decision Records (ADRs)](docs/adr/README.md)
 - [System Glossary](GLOSSARY.md)

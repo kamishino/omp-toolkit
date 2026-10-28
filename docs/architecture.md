@@ -220,7 +220,7 @@ sequenceDiagram
 
 The provider usage CLI only reads `gemini-health-latest.json`. It never probes
 a model, so an idle monitoring tab spends zero model tokens. See
-[roadmap.md](roadmap.md) for the 90-day reliability scaling plan,
+[roadmap.md](roadmap.md) for the 90-day execution-quality roadmap,
 [GLOSSARY.md](../GLOSSARY.md) for system terminology, and
 [ADR-0002](adr/0002-opt-in-auto-restore.md) for opt-in recovery policy.
 
