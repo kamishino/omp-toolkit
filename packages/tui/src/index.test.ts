@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildDashboard,
+  DashboardEngine,
   DEEPSEEK_POLICY,
   type HealthResult,
   sectionsFor,
@@ -209,6 +210,58 @@ describe("provider usage view", () => {
     for (const line of view.split("\n")) {
       expect(stripAnsi(line).length).toBeLessThanOrEqual(86);
     }
+  });
+
+  test("renders pacing sub-row for muse-code when pacing is present", () => {
+    const now = Date.now();
+    const resetsAt = now + 400_000_000;
+    const museReports: UsageReport[] = [
+      {
+        provider: "muse-code",
+        metadata: { email: "muse@example.com" },
+        limits: [
+          {
+            label: "Weekly",
+            window: { label: "Weekly", resetsAt },
+            amount: { usedFraction: 0.25 },
+          },
+        ],
+      },
+    ];
+
+    const dashboardWithPacing = DashboardEngine.compile(museReports, null, {
+      now,
+      pacingSamples: {
+        "muse@example.com": [{ at: resetsAt - 604_800_000, resetsAt, usedFraction: 0 }],
+      },
+    });
+
+    const viewWithPacing = renderProviderUsage(dashboardWithPacing, {
+      interval: 300,
+      watch: false,
+      showHealth: false,
+    });
+    expect(viewWithPacing).toContain("PACE Day");
+    expect(viewWithPacing).toContain("D1 ");
+    expect(viewWithPacing).toContain("safe left");
+
+    // Without muse pacing (e.g. only google-antigravity reports)
+    const antigravityOnly: UsageReport[] = [
+      {
+        provider: "google-antigravity",
+        metadata: { email: "anti@example.com" },
+        limits: [
+          { label: "Weekly", window: { label: "Weekly", resetsAt }, amount: { usedFraction: 0.1 } },
+        ],
+      },
+    ];
+    const dashboardWithoutPacing = DashboardEngine.compile(antigravityOnly, null, { now });
+    const viewWithoutPacing = renderProviderUsage(dashboardWithoutPacing, {
+      interval: 300,
+      watch: false,
+      showHealth: false,
+    });
+    expect(viewWithoutPacing).not.toContain("PACE Day");
   });
   test("drawProviderUsage draws onto terminui terminal buffer via test backend", () => {
     const state = createTestBackendState(86, 20);

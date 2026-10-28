@@ -6,9 +6,11 @@ import {
   type DashboardRoute,
   DEFAULT_BALANCE_ALERT,
   formatAge,
+  formatResetCompact,
   money,
   type ProviderSection,
   summaryText,
+  type WeeklyPacing,
 } from "@omp-toolkit/core";
 import { createParagraph, type Frame, frameRenderWidget, renderParagraph } from "terminui";
 import {
@@ -71,6 +73,62 @@ function columnBlock(limit: DashboardLimit, width: number): string {
     );
   }
   return padVisible(paint(percent(value), colorForLevel(limit.level)), width);
+}
+
+function pacingLines(pacing: WeeklyPacing, indent = 2): string[] {
+  const prefix = " ".repeat(indent);
+  const {
+    dayIndex,
+    todayUsedFraction,
+    todayLowerBound,
+    safeLeftTodayFraction,
+    status,
+    paceDeltaFraction,
+    projectedExhaustionAt,
+    level,
+    slices,
+    unobservedFraction,
+  } = pacing;
+
+  let paceWord = "on pace";
+  let sign = "±";
+  if (status === "over") {
+    paceWord = "over";
+    sign = "+";
+  } else if (status === "under") {
+    paceWord = "under";
+    sign = "−";
+  }
+
+  const todayStr =
+    todayUsedFraction === null ? "—" : `${todayLowerBound ? "≥" : ""}${percent(todayUsedFraction)}`;
+  const deltaStr = `${paceWord} ${sign}${percent(Math.abs(paceDeltaFraction))}`;
+  const exhaustionStr = projectedExhaustionAt
+    ? `empty in ${formatResetCompact(projectedExhaustionAt, Date.now())}`
+    : "lasts to reset";
+
+  const metricsContent = `Day ${dayIndex + 1}/7 · today ${todayStr} · safe left ${percent(safeLeftTodayFraction)} · ${deltaStr} · ${exhaustionStr}`;
+  const metricsLine = `${prefix}${paint("PACE", ANSI.muted)} ${paint(metricsContent, colorForLevel(level))}`;
+
+  const sliceTokens = slices.map((slice) => {
+    let tokenVal = "—";
+    if (slice.state === "future") {
+      tokenVal = `[${percent(slice.budgetFraction ?? 0)}]`;
+    } else if (slice.usedFraction !== null) {
+      tokenVal = `${slice.lowerBound ? "≥" : ""}${percent(slice.usedFraction)}`;
+    }
+    const token = `D${slice.index + 1} ${tokenVal}`;
+    return slice.state === "current"
+      ? paint(token, colorForLevel(level))
+      : paint(token, ANSI.muted);
+  });
+
+  let slicesLine = `${prefix}${sliceTokens.join(" ")}`;
+  if (unobservedFraction > 0) {
+    slicesLine += ` ${paint(`· unobserved ${percent(unobservedFraction)}`, ANSI.muted)}`;
+  }
+
+  return [metricsLine, slicesLine];
 }
 
 export function renderProviderUsageFromDashboard(
@@ -149,6 +207,12 @@ export function renderProviderUsageFromDashboard(
         .map((limit) => columnBlock(limit, columnWidth))
         .join(" ".repeat(gap));
       output.push(line(`${account} ${route}${blocks}`));
+      const pacingLimit = row.limits.find((l) => l.pacing);
+      if (pacingLimit?.pacing) {
+        for (const pLine of pacingLines(pacingLimit.pacing, 2)) {
+          output.push(line(pLine));
+        }
+      }
     }
   }
 
