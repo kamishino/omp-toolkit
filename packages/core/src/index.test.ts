@@ -223,13 +223,41 @@ describe("health domain", () => {
     expect(streaks["a@example.com"]).toEqual({ ok: 0, lastAt: 0 });
   });
 
-  test("selects only managed accounts at the restore threshold", () => {
-    const state = { excluded: ["a@example.com", "b@example.com"] };
-    const streaks = {
-      "a@example.com": { ok: 3, lastAt: 0 },
-      "b@example.com": { ok: 2, lastAt: 0 },
-    };
+  test("managed exclusion restores without opt-in", () => {
+    const state = { excluded: ["a@example.com"] };
+    const streaks = { "a@example.com": { ok: 3, lastAt: 0 } };
     expect(restorableEmails(state, streaks, 3)).toEqual(["a@example.com"]);
+  });
+
+  test("manual exclusion does not restore without opt-in", () => {
+    const state = { excluded: [] };
+    const streaks = { "m@example.com": { ok: 3, lastAt: 0 } };
+    const manual = new Set(["m@example.com"]);
+    expect(restorableEmails(state, streaks, 3, new Set(), manual)).toEqual([]);
+  });
+
+  test("opted-in manual exclusion restores at the threshold", () => {
+    const state = { excluded: [] };
+    const streaks = { "m@example.com": { ok: 3, lastAt: 0 } };
+    const manual = new Set(["m@example.com"]);
+    const optedIn = new Set(["m@example.com"]);
+    expect(restorableEmails(state, streaks, 3, optedIn, manual)).toEqual(["m@example.com"]);
+  });
+
+  test("opted-in manual exclusion below the threshold does not restore", () => {
+    const state = { excluded: [] };
+    const streaks = { "m@example.com": { ok: 2, lastAt: 0 } };
+    const manual = new Set(["m@example.com"]);
+    const optedIn = new Set(["m@example.com"]);
+    expect(restorableEmails(state, streaks, 3, optedIn, manual)).toEqual([]);
+  });
+
+  test("duplicates across managed and manual sets restore once", () => {
+    const state = { excluded: ["both@example.com"] };
+    const streaks = { "both@example.com": { ok: 3, lastAt: 0 } };
+    const manual = new Set(["both@example.com"]);
+    const optedIn = new Set(["both@example.com"]);
+    expect(restorableEmails(state, streaks, 3, optedIn, manual)).toEqual(["both@example.com"]);
   });
 
   test("finds reservePct exclusions only for Antigravity", () => {

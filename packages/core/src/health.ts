@@ -42,8 +42,13 @@ export function restorableEmails(
   state: HealthState,
   streaks: StreakState,
   threshold: number,
+  optedIn: ReadonlySet<string> = new Set(),
+  manuallyExcluded: ReadonlySet<string> = new Set(),
 ): string[] {
-  return state.excluded.filter((email) => (streaks[email]?.ok ?? 0) >= threshold);
+  return [...new Set([...state.excluded, ...manuallyExcluded])].filter((email) => {
+    if (!state.excluded.includes(email) && !optedIn.has(email)) return false;
+    return (streaks[email]?.ok ?? 0) >= threshold;
+  });
 }
 
 export function excludedEmails(policies: Policy[]): Set<string> {

@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import {
   resolveAgentDir,
+  resolveAutoRestorePath,
   resolveHealthScriptCandidates,
   resolveHeartbeatPath,
   resolveHistoryDbPath,
   resolveInstalledScript,
+  resolveLockPath,
   resolveMonitorScriptCandidates,
   resolvePacingSamplesPath,
   resolveSnapshotPath,
@@ -27,11 +29,15 @@ describe("AgentEnvironment path resolver", () => {
     expect(dir).toBe(custom);
   });
 
-  test("resolves state, snapshot, and streak paths under agent directory", () => {
+  test("resolves state, snapshot, streak, auto-restore, and lock paths under agent directory", () => {
     const dir = path.join(fakeHome, ".omp", "agent");
     expect(resolveSnapshotPath({}, fakeHome)).toBe(path.join(dir, "gemini-health-latest.json"));
     expect(resolveStatePath({}, fakeHome)).toBe(path.join(dir, "gemini-health-state.json"));
     expect(resolveStreakPath({}, fakeHome)).toBe(path.join(dir, "gemini-health-streaks.json"));
+    expect(resolveAutoRestorePath({}, fakeHome)).toBe(
+      path.join(dir, "gemini-health-auto-restore.json"),
+    );
+    expect(resolveLockPath({}, fakeHome)).toBe(path.join(dir, "omp-toolkit.lock"));
   });
 
   test("resolveHeartbeatPath resolves monitor json under agent directory", () => {

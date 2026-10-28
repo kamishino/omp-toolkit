@@ -24,6 +24,12 @@ export function resolveStatePath(env = process.env, home = homedir()): string {
 export function resolveStreakPath(env = process.env, home = homedir()): string {
   return path.join(resolveAgentDir(env, home), "gemini-health-streaks.json");
 }
+export function resolveAutoRestorePath(env = process.env, home = homedir()): string {
+  return path.join(resolveAgentDir(env, home), "gemini-health-auto-restore.json");
+}
+export function resolveLockPath(env = process.env, home = homedir()): string {
+  return path.join(resolveAgentDir(env, home), "omp-toolkit.lock");
+}
 
 export function resolveWidgetStatePath(env = process.env, home = homedir()): string {
   return path.join(resolveAgentDir(env, home), "gemini-health-widget.json");
