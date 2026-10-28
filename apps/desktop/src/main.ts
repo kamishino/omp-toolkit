@@ -142,6 +142,10 @@ void app.whenReady().then(async () => {
       onOpenOrca: () => {
         runtime?.launchOrca();
       },
+      onOpenSettings: () => {
+        showPanel();
+        panel?.window.webContents.send(IPC.openSettings);
+      },
       onQuit: () => {
         app.quit();
       },
@@ -219,6 +223,9 @@ void app.whenReady().then(async () => {
   });
   onIpc(IPC.warmup, async (_event, request) => {
     await runtime?.handleWarmUp(request, panel?.window);
+  });
+  onIpc(IPC.resize, (_event, height: number) => {
+    panel?.setHeight(height);
   });
   panel.window.webContents.on("did-finish-load", () => {
     if (runtime) {

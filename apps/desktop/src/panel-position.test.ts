@@ -100,4 +100,37 @@ describe("placePanel positioning", () => {
     expect(res.x).toBe(12);
     expect(res.y).toBe(12);
   });
+
+  test("re-places panel when height changes (auto-resize from 240px to 480px to 720px)", () => {
+    const tray = { x: 1800, y: 1040, width: 24, height: 24 };
+    const minPanel = placePanel({
+      tray,
+      workArea,
+      panel: { width: 700, height: 220 },
+      platform: "win32",
+      margin: 12,
+    });
+    expect(minPanel.height).toBe(220);
+    expect(minPanel.y).toBe(1040 - 220 - 12); // 808
+
+    const midPanel = placePanel({
+      tray,
+      workArea,
+      panel: { width: 700, height: 480 },
+      platform: "win32",
+      margin: 12,
+    });
+    expect(midPanel.height).toBe(480);
+    expect(midPanel.y).toBe(1040 - 480 - 12); // 548
+
+    const maxPanel = placePanel({
+      tray,
+      workArea,
+      panel: { width: 700, height: 720 },
+      platform: "win32",
+      margin: 12,
+    });
+    expect(maxPanel.height).toBe(720);
+    expect(maxPanel.y).toBe(1040 - 720 - 12); // 308
+  });
 });

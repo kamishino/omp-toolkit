@@ -20,15 +20,17 @@ export interface CreatePanelOptions {
 export class DesktopPanel {
   readonly window: BrowserWindow;
   private readonly width: number;
-  private readonly height: number;
+  private readonly maxHeight: number;
+  private currentHeight: number;
   private readonly margin: number;
   private lastHiddenAt = 0;
+  private lastTrayBounds: Rectangle | null = null;
 
   constructor(options: CreatePanelOptions) {
     this.width = options.width;
-    this.height = options.height;
+    this.maxHeight = options.height;
+    this.currentHeight = options.height;
     this.margin = options.margin ?? 12;
-
     this.window = new BrowserWindow({
       width: options.width,
       height: options.height,
@@ -81,6 +83,7 @@ export class DesktopPanel {
 
   show(trayBounds: Rectangle | null = null): void {
     if (this.window.isDestroyed()) return;
+    this.lastTrayBounds = trayBounds;
 
     const cursor = screen.getCursorScreenPoint();
     const display = screen.getDisplayNearestPoint(
@@ -95,7 +98,7 @@ export class DesktopPanel {
     const pos = placePanel({
       tray: trayBounds,
       workArea: display.workArea,
-      panel: { width: this.width, height: this.height },
+      panel: { width: this.width, height: this.currentHeight },
       platform: process.platform,
       margin: this.margin,
     });
@@ -103,6 +106,45 @@ export class DesktopPanel {
     this.window.setBounds(pos);
     this.window.show();
     this.window.focus();
+  }
+
+  setHeight(newHeight: number): void {
+    if (this.window.isDestroyed()) return;
+    const minH = 220;
+    const maxH = this.maxHeight;
+    const clamped = Math.max(minH, Math.min(maxH, newHeight));
+    const [currW, currH] = this.window.getSize();
+    if (currH === clamped) return;
+
+    this.currentHeight = clamped;
+
+    if (this.window.isVisible()) {
+      const cursor = screen.getCursorScreenPoint();
+      const display = screen.getDisplayNearestPoint(
+        this.lastTrayBounds && this.lastTrayBounds.width > 0
+          ? {
+              x: this.lastTrayBounds.x + this.lastTrayBounds.width / 2,
+              y: this.lastTrayBounds.y + this.lastTrayBounds.height / 2,
+            }
+          : cursor,
+      );
+
+      const pos = placePanel({
+        tray: this.lastTrayBounds,
+        workArea: display.workArea,
+        panel: { width: currW, height: clamped },
+        platform: process.platform,
+        margin: this.margin,
+      });
+
+      this.window.setBounds(pos);
+    } else {
+      this.window.setSize(currW, clamped);
+    }
+  }
+
+  getHeight(): number {
+    return this.currentHeight;
   }
 
   hide(): void {

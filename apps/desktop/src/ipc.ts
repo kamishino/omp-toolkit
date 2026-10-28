@@ -10,6 +10,8 @@ export const IPC = {
   ready: "omp:ready",
   warmup: "omp:warmup",
   saveSettings: "omp:save-settings",
+  resize: "omp:resize",
+  openSettings: "omp:open-settings",
 } as const;
 
 export interface RendererToMainEvents {
@@ -20,10 +22,12 @@ export interface RendererToMainEvents {
   [IPC.ready]: () => void;
   [IPC.warmup]: (request: WarmUpRequest) => void;
   [IPC.saveSettings]: (settings: DesktopSettings) => void;
+  [IPC.resize]: (height: number) => void;
 }
 
 export interface MainToRendererEvents {
   [IPC.state]: (state: PanelState) => void;
+  [IPC.openSettings]: () => void;
 }
 
 export interface WarmUpState {
@@ -63,6 +67,8 @@ export interface OmpApi {
   openOrca(): void;
   warmup(request: WarmUpRequest): void;
   saveSettings(settings: DesktopSettings): void;
+  resize(height: number): void;
+  onOpenSettings(callback: () => void): () => void;
 }
 
 declare global {

@@ -229,6 +229,35 @@ let currentState: PanelState = {
   settings: DEFAULT_DESKTOP_SETTINGS,
 };
 
+function measureContentHeight(): number {
+  const panel = document.querySelector(".panel") as HTMLElement | null;
+  if (!panel) return 220;
+
+  const header = panel.querySelector(".header") as HTMLElement | null;
+  const summary = panel.querySelector(".summary") as HTMLElement | null;
+  const warmup = panel.querySelector(".warmup-message") as HTMLElement | null;
+  const scrollArea = panel.querySelector(".content, .settings-view") as HTMLElement | null;
+  const footer = panel.querySelector(".footer") as HTMLElement | null;
+
+  const headerH = header ? header.offsetHeight : 0;
+  const summaryH = summary ? summary.offsetHeight : 0;
+  const warmupH = warmup ? warmup.offsetHeight : 0;
+  const scrollH = scrollArea ? scrollArea.scrollHeight : 0;
+  const footerH = footer ? footer.offsetHeight : 0;
+
+  const panelStyle = window.getComputedStyle(panel);
+  const paddingTop = Number.parseFloat(panelStyle.paddingTop) || 20;
+  const paddingBottom = Number.parseFloat(panelStyle.paddingBottom) || 20;
+  const rowGap = Number.parseFloat(panelStyle.rowGap) || 16;
+
+  const activeChildren = [header, summary, warmup, scrollArea, footer].filter(Boolean);
+  const gapTotal = Math.max(0, activeChildren.length - 1) * rowGap;
+
+  return Math.ceil(
+    headerH + summaryH + warmupH + scrollH + footerH + paddingTop + paddingBottom + gapTotal + 2,
+  );
+}
+
 function render(): void {
   const app = document.querySelector("#app");
   if (!app) return;
@@ -242,12 +271,26 @@ function render(): void {
   if (newContent) {
     newContent.scrollTop = scrollTop;
   }
+
+  if (typeof window !== "undefined" && window.omp?.resize) {
+    const neededHeight = measureContentHeight();
+    window.omp.resize(neededHeight);
+  }
 }
 
 render();
 
-window.omp.onState((state) => {
-  currentState = state;
-  themeManager.apply(state.settings.theme);
-  render();
-});
+if (typeof window !== "undefined" && window.omp?.onState) {
+  window.omp.onState((state) => {
+    currentState = state;
+    themeManager.apply(state.settings.theme);
+    render();
+  });
+}
+
+if (typeof window !== "undefined" && window.omp?.onOpenSettings) {
+  window.omp.onOpenSettings(() => {
+    activeTab = "settings";
+    render();
+  });
+}

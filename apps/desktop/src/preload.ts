@@ -40,6 +40,18 @@ const api: OmpApi = {
   saveSettings(settings: DesktopSettings): void {
     sendIpc(IPC.saveSettings, settings);
   },
+  resize(height: number): void {
+    sendIpc(IPC.resize, height);
+  },
+  onOpenSettings(callback: () => void): () => void {
+    const listener = () => {
+      callback();
+    };
+    ipcRenderer.on(IPC.openSettings, listener);
+    return () => {
+      ipcRenderer.removeListener(IPC.openSettings, listener);
+    };
+  },
 };
 
 contextBridge.exposeInMainWorld("omp", api);
