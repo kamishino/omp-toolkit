@@ -42,7 +42,6 @@ export function assembleDashboard(
     staleMinutes: options.staleMinutes ?? DEFAULT_STALE_MINUTES,
     balanceAlert: options.balanceAlert ?? DEFAULT_BALANCE_ALERT,
     userTimeZone: options.userTimeZone,
-    pacingSamples: options.pacingSamples,
   });
 }
 
@@ -92,7 +91,6 @@ export function buildDashboard(
                 usedFraction,
                 resetsAt: limit.window.resetsAt,
                 now: options.now,
-                samples: options.pacingSamples?.[row.account] ?? [],
               })
             : null;
 

@@ -1,4 +1,4 @@
-import type { PacingSample, WeeklyPacing } from "../pacing";
+import type { WeeklyPacing } from "../pacing";
 import type { WindowEvaluation } from "../schedule";
 import type { BalanceAlertThresholds } from "../settings";
 import type { Status } from "../types";
@@ -83,7 +83,6 @@ export interface BuildDashboardOptions {
   staleMinutes: number;
   balanceAlert: BalanceAlertThresholds;
   userTimeZone?: string;
-  pacingSamples?: Record<string, readonly PacingSample[]>;
 }
 
 export const DEFAULT_USAGE_THRESHOLDS = {
@@ -102,5 +101,4 @@ export interface AssembleDashboardOptions {
   staleMinutes?: number;
   balanceAlert?: BalanceAlertThresholds;
   userTimeZone?: string;
-  pacingSamples?: Record<string, readonly PacingSample[]>;
 }

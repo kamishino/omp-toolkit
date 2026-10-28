@@ -32,25 +32,6 @@ export function isDashboardColumn(c: unknown): boolean {
   return typeof col.key === "string" && typeof col.label === "string";
 }
 
-const VALID_PACING_STATUSES: Record<string, true> = {
-  under: true,
-  "on-pace": true,
-  over: true,
-};
-
-const VALID_PACING_LEVELS: Record<string, true> = {
-  ok: true,
-  warn: true,
-  hot: true,
-  critical: true,
-};
-
-const VALID_SLICE_STATES: Record<string, true> = {
-  past: true,
-  current: true,
-  future: true,
-};
-
 function isFiniteNumber(n: unknown): n is number {
   return typeof n === "number" && Number.isFinite(n);
 }
@@ -58,21 +39,6 @@ function isFiniteNumber(n: unknown): n is number {
 function isWeeklyPacing(p: unknown): boolean {
   if (!p || typeof p !== "object") return false;
   const pacing = p as Record<string, unknown>;
-
-  if (
-    !isFiniteNumber(pacing.windowStartAt) ||
-    !isFiniteNumber(pacing.resetsAt) ||
-    !isFiniteNumber(pacing.usedFraction) ||
-    !isFiniteNumber(pacing.remainingFraction) ||
-    !isFiniteNumber(pacing.idealUsedFraction) ||
-    !isFiniteNumber(pacing.paceDeltaFraction) ||
-    !isFiniteNumber(pacing.fixedDailyFraction) ||
-    !isFiniteNumber(pacing.adaptiveDailyFraction) ||
-    !isFiniteNumber(pacing.safeLeftTodayFraction) ||
-    !isFiniteNumber(pacing.unobservedFraction)
-  ) {
-    return false;
-  }
 
   if (
     typeof pacing.dayIndex !== "number" ||
@@ -83,40 +49,20 @@ function isWeeklyPacing(p: unknown): boolean {
     return false;
   }
 
-  if (typeof pacing.status !== "string" || !VALID_PACING_STATUSES[pacing.status]) {
+  if (
+    !isFiniteNumber(pacing.todayCeilingFraction) ||
+    pacing.todayCeilingFraction <= 0 ||
+    pacing.todayCeilingFraction > 1
+  ) {
     return false;
   }
 
-  if (typeof pacing.level !== "string" || !VALID_PACING_LEVELS[pacing.level]) {
+  if (
+    !isFiniteNumber(pacing.headroomFraction) ||
+    pacing.headroomFraction < -1 ||
+    pacing.headroomFraction > 1
+  ) {
     return false;
-  }
-
-  if (pacing.todayUsedFraction !== null && !isFiniteNumber(pacing.todayUsedFraction)) {
-    return false;
-  }
-
-  if (typeof pacing.todayLowerBound !== "boolean") {
-    return false;
-  }
-
-  if (pacing.projectedExhaustionAt !== null && !isFiniteNumber(pacing.projectedExhaustionAt)) {
-    return false;
-  }
-
-  if (!Array.isArray(pacing.slices) || pacing.slices.length !== 7) {
-    return false;
-  }
-
-  for (let i = 0; i < 7; i++) {
-    const slice = pacing.slices[i];
-    if (!slice || typeof slice !== "object") return false;
-    const s = slice as Record<string, unknown>;
-    if (s.index !== i) return false;
-    if (!isFiniteNumber(s.startAt) || !isFiniteNumber(s.endAt)) return false;
-    if (typeof s.state !== "string" || !VALID_SLICE_STATES[s.state]) return false;
-    if (typeof s.lowerBound !== "boolean") return false;
-    if (s.usedFraction !== null && !isFiniteNumber(s.usedFraction)) return false;
-    if (s.budgetFraction !== null && !isFiniteNumber(s.budgetFraction)) return false;
   }
 
   return true;

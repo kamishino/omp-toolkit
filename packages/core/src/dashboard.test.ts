@@ -349,20 +349,17 @@ describe("isDashboard validator", () => {
       },
     ];
 
-    const dashboard = DashboardEngine.compile(reports, null, {
-      now,
-      pacingSamples: {
-        "muse@example.com": [{ at: resetsAt - 604_800_000, resetsAt, usedFraction: 0 }],
-      },
-    });
+    const dashboard = DashboardEngine.compile(reports, null, { now });
 
     expect(isDashboard(dashboard)).toBe(true);
 
     const museProvider = dashboard.providers.find((p) => p.id === "muse-code");
     const museWeekly = museProvider?.rows[0].limits.find((l) => l.label === "Weekly");
-    expect(museWeekly?.pacing).toBeDefined();
-    expect(museWeekly?.pacing?.slices.length).toBe(7);
-    expect(museWeekly?.pacing?.dayIndex).toBeDefined();
+    expect(museWeekly?.pacing).toEqual({
+      dayIndex: 2,
+      todayCeilingFraction: 3 / 7,
+      headroomFraction: 3 / 7 - 0.35,
+    });
 
     const antiProvider = dashboard.providers.find((p) => p.id === "google-antigravity");
     const antiWeekly = antiProvider?.rows[0].limits.find((l) => l.label === "Weekly");
@@ -371,7 +368,7 @@ describe("isDashboard validator", () => {
     // Mutate pacing to be malformed (slices length 6) -> isDashboard must reject
     const malformed = JSON.parse(JSON.stringify(dashboard));
     const malformedMuseWeekly = malformed.providers[0].rows[0].limits[0];
-    malformedMuseWeekly.pacing.slices.pop();
+    malformedMuseWeekly.pacing.dayIndex = 7;
     expect(isDashboard(malformed)).toBe(false);
   });
 });

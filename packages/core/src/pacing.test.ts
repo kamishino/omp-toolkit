@@ -188,157 +188,62 @@ describe("core pacing domain", () => {
     ).toBeNull();
   });
 
-  test("Scenario A: boundary-aligned samples with on-track pacing", () => {
+  test("computes ceiling and headroom on on-track pacing", () => {
     const windowStart = 1_000_000_000_000;
     const resetsAt = windowStart + PACING_WINDOW_MS;
-    // now is 2.5 days into the window
+    // now is 2.5 days into the window -> Day 3/7 (index 2)
     const now = windowStart + 2.5 * PACING_DAY_MS;
     const usedFraction = 0.3;
-
-    const samples = [
-      { at: windowStart, resetsAt, usedFraction: 0 },
-      { at: windowStart + 1.0 * PACING_DAY_MS, resetsAt, usedFraction: 0.12 },
-      { at: windowStart + 2.0 * PACING_DAY_MS, resetsAt, usedFraction: 0.25 },
-    ];
 
     const result = computeWeeklyPacing({
       usedFraction,
       resetsAt,
       now,
-      samples,
     });
 
     expect(result).not.toBeNull();
     if (!result) return;
 
     expect(result.dayIndex).toBe(2);
-    expect(result.windowStartAt).toBe(windowStart);
-    expect(result.resetsAt).toBe(resetsAt);
-
-    // ideal = 2.5 / 7 ≈ 0.35714
-    expect(result.idealUsedFraction).toBeCloseTo(2.5 / 7, 4);
-    // actual used = 0.30 < 0.35714 -> under pace
-    expect(result.status).toBe("under");
-    expect(result.level).toBe("ok");
-
-    // remaining = 0.70; remainingDays = 4.5 -> adaptiveDaily = 0.70 / 4.5 ≈ 0.1555
-    expect(result.adaptiveDailyFraction).toBeCloseTo(0.7 / 4.5, 4);
-
-    // safe left today: 0.5 days remaining in dayIndex 2 -> adaptive * 0.5
-    expect(result.safeLeftTodayFraction).toBeCloseTo((0.7 / 4.5) * 0.5, 4);
-
-    // Slices
-    expect(result.slices.length).toBe(7);
-    // D1 (dayIndex 0): 0 -> 0.12 = 0.12
-    expect(result.slices[0].state).toBe("past");
-    expect(result.slices[0].usedFraction).toBeCloseTo(0.12, 4);
-    expect(result.slices[0].lowerBound).toBe(false);
-
-    // D2 (dayIndex 1): 0.12 -> 0.25 = 0.13
-    expect(result.slices[1].state).toBe("past");
-    expect(result.slices[1].usedFraction).toBeCloseTo(0.13, 4);
-    expect(result.slices[1].lowerBound).toBe(false);
-
-    // D3 (dayIndex 2, current): 0.25 -> 0.30 = 0.05
-    expect(result.slices[2].state).toBe("current");
-    expect(result.slices[2].usedFraction).toBeCloseTo(0.05, 4);
-    expect(result.slices[2].lowerBound).toBe(false);
-
-    // D4..D7 (future): null usedFraction, budgetFraction = adaptiveDaily
-    for (let i = 3; i < 7; i++) {
-      expect(result.slices[i].state).toBe("future");
-      expect(result.slices[i].usedFraction).toBeNull();
-      expect(result.slices[i].budgetFraction).toBeCloseTo(result.adaptiveDailyFraction, 4);
-    }
-
-    expect(result.todayUsedFraction).toBeCloseTo(0.05, 4);
-    expect(result.todayLowerBound).toBe(false);
-    expect(result.unobservedFraction).toBe(0);
-    expect(result.projectedExhaustionAt).toBeNull(); // Lasts past reset
+    expect(result.todayCeilingFraction).toBeCloseTo(3 / 7, 4);
+    expect(result.headroomFraction).toBeCloseTo(3 / 7 - 0.3, 4);
   });
 
-  test("Scenario B: late first sample introduces unobserved and lower bound", () => {
+  test("calculates over-ceiling headroom on early high burn", () => {
     const windowStart = 1_000_000_000_000;
     const resetsAt = windowStart + PACING_WINDOW_MS;
-    // First sample arrives at start + 1.5d with used = 0.20
-    const now = windowStart + 1.8 * PACING_DAY_MS;
-    const usedFraction = 0.22;
-
-    const samples = [{ at: windowStart + 1.5 * PACING_DAY_MS, resetsAt, usedFraction: 0.2 }];
-
-    const result = computeWeeklyPacing({
-      usedFraction,
-      resetsAt,
-      now,
-      samples,
-    });
-
-    expect(result).not.toBeNull();
-    if (!result) return;
-
-    // Unobserved fraction should capture the pre-first-sample burn: 0.20
-    expect(result.unobservedFraction).toBeCloseTo(0.2, 4);
-
-    // Day 1 (index 0) was unobserved
-    expect(result.slices[0].usedFraction).toBeNull();
-
-    // Day 2 (index 1, current): first observation arrived mid-slice -> lowerBound is true
-    expect(result.slices[1].state).toBe("current");
-    expect(result.slices[1].usedFraction).toBeCloseTo(0.02, 4);
-    expect(result.slices[1].lowerBound).toBe(true);
-    expect(result.todayLowerBound).toBe(true);
-  });
-
-  test("Scenario C: over-pace projection calculates exhaustion date", () => {
-    const windowStart = 1_000_000_000_000;
-    const resetsAt = windowStart + PACING_WINDOW_MS;
-    // 3.5 days in, used 0.70 (ideal is 0.50 -> +0.20 over pace)
-    const now = windowStart + 3.5 * PACING_DAY_MS;
-    const usedFraction = 0.7;
+    // Day 1 (index 0): ceiling is 1/7 ≈ 0.142857
+    const now = windowStart + 0.5 * PACING_DAY_MS;
+    const usedFraction = 0.3;
 
     const result = computeWeeklyPacing({
       usedFraction,
       resetsAt,
       now,
     });
-
     expect(result).not.toBeNull();
     if (!result) return;
-
-    expect(result.status).toBe("over");
-    expect(result.level).toBe("critical"); // delta 0.20 >= 0.15
-
-    // avg burn per day = 0.70 / 3.5 = 0.20/day
-    // remaining = 0.30 -> exhaustion in 0.30 / 0.20 = 1.5 days
-    const expectedExhaustion = now + 1.5 * PACING_DAY_MS;
-    expect(result.projectedExhaustionAt).toBeCloseTo(expectedExhaustion, -2);
+    expect(result.dayIndex).toBe(0);
+    expect(result.todayCeilingFraction).toBeCloseTo(1 / 7, 4);
+    expect(result.headroomFraction).toBeCloseTo(1 / 7 - 0.3, 4);
   });
 
-  test("Scenario D: multi-day gap interval (>2h crossing boundary) goes to unobserved", () => {
+  test("calculates Day 7 ceiling as 1.0 and headroom", () => {
     const windowStart = 1_000_000_000_000;
     const resetsAt = windowStart + PACING_WINDOW_MS;
-
-    // Sample 1 at start + 0.5d (Day 1)
-    // Sample 2 at start + 2.5d (Day 3, 2 full days later > 2h gap)
-    const s1 = { at: windowStart + 0.5 * PACING_DAY_MS, resetsAt, usedFraction: 0.1 };
-    const s2 = { at: windowStart + 2.5 * PACING_DAY_MS, resetsAt, usedFraction: 0.5 };
-    const now = windowStart + 2.5 * PACING_DAY_MS;
+    // Day 7 (index 6): ceiling is 7/7 = 1.0
+    const now = windowStart + 6.5 * PACING_DAY_MS;
+    const usedFraction = 0.92;
 
     const result = computeWeeklyPacing({
-      usedFraction: 0.5,
+      usedFraction,
       resetsAt,
       now,
-      samples: [s1, s2],
     });
-
     expect(result).not.toBeNull();
     if (!result) return;
-
-    // Delta between s1 and s2 is 0.40, crossing 2 boundaries (>2h gap) -> added to unobserved
-    // plus initial pre-sample burn of 0.10 -> unobserved should be 0.50
-    expect(result.unobservedFraction).toBeCloseTo(0.5, 4);
-    // Slices 0, 1, 2 should have no attributed intervals from that gap
-    expect(result.slices[0].usedFraction).toBeNull();
-    expect(result.slices[1].usedFraction).toBeNull();
+    expect(result.dayIndex).toBe(6);
+    expect(result.todayCeilingFraction).toBeCloseTo(1.0, 4);
+    expect(result.headroomFraction).toBeCloseTo(0.08, 4);
   });
 });
