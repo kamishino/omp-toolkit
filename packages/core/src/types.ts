@@ -135,6 +135,7 @@ export interface ProviderRow {
   health?: HealthResult;
   max: number;
   primary?: number;
+  secondary?: number;
 }
 
 export interface ProviderSection {

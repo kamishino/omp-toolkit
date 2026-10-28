@@ -115,6 +115,8 @@ function rowsFor(
   columns: UsageColumn[],
   health: Map<string, HealthResult>,
 ): ProviderRow[] {
+  const weeklyCol = columns.find((c) => c.label.toLowerCase() === "weekly");
+
   return reports
     .map((report) => {
       const account = accountName(report);
@@ -123,7 +125,11 @@ function rowsFor(
         .filter((limit): limit is UsageLimit => !!limit);
       const source = selected.length > 0 ? selected : (report.limits ?? []);
       const max = Math.max(0, ...source.map((limit) => usedPercent(limit) ?? 0));
-      const primary = selected[0] ? (usedPercent(selected[0]) ?? 0) : max;
+      const weeklyLimit = weeklyCol ? limitFor(report, weeklyCol) : undefined;
+      const weeklyUsed = weeklyLimit ? usedPercent(weeklyLimit) : undefined;
+      const firstUsed = selected[0] ? (usedPercent(selected[0]) ?? 0) : max;
+      const primary = weeklyUsed !== undefined ? weeklyUsed : firstUsed;
+      const secondary = weeklyUsed !== undefined ? firstUsed : max;
       return {
         report,
         account,
@@ -134,12 +140,14 @@ function rowsFor(
             : undefined),
         max,
         primary,
+        secondary,
       };
     })
     .sort(
       (a, b) =>
         healthRank(a) - healthRank(b) ||
         (b.primary ?? b.max) - (a.primary ?? a.max) ||
+        (b.secondary ?? b.max) - (a.secondary ?? a.max) ||
         b.max - a.max ||
         a.account.localeCompare(b.account),
     );

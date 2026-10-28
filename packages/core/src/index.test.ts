@@ -99,7 +99,7 @@ describe("provider sections", () => {
     expect(sections[1]?.columns.map((column) => column.label)).toEqual(["5 Hours", "Weekly"]);
   });
 
-  test("sorts accounts primarily by 5-hour usage, breaking ties by weekly usage and name", () => {
+  test("sorts accounts primarily by weekly usage, breaking ties by 5-hour usage and name", () => {
     const testReports: UsageReport[] = [
       {
         provider: "google-antigravity",
@@ -134,20 +134,57 @@ describe("provider sections", () => {
     const rows = agySection?.rows ?? [];
     expect(rows.length).toBe(3);
 
-    // 1. busy-5h floats to top because 5-hour is 60%
-    expect(rows[0].account).toBe("busy-5h@example.com");
-    expect(rows[0].primary).toBe(0.6);
-    expect(rows[0].max).toBe(0.6);
+    // 1. zero-high floats to top because weekly is 90% (highest)
+    expect(rows[0].account).toBe("zero-high@example.com");
+    expect(rows[0].primary).toBe(0.9);
+    expect(rows[0].secondary).toBe(0);
+    expect(rows[0].max).toBe(0.9);
 
-    // 2. zero-high floats above zero-low because 5-hour tied at 0%, and weekly breaks tie (90% > 10%)
-    expect(rows[1].account).toBe("zero-high@example.com");
-    expect(rows[1].primary).toBe(0);
-    expect(rows[1].max).toBe(0.9);
+    // 2. busy-5h is second because weekly is 40% (middle)
+    expect(rows[1].account).toBe("busy-5h@example.com");
+    expect(rows[1].primary).toBe(0.4);
+    expect(rows[1].secondary).toBe(0.6);
+    expect(rows[1].max).toBe(0.6);
 
-    // 3. zero-low is last
+    // 3. zero-low is last because weekly is 10% (lowest)
     expect(rows[2].account).toBe("zero-low@example.com");
-    expect(rows[2].primary).toBe(0);
+    expect(rows[2].primary).toBe(0.1);
+    expect(rows[2].secondary).toBe(0);
     expect(rows[2].max).toBe(0.1);
+  });
+
+  test("breaks ties on identical weekly usage using 5-hour usage descending", () => {
+    const testReports: UsageReport[] = [
+      {
+        provider: "google-antigravity",
+        metadata: { email: "tied-low-5h@example.com" },
+        limits: [
+          { label: "Gemini", window: { label: "5 Hour" }, amount: { usedFraction: 0.1 } },
+          { label: "Gemini", window: { label: "Weekly" }, amount: { usedFraction: 0.5 } },
+        ],
+      },
+      {
+        provider: "google-antigravity",
+        metadata: { email: "tied-high-5h@example.com" },
+        limits: [
+          { label: "Gemini", window: { label: "5 Hour" }, amount: { usedFraction: 0.8 } },
+          { label: "Gemini", window: { label: "Weekly" }, amount: { usedFraction: 0.5 } },
+        ],
+      },
+    ];
+
+    const sections = sectionsFor(testReports, new Map());
+    const agySection = sections.find((s) => s.provider === "google-antigravity");
+    const rows = agySection?.rows ?? [];
+    expect(rows.length).toBe(2);
+
+    expect(rows[0].account).toBe("tied-high-5h@example.com");
+    expect(rows[0].primary).toBe(0.5);
+    expect(rows[0].secondary).toBe(0.8);
+
+    expect(rows[1].account).toBe("tied-low-5h@example.com");
+    expect(rows[1].primary).toBe(0.5);
+    expect(rows[1].secondary).toBe(0.1);
   });
 });
 
