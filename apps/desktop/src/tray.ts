@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { type Dashboard, truncate, type UsageLevel } from "@omp-toolkit/core";
 import { Menu, type NativeImage, nativeImage, nativeTheme, type Rectangle, Tray } from "electron";
 import type { LoginItem } from "./login-item";
+import { buildTrayMenuTemplate } from "./tray-menu";
 import { trayIconPath } from "./tray-path";
 
 export function trayImage(
@@ -47,6 +48,7 @@ export interface DesktopTrayOptions {
   onRefreshNow: () => Promise<void>;
   onOpenTerminal: () => void;
   onOpenOrca: () => void;
+  onOpenSettings?: () => void;
   onQuit: () => void;
   onError?: (error: unknown) => void;
 }
@@ -125,56 +127,29 @@ export class DesktopTray {
     const isVisible = Boolean(this.options.isPanelVisible?.());
     const isAutostart = Boolean(this.options.loginItem?.isEnabled());
 
-    const menu = Menu.buildFromTemplate([
-      {
-        label: this.isRefreshing ? "Refreshing..." : "Refresh now",
-        enabled: !this.isRefreshing,
-        click: () => {
-          void this.options.onRefreshNow();
-        },
+    const template = buildTrayMenuTemplate({
+      isPanelVisible: isVisible,
+      isAutostart,
+      isRefreshing: this.isRefreshing,
+      lastDashboard: this.lastDashboard,
+      lastError: this.lastError,
+      onRefreshNow: this.options.onRefreshNow,
+      onTogglePanel: this.options.onTogglePanel,
+      onOpenSettings: this.options.onOpenSettings,
+      onOpenTerminal: this.options.onOpenTerminal,
+      onOpenOrca: this.options.onOpenOrca,
+      onToggleAutostart: (checked: boolean) => {
+        try {
+          this.options.loginItem?.setEnabled(checked);
+        } catch (error) {
+          this.options.onError?.(error);
+        }
+        this.rebuildMenu();
       },
-      {
-        label: isVisible ? "Minimize to tray" : "Show panel",
-        click: () => {
-          this.options.onTogglePanel();
-        },
-      },
-      { type: "separator" },
-      {
-        label: "Open terminal monitor",
-        click: () => {
-          this.options.onOpenTerminal();
-        },
-      },
-      {
-        label: "Open Orca tab",
-        click: () => {
-          this.options.onOpenOrca();
-        },
-      },
-      { type: "separator" },
-      {
-        label: "Start at login",
-        type: "checkbox",
-        checked: isAutostart,
-        click: (item: { checked: boolean }) => {
-          try {
-            this.options.loginItem?.setEnabled(item.checked);
-          } catch (error) {
-            this.options.onError?.(error);
-          }
-          this.rebuildMenu();
-        },
-      },
-      { type: "separator" },
-      {
-        label: "Exit",
-        click: () => {
-          this.options.onQuit();
-        },
-      },
-    ]);
+      onQuit: this.options.onQuit,
+    });
 
+    const menu = Menu.buildFromTemplate(template);
     if (process.platform === "linux") {
       this.tray.setContextMenu(menu);
     }
