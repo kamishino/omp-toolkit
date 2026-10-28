@@ -82,7 +82,7 @@ describe("MonitorRunner deep execution coordinator", () => {
     expect(outputs[0]).toContain("GOOGLE ANTIGRAVITY");
   });
 
-  test("executeCycle includes pacing in JSON payload for muse-code when samples are provided", async () => {
+  test("executeCycle includes pacing in JSON payload for muse-code and invokes recordPacingFn", async () => {
     const now = Date.now();
     const resetsAt = now + 400_000_000;
     const museReports: UsageReport[] = [
@@ -95,20 +95,24 @@ describe("MonitorRunner deep execution coordinator", () => {
       },
     ];
 
+    let recordPacingCalled = false;
     const runner = new MonitorRunner({
       fetchReports: async () => museReports,
       readSnapshotFn: () => null,
-      recordPacingFn: () => ({
-        "muse@example.com": [{ at: resetsAt - 604_800_000, resetsAt, usedFraction: 0 }],
-      }),
+      recordPacingFn: () => {
+        recordPacingCalled = true;
+        return {};
+      },
     });
 
     const config = parseMonitorCliConfig(["--json"], {});
     const { output } = await runner.executeCycle(config);
+    expect(recordPacingCalled).toBe(true);
+
     const parsed = JSON.parse(output);
     const weekly = parsed.dashboard.providers[0].rows[0].limits[0];
     expect(weekly.pacing).toBeDefined();
-    expect(weekly.pacing.dayIndex).toBeDefined();
-    expect(weekly.pacing.slices).toHaveLength(7);
+    expect(weekly.pacing.todayCeilingFraction).toBeCloseTo(3 / 7, 4);
+    expect(weekly.pacing.headroomFraction).toBeCloseTo(3 / 7 - 0.3, 4);
   });
 });

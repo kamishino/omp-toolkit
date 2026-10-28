@@ -62,9 +62,8 @@ export class MonitorRunner {
       this.writeHeartbeatFn();
     } catch {}
 
-    let pacingSamples: Record<string, PacingSample[]> = {};
     try {
-      pacingSamples = this.recordPacingFn(reports);
+      this.recordPacingFn(reports);
     } catch {
       // Best effort
     }
@@ -73,7 +72,6 @@ export class MonitorRunner {
     const dashboard = DashboardEngine.compile(reports, snapshot, {
       showHealth: config.health,
       balanceAlert: config.balanceAlert,
-      pacingSamples,
     });
     if (config.json) {
       const payload = jsonPayload(dashboard, {

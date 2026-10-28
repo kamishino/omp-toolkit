@@ -54,7 +54,6 @@ export class InteractiveMonitor {
   private rawModeActive = false;
   private currentReports: UsageReport[] = [];
   private currentSnapshot: HealthSnapshot | null = null;
-  private currentPacingSamples: Record<string, PacingSample[]> = {};
   private terminal: Terminal | null = null;
   private cleanupHandler: (() => void) | null = null;
 
@@ -158,7 +157,6 @@ export class InteractiveMonitor {
           now,
           showHealth: this.config.health,
           balanceAlert: this.config.balanceAlert,
-          pacingSamples: this.currentPacingSamples,
         });
         drawProviderUsage(frame, dashboard, {
           interval: this.config.interval,
@@ -175,9 +173,9 @@ export class InteractiveMonitor {
     try {
       this.currentReports = await this.fetchReports();
       try {
-        this.currentPacingSamples = this.recordPacingFn(this.currentReports);
+        this.recordPacingFn(this.currentReports);
       } catch {
-        // Keep previous reports/samples on error
+        // Best effort
       }
     } catch {
       // Keep previous reports on error
