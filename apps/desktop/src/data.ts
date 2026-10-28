@@ -11,6 +11,7 @@ import {
   type UsageDataSourceAdapter,
   type UsageReport,
 } from "@omp-toolkit/core";
+import { recordAndLoadPacingSamples } from "./pacing-store";
 
 const execFileAsync = promisify(execFile);
 
@@ -79,7 +80,8 @@ export async function fetchDashboard(
   try {
     const reports = await fetchRawUsage(source?.ompBin, options);
     const snapshot = readHealthSnapshot(source?.agentDir);
-    return DashboardEngine.compile(reports, snapshot);
+    const pacingSamples = recordAndLoadPacingSamples(reports, { agentDir: source?.agentDir });
+    return DashboardEngine.compile(reports, snapshot, { pacingSamples });
   } catch (directError) {
     if (source?.bun && source?.script && fs.existsSync(source.script)) {
       const { stdout } = await execFileAsync(source.bun, [source.script, "--json", "--health"], {

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { WeeklyPacing } from "@omp-toolkit/core";
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings";
 import { renderProviderCard } from "./card";
 import { icon } from "./icon";
@@ -14,7 +15,11 @@ describe("renderer card module", () => {
         const el: any = {
           tagName: tag,
           className: "",
-          appendChild: (c: unknown) => c,
+          children: [] as unknown[],
+          appendChild: (c: unknown) => {
+            el.children.push(c);
+            return c;
+          },
           setAttribute: (k: string, v: string) => {
             el[k] = v;
           },
@@ -93,6 +98,92 @@ describe("renderer card module", () => {
       );
       expect(card).toBeDefined();
       expect(card.className).toBe("provider-card");
+    } finally {
+      restoreDoc();
+    }
+  });
+
+  test("renderProviderCard renders pacing row when limit carries pacing", () => {
+    mockDoc();
+    try {
+      const pacingStub: WeeklyPacing = {
+        windowStartAt: 1000,
+        resetsAt: 2000,
+        dayIndex: 1,
+        usedFraction: 0.2,
+        remainingFraction: 0.8,
+        idealUsedFraction: 0.25,
+        paceDeltaFraction: -0.05,
+        status: "under",
+        level: "ok",
+        fixedDailyFraction: 1 / 7,
+        adaptiveDailyFraction: 0.15,
+        safeLeftTodayFraction: 0.08,
+        todayUsedFraction: 0.1,
+        todayLowerBound: false,
+        unobservedFraction: 0,
+        projectedExhaustionAt: null,
+        slices: Array.from({ length: 7 }, (_, i) => ({
+          index: i,
+          startAt: 1000 + i * 100,
+          endAt: 1100 + i * 100,
+          state: i === 1 ? "current" : i < 1 ? "past" : "future",
+          usedFraction: i <= 1 ? 0.1 : null,
+          lowerBound: false,
+          budgetFraction: i > 1 ? 0.15 : null,
+        })),
+      };
+
+      const card = renderProviderCard(
+        {
+          id: "muse-code",
+          name: "MUSE CODE",
+          suffix: "",
+          accounts: 1,
+          columns: [{ key: "c1", label: "Weekly" }],
+          rows: [
+            {
+              account: "muse@example.com",
+              displayAccount: "muse",
+              health: null,
+              maxUsed: 0.2,
+              level: "ok",
+              route: { text: "—", level: "ok" },
+              limits: [
+                {
+                  label: "Weekly",
+                  low: false,
+                  level: "ok",
+                  usedFraction: 0.2,
+                  pacing: pacingStub,
+                },
+              ],
+            },
+          ],
+        },
+        false,
+        0,
+        {
+          status: "loading",
+          data: null,
+          intervalSeconds: 300,
+          warmup: { running: false, message: null },
+          settings: DEFAULT_DESKTOP_SETTINGS,
+        },
+      );
+
+      interface MockNode {
+        tagName: string;
+        className: string;
+        children: MockNode[];
+      }
+      const cardObj = card as unknown as MockNode;
+      const table = cardObj.children.find((c) => c.tagName === "table");
+      const tbody = table?.children.find((c) => c.tagName === "tbody");
+      const rows = tbody?.children ?? [];
+      // Primary row + Pacing row
+      expect(rows.length).toBe(2);
+      expect(rows[1].className).toBe("pacing-row");
     } finally {
       restoreDoc();
     }

@@ -452,6 +452,77 @@ progress::-webkit-progress-value {
   color: var(--color-muted);
 }
 
+/* Pacing Sub-Row */
+.pacing-row td.col-pacing {
+  padding-block: var(--space-xs) var(--space-sm);
+  padding-inline: var(--space-md);
+  background-color: var(--color-surface);
+  border-bottom: var(--size-border) solid var(--color-border);
+}
+
+.pacing-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.pacing-metrics {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-weight: 600;
+}
+
+.pacing-badge {
+  display: inline-block;
+  padding: 1px var(--space-xs);
+  background-color: var(--color-border);
+  color: var(--color-muted);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.pacing-slices {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.pacing-slice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-muted);
+}
+
+.pacing-slice.is-current {
+  font-weight: 700;
+}
+
+.pacing-slice progress {
+  inline-size: 24px;
+  block-size: var(--size-bar-height);
+}
+
+.slice-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.slice-value {
+  font-weight: 600;
+}
+
+.pacing-unobserved {
+  color: var(--color-muted);
+  font-style: italic;
+}
+
 /* Settings View */
 .settings-view {
   display: flex;
