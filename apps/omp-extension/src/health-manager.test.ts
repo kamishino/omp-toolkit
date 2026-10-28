@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Account, ProbeResult } from "@omp-toolkit/core";
+import type { Account, Policy, ProbeResult } from "@omp-toolkit/core";
 import { AntigravityHealthManager } from "./health-manager";
+import type { RoutingPolicyStore } from "./policy-store";
 import type { AntigravityProbeClient } from "./probe-client";
 
 describe("AntigravityHealthManager deep recovery coordinator", () => {
@@ -99,6 +100,136 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
     expect(res.status).toBe("ambiguous");
     if (res.status === "ambiguous") {
       expect(res.matches.length).toBe(2);
+    }
+  });
+  test("auto-restore sidecar read and write with corrupt detection", () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-test-"));
+    try {
+      const manager = new AntigravityHealthManager({ agentDir: tempDir });
+      // File absent
+      expect(manager.readAutoRestore()).toEqual({ enabled: [] });
+
+      // Write sidecar
+      manager.writeAutoRestore({ enabled: ["test@example.com", "other@example.com"] });
+      expect(manager.readAutoRestore()).toEqual({
+        enabled: ["test@example.com", "other@example.com"],
+      });
+
+      // Corrupt content throws
+      const file = path.join(tempDir, "gemini-health-auto-restore.json");
+      fs.writeFileSync(file, "{ invalid json", "utf8");
+      expect(() => manager.readAutoRestore()).toThrow("corrupt auto-restore sidecar");
+
+      fs.writeFileSync(file, JSON.stringify({ enabled: "not-an-array" }), "utf8");
+      expect(() => manager.readAutoRestore()).toThrow("corrupt auto-restore sidecar");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("hasExclusionsToRecover checks managed and opted-in manual exclusions", async () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-rec-"));
+    try {
+      let policies: Policy[] = [];
+      const mockPolicyStore = {
+        readPolicies: async () => policies,
+        writePolicies: async (p: Policy[]) => {
+          policies = p;
+        },
+      };
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
+      });
+
+      // Initially false
+      expect(await manager.hasExclusionsToRecover()).toBe(false);
+
+      // Managed exclusion -> true
+      manager.writeState({ excluded: ["managed@example.com"] });
+      expect(await manager.hasExclusionsToRecover()).toBe(true);
+
+      // Clear managed, add manual without opt-in -> false
+      manager.writeState({ excluded: [] });
+      policies = [
+        {
+          provider: "google-antigravity",
+          account: { email: "manual@example.com" },
+          reservePct: 100,
+        },
+      ];
+      expect(await manager.hasExclusionsToRecover()).toBe(false);
+
+      // Opt-in manual -> true
+      manager.writeAutoRestore({ enabled: ["manual@example.com"] });
+      expect(await manager.hasExclusionsToRecover()).toBe(true);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("maybeRestoreManaged restores opted-in manual and managed exclusions and preserves sidecar", async () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-rest-"));
+    try {
+      let policies: Policy[] = [
+        {
+          provider: "google-antigravity",
+          account: { email: "managed@example.com" },
+          reservePct: 100,
+        },
+        {
+          provider: "google-antigravity",
+          account: { email: "manual-opted@example.com" },
+          reservePct: 100,
+        },
+        {
+          provider: "google-antigravity",
+          account: { email: "manual-not-opted@example.com" },
+          reservePct: 100,
+        },
+      ];
+      const mockPolicyStore = {
+        readPolicies: async () => policies,
+        writePolicies: async (p: Policy[]) => {
+          policies = p;
+        },
+      };
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
+      });
+
+      manager.writeState({ excluded: ["managed@example.com"] });
+      manager.writeAutoRestore({ enabled: ["manual-opted@example.com"] });
+      manager.writeStreaks({
+        "managed@example.com": { ok: 3, lastAt: Date.now() },
+        "manual-opted@example.com": { ok: 3, lastAt: Date.now() },
+        "manual-not-opted@example.com": { ok: 3, lastAt: Date.now() },
+      });
+
+      const restored = await manager.maybeRestoreManaged();
+      expect(restored.sort()).toEqual(["managed@example.com", "manual-opted@example.com"]);
+
+      // Managed removed from state
+      expect(manager.readState().excluded).toEqual([]);
+
+      // Sidecar still has manual-opted
+      expect(manager.readAutoRestore().enabled).toEqual(["manual-opted@example.com"]);
+
+      // Policies removed for restored accounts only
+      expect(policies.length).toBe(1);
+      expect(policies[0]?.account?.email).toBe("manual-not-opted@example.com");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 });
