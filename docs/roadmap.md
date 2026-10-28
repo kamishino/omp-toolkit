@@ -1,397 +1,364 @@
-# OMP Toolkit 90-day reliability roadmap
+# OMP Toolkit 90-day execution-quality roadmap
 
 ## North star and success metric
 
-- **North star:** one operator, two independent Windows machines, four OMP
-  providers (Google Antigravity, OpenAI Codex, Muse Code, DeepSeek), zero manual
-  route fixes for 30 consecutive days.
-- **Manual route fix:** any `/gemini-enable`, `/gemini-heal`, or
-  `/gemini-restore` invocation, or any incident that remains unresolved for
-  more than 15 minutes.
-- **Not a manual route fix:** restarting OMP, Orca, or the monitor after a
-  reboot; running the one-time `/gemini-auto-restore` opt-in; reading the
-  monitor.
-- **Proof:** `bun run reliability:report --days=30 --machine all` exits 0 only
-  when every machine has route-check coverage for every day, zero manual
-  interventions, and zero late incidents.
-- **Second machine:** joins on day 51, after the first machine has passed the
-  Phase 1 and Phase 2 acceptance gates.
+- **North star:** measurably better agent execution quality at no worse cost,
+  for one operator across two independent Windows machines and four OMP
+  providers (Google Antigravity, OpenAI Codex, Muse Code, DeepSeek), while
+  finishing the 30-consecutive-day zero-manual-fix reliability proof as an
+  unwaivable exit gate.
+- **North-star metric (pooled across both machines):**
+  - `errorEndedRate = agent_run(status="error") / agent_run(all)`.
+  - `costProxy`: mean tokens per non-error run if per-run token totals are
+    available in `agent_end` payloads; otherwise `agent_run(all) / session_start`
+    (runs per session).
+  - **Success at Day 90:** `errorEndedRate` improved by $\ge 25\%$ relative to
+    baseline, `costProxy` not worse than baseline by $> 10\%$, and $\ge 30$
+    `agent_run` samples present in each measurement window (baseline and Days
+    51–80). If a window has $< 30$ samples, the metric gate is reported as
+    `insufficient data` and is treated as not met.
+- **Mandatory reliability gate:**
+  - **Manual route fix:** any `/gemini-enable`, `/gemini-heal`, or
+    `/gemini-restore` invocation, or any incident that remains unresolved for
+    more than 15 minutes.
+  - **Not a manual route fix:** restarting OMP, Orca, or the monitor after a
+    reboot; running the one-time `/gemini-auto-restore` opt-in; reading the
+    monitor.
+  - **Proof:** `bun run reliability:report --days=30 --machine all` exits 0 only
+    when every machine has route-check coverage for every day, zero manual
+    interventions, and zero late incidents during the Days 51–80 proof window
+    (or the single permitted restart window).
+  - **Precedence:** the cycle fails if the reliability gate fails, even if
+    execution-quality thresholds are met.
+- **Capacity:** sized for ~5 hours/week including operating cadence; strictly
+  one feature at a time.
 
 ## Baseline
 
-- `v0.1.0` extension with event-driven Gemini health, managed exclusions, and
-  the route snapshot.
-- Provider usage CLI with Google Antigravity route health plus OpenAI Codex,
-  Muse Code, and DeepSeek usage.
-- `bun run monitor:orca` one-command Floating Workspace launcher.
-- Known manual exclusion: `<account>` still uses a manual `reservePct: 100`
-  policy.
-- No history database, no cross-process lock, no opt-in auto-restore, no
-  recovery timer, no incident alerting, no reliability report.
-
-Cross-platform installation and CLI support are defined by
-[ADR-0004](adr/0004-cross-platform-support.md); the 30-day reliability proof
-remains on Windows.
+- Reliability history SQLite database (`omp-toolkit-history.db`) with
+  machine identity and `bun run reliability:report`.
+- Gemini health probe client and circuit breaker with managed exclusions.
+- Opt-in auto-restore sidecar (`gemini-health-auto-restore.json`),
+  `/gemini-auto-restore` command, and in-process idle recovery timer
+  (`RECOVERY_INTERVAL_MS = 300_000`).
+- Cross-process lock (`apps/omp-extension/src/lock.ts`) wrapping all mutating
+  health paths (`applyHeal`, `restoreManaged`, `maybeRestoreManaged`,
+  `removeExclusion`, `writePolicies`).
+- Eval-locked model pairing (Pair A `deepseek/deepseek-flash`) and versioned
+  plan-to-executor handoff contract template (`templates/plan-exec-handoff/`).
+- Weekly pacing, multi-provider schedule, desktop tray widget, and TUI
+  monitor are shipped and maintain-only this cycle.
+- **Known gaps:**
+  - No `scripts/doctor.ts` or `bun run doctor` command exists in the tree
+    (yet `docs/runbook.md` references it).
+  - No production writer emits `incident` or `incident_resolved` events into
+    history; the report's `late` incident metric is currently vacuous.
+  - Two-machine rollout is undocumented in `docs/runbook.md`.
+  - Machine 2 is not yet installed.
+  - Account `<account>` still requires a manual `reservePct: 100` exclusion.
 
 > This roadmap is public. Personal machine names, account emails, and terminal
 > handles must not be added to it.
 
 ## Phase table
 
-| Phase |  Days | Theme                |  Effort | Exit gate                                                            |
-| ----- | ----: | -------------------- | ------: | -------------------------------------------------------------------- |
-| 0     |  1–14 | Instrument the truth | 12–16 h | 7 days of history rows and a working weekly report                   |
-| 1     | 15–35 | Hands-off recovery   | 18–24 h | Opt-in restore and conditional timer pass tests; 7 days on machine 1 |
-| 2     | 36–50 | Safe concurrency     | 12–18 h | Two concurrent writers cannot lose policy updates; lock tests pass   |
-| 3     | 51–90 | Alert and prove      | 20–28 h | 30 consecutive days, both machines, report exit 0                    |
+| Phase | Days  | Theme                        | Effort  | Exit gate                                                                                   |
+| ----- | ----: | ---------------------------- | ------: | ------------------------------------------------------------------------------------------- |
+| 0     |  1–14 | Close reliability gaps       | 12–16 h | doctor all-PASS on both machines; incident write→resolve proven; machine 2 installed        |
+| 1     | 15–32 | Instrument execution quality | 10–14 h | `execution:report` prints pooled baseline from $\ge 14$ days and $\ge 30$ samples          |
+| 2     | 33–50 | Improve execution quality    |  8–12 h | Each attempted menu intervention kept or reverted by 7-day keep/kill in Monday review notes |
+| 3     | 51–90 | Prove both gates             |   4–6 h | `reliability:report --days=30` exit 0 on both machines and north-star thresholds met        |
 
-Dependencies are strict: Phase 1 starts only after Phase 0's report works;
-Phase 2 starts only after Phase 1's acceptance; Phase 3 starts only after
-Phase 2's lock is in use by every mutating path.
+### Strict dependencies and slippage rules
 
-## Phase 0 — Instrument the truth (Days 1–14)
+- Dependencies are strict: Phase 1 starts only after Phase 0's doctor and
+  incident tests pass; Phase 2 starts only after Phase 1's baseline report is
+  recorded; Phase 3 starts strictly on Day 51.
+- **Day 51 never moves.** The 30-day proof requires an uninterrupted window
+  on a frozen system.
+- If Phase 0 or Phase 1 slips, Phase 0 and Phase 1 exit gates may **never** be
+  waived. Slippage is absorbed first by cutting Phase 2 menu interventions from
+  the bottom of the ranking, and second by consuming the Days 81–90 buffer.
+- Phase 1 baseline observation may shrink only to the 14-day minimum.
 
-**Outcome:** the operator can measure reliability instead of remembering it.
+---
 
-### Work items
+## Phase 0 — Close reliability gaps (Days 1–14)
 
-1. Add `packages/core/src/history.ts` with pure types only:
-
-   ```ts
-   export type HistoryEventKind =
-     | "route_check"
-     | "policy_change"
-     | "manual_intervention"
-     | "restore"
-     | "incident"
-     | "incident_resolved"
-     | "alert"
-     | "session_start";
-
-   export interface HistoryEvent {
-     at: number;
-     machineId: string;
-     kind: HistoryEventKind;
-     provider?: string;
-     account?: string;
-     status?: string;
-     incidentId?: string;
-     detail?: string;
-   }
-   ```
-
-   Export it from `packages/core/src/index.ts`.
-
-2. Add `apps/omp-extension/src/history.ts` using `bun:sqlite`. It owns all
-   history I/O; `packages/core` stays pure.
-
-   Database path: `~/.omp/agent/omp-toolkit-history.db`, overridable with
-   `OMP_TOOLKIT_HISTORY_DB`.
-
-   Schema, created with `CREATE TABLE IF NOT EXISTS`:
-
-   ```sql
-   events(
-     id INTEGER PRIMARY KEY,
-     at INTEGER NOT NULL,
-     machine_id TEXT NOT NULL,
-     kind TEXT NOT NULL,
-     provider TEXT,
-     account TEXT,
-     status TEXT,
-     incident_id TEXT,
-     detail TEXT
-   );
-   ```
-
-   Add indexes on `events(at)`, `events(kind, at)`, and
-   `events(incident_id)`. Set `PRAGMA journal_mode = WAL` and
-   `PRAGMA busy_timeout = 5000`. Delete rows older than 30 days on open, once
-   per process.
-
-3. Add machine identity. On first history open, create
-   `~/.omp/agent/omp-toolkit-machine.json` atomically:
-
-   ```json
-   { "id": "<crypto.randomUUID()>", "hostname": "<os.hostname()>", "createdAt": 0 }
-   ```
-
-   Read it on every process start; never regenerate while the file exists.
-   If the file is corrupt, throw and surface the path; do not overwrite it.
-
-4. Wire event writes in `apps/omp-extension/src/index.ts`:
-   - `recordHealth(results)` writes one `route_check` event per result.
-   - `applyHeal` writes `policy_change` for each changed account.
-   - `restoreManaged` writes `restore` for each restored account.
-   - `/gemini-enable`, `/gemini-heal`, `/gemini-restore` write
-     `manual_intervention` with the command name.
-   - `session_start` writes `session_start`.
-     History failures must not fail a health check, heal, or restore; catch and
-     emit a single warning per process.
-
-5. Add `scripts/reliability-report.ts` and the package script:
-
-   ```json
-   "reliability:report": "bun scripts/reliability-report.ts"
-   ```
-
-   Flags: `--days=<n>` default 30, `--machine=<id|all>` default `all`.
-   With independent per-machine state, run the report on each machine;
-   `--machine all` means all machine ids present in that machine's local
-   database.
-   Output one table row per machine:
-   `machine | days | checks | ok | hang | error | auth | restores | manual | incidents | late | monitor-age`.
-   `incidents` counts `incident` events. `late` counts incidents whose matching
-   `incident_resolved` event is absent 15 minutes after the incident (or absent
-   entirely); match on `incident_id`. A `late` incident counts as a manual
-   failure for the exit code.
-   Exit 0 only when every machine has checks on every requested UTC day, zero
-   manual interventions, and zero `late` incidents; otherwise exit 1.
-   If the database is absent, print `no history` and exit 1.
-
-6. Add a monitor heartbeat. `apps/provider-usage/src/index.ts` writes
-   `~/.omp/agent/omp-toolkit-monitor.json` atomically on every successful
-   `runOnce()`:
-
-   ```json
-   { "at": 0, "hostname": "<os.hostname()>", "pid": 0 }
-   ```
-
-   The report matches the heartbeat to the machine by hostname and treats a
-   heartbeat older than 10 minutes as stale; it prints `monitor-age=stale`.
-
-### Acceptance
-
-- `bun run check` passes.
-- Run the extension once, then `bun run reliability:report --days=1` prints one
-  machine, at least one check, zero manual interventions, and
-  `monitor-age=stale` until the monitor runs.
-- Run `bun ~/.omp/agent/scripts/omp-provider-usage.js --health`, then repeat the
-  report; `monitor-age` is a recent age, not `stale`.
-- Restart OMP; the machine id is unchanged and history rows accumulate.
-- A forced history write failure prints one warning and does not fail the
-  health check.
-
-## Phase 1 — Hands-off recovery (Days 15–35)
-
-**Outcome:** managed and opted-in manual exclusions restore while OMP is idle,
-without operator commands.
+**Outcome:** the mandatory reliability proof becomes honest, complete, and
+operable across both machines.
 
 ### Work items
 
-1. Add the sidecar `~/.omp/agent/gemini-health-auto-restore.json` with shape
-   `{ "enabled": ["email"] }`. Add strict read/write helpers to
-   `apps/omp-extension/src/index.ts`, using the existing `writeFileAtomic`
-   pattern. Corrupt content throws; do not clobber.
-
-2. Add commands in `apps/omp-extension/src/index.ts`:
-   - `/gemini-auto-restore <email-or-local-part>`: resolve against
-     `loadAccounts()`; refuse ambiguous local parts; write the exact email.
-   - `/gemini-auto-restore off <email-or-local-part>`: remove the email.
-   - `/gemini-auto-restore` with no args: list opted-in accounts and current
-     manual exclusions.
-     Each successful change writes a `policy_change` history event.
-
-3. Change `restorableEmails` in `packages/core/src/health.ts` to:
-
-   ```ts
-   export function restorableEmails(
-     state: HealthState,
-     streaks: StreakState,
-     threshold: number,
-     optedIn: ReadonlySet<string> = new Set(),
-     manuallyExcluded: ReadonlySet<string> = new Set(),
-   ): string[] {
-     return [...new Set([...state.excluded, ...manuallyExcluded])].filter(
-       (email) => {
-         if (!state.excluded.includes(email) && !optedIn.has(email)) return false;
-         return (streaks[email]?.ok ?? 0) >= threshold;
-       },
-     );
-   }
-   ```
-
-   Managed exclusions need no opt-in; manual exclusions require it.
-
-4. Update `maybeRestoreManaged` in `apps/omp-extension/src/index.ts`:
-   - Read policies, `state.excluded`, auto-restore sidecar, and streaks.
-   - Compute `manuallyExcluded` as emails with `reservePct >= 100` that are not
-     in `state.excluded`.
-   - Pass `optedIn` and `manuallyExcluded` to `restorableEmails`.
-   - For every restorable email, remove its policy. Remove it from
-     `state.excluded` only if it was managed. Keep the auto-restore sidecar
-     entry so the account stays opted in.
-   - Call `reloadIfAvailable(ctx)` after a non-empty restore and write
-     `restore` events.
-
-5. Add the conditional recovery timer in the extension factory:
-   - Add `isIdle(): boolean;` to `ExtensionContext` in
-     `apps/omp-extension/src/omp-types.d.ts`.
-   - Constants: `RECOVERY_INTERVAL_MS = 300_000`, override with
-     `GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS`, minimum 60 seconds.
-   - On `session_start`, clear any previous interval and start
-     `setInterval(tick, RECOVERY_INTERVAL_MS)` only when
-     `ctx.agent.kind === "main"`.
-   - `tick`: return if `running`; return if `!ctx.isIdle()`; return if there is
-     no managed exclusion and no opted-in manual exclusion; otherwise call
-     `refresh(ctx, false)`.
-   - On `session_shutdown`, clear the interval.
-   - Do not probe healthy periods: an empty exclusion set skips the tick
-     without calling `omp usage` or a model probe.
-
-6. Add tests in `packages/core/src/index.test.ts`:
-   - managed exclusion restores without opt-in;
-   - manual exclusion does not restore without opt-in;
-   - opted-in manual exclusion restores at the threshold;
-   - opted-in manual exclusion below the threshold does not restore;
-   - duplicates across managed/manual sets restore once.
-
-### Acceptance
-
-- `bun run check` passes.
-- Set a manual exclusion for a test account, run `/gemini-auto-restore <account>`,
-  then simulate three spaced healthy checks; the policy is removed and a
-  `restore` event exists.
-- The same account without opt-in stays excluded after the same streak.
-- With no exclusions, the timer runs for 15 minutes and the history DB gains
-  no new `route_check` rows.
-- With an opted-in exclusion, the timer produces a check at the configured
-  interval while `ctx.isIdle()` is true.
-- Shut down OMP; no timer callback runs after `session_shutdown`.
-
-## Phase 2 — Safe concurrency (Days 36–50)
-
-**Outcome:** the extension, the health CLI, and command handlers cannot lose a
-policy update when they overlap.
-
-### Work items
-
-1. Add `apps/omp-extension/src/lock.ts`:
-   - Lock path `~/.omp/agent/omp-toolkit.lock`.
-   - `acquireLock(operation: string, timeoutMs = 5_000)`:
-     - open with `fs.openSync(path, "wx")`;
-     - write `{ token, pid, machineId, operation, acquiredAt }`;
-     - on `EEXIST`, read the lock; if `acquiredAt` is older than 30 seconds,
-       unlink and retry; otherwise sleep 50 ms and retry until timeout;
-     - throw `lock_timeout` after the deadline.
-   - `releaseLock(token)`: unlink only when the stored token matches.
-   - `withLock(operation, fn)`: acquire, run, release in `finally`.
-
-2. Wrap every read-modify-write path in `withLock`:
-   - `writeState`, `writeStreaks`, `writePolicies`, `applyHeal`,
-     `restoreManaged`, `maybeRestoreManaged`, and the history retention delete.
-   - Do not wrap read-only snapshot reads or `publish`.
-   - Keep atomic file writes; the lock protects the read-modify-write window,
-     not individual writes.
-
-3. Add `scripts/doctor.ts` and `"doctor": "bun scripts/doctor.ts"`:
+1. Add `scripts/doctor.ts` and `"doctor": "bun scripts/doctor.ts"` in
+   `package.json`:
    - check OMP version via `omp --version`;
-   - check installed extension/script files exist;
+   - check installed extension and script files exist;
    - check history DB opens and schema version is current;
-   - check machine id file;
-   - check lock file is either absent or stale;
+   - check machine id file (`omp-toolkit-machine.json`) exists and is valid;
+   - check lock file (`omp-toolkit.lock`) is either absent or stale;
    - check Orca floating selector with
      `orca terminal list --worktree id:global-floating-terminal --json`;
    - print PASS/FAIL per check and exit 1 on any FAIL.
 
-4. Document the two-machine rollout in `docs/runbook.md`:
-   - install on machine 1, run the 30-day proof;
-   - install the same independent setup on machine 2 on day 51;
+2. Document the two-machine rollout in `docs/runbook.md`:
+   - install on machine 1, verify baseline health and history;
+   - install the same independent setup on machine 2 during Phase 0;
    - each machine has its own agent dir, history DB, machine id, and monitor;
    - no sync, no shared config, no cross-machine lock.
 
+3. Implement incident recording, Windows toast notifications, and monitor banner:
+   - Add `scripts/windows-toast.ps1` with `param([string]$Title, [string]$Message)`.
+     Try, in order:
+     1. `BurntToast` PowerShell module if available;
+     2. WinRT `Windows.UI.Notifications.ToastNotificationManager` with
+        `CreateToastNotifier("OMP Toolkit")`;
+     3. exit 0 without toast after printing `toast_unavailable`.
+     The extension invokes it with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <path> -Title "OMP Toolkit" -Message <text>`. Toast failures must not fail a health check.
+   - Update `HealthSnapshot` in `packages/core/src/types.ts` with optional:
+     `incident?: { id: string; at: number; kind: "all-failed" | "restore-failed" | "lock-timeout" | "history-error"; detail: string }`.
+   - In `apps/omp-extension`: set `incident` when every probed account fails,
+     when restore throws, when lock times out, or when history DB throws. Write
+     an `incident` history event with `incidentId = incident.id` and invoke the
+     toast (throttled to 1 toast per `kind` per 15 minutes).
+   - Clear `incident` and write `incident_resolved` with the matching
+     `incidentId` after a subsequent healthy check or successful restore.
+   - In `packages/tui/src/provider-usage-view.ts`: add one red line immediately
+     below the summary when `options.showHealth` is active and the snapshot has
+     an incident newer than 24 hours: `INCIDENT <kind> · <age> · <detail>`,
+     truncating detail to fit the 86-column frame. Footer continues to show
+     `health <age>`.
+
+4. Minor maintenance items:
+   - Verify probe pins (`MODEL_WIRE`, `PI_AI_ANTIGRAVITY_VERSION` in
+     `apps/omp-extension/src/probe-client.ts`) against upstream OMP and bump if
+     stale.
+   - Audit remaining persistence/`applyHeal` flow tests in `HANDOFF.md` §8;
+     add only missing test coverage.
+
+5. Machine 2 setup and manual account opt-in:
+   - Run `bun run install:omp` on machine 2, initializing its independent
+     history DB, machine id, and monitor.
+   - Run `/gemini-auto-restore <account>` on machine 1 to opt in `<account>`.
+     Setup actions taken during Phase 0 precede the proof window and are not
+     counted as manual interventions.
+
 ### Acceptance
 
 - `bun run check` passes.
-- Unit tests in `apps/omp-extension/src/lock.test.ts` using a temp directory:
-  - second acquire waits and then succeeds after release;
-  - stale lock is removed;
-  - timeout throws `lock_timeout`;
-  - release with the wrong token leaves the lock intact.
-- Run `/gemini-heal` and the extension timer concurrently in a test harness;
-  both complete and the policy file contains every expected change.
-- `bun run doctor` reports all PASS on machine 1 and is safe to run while the
-  monitor is running.
+- `bun run doctor` reports all PASS on machine 1 and machine 2, and is safe
+  to run while the monitor is active.
+- Simulate an all-accounts-failed snapshot in a test harness: monitor renders
+  one `INCIDENT` line, history DB gains one `incident` event, and toast dispatch
+  is attempted.
+- Follow with a healthy check: `incident_resolved` is written and the incident
+  banner clears.
+- Machine 2 runs `bun run reliability:report --days=1` and prints its own
+  distinct machine id with $\ge 1$ check.
 
-## Phase 3 — Alert and prove (Days 51–90)
+---
 
-**Outcome:** incidents are visible, and the 30-day metric is auditable.
+## Phase 1 — Instrument execution quality (Days 15–32)
+
+**Outcome:** execution quality and cost proxies are automatically recorded
+from real sessions, establishing the auditable baseline for the cycle.
 
 ### Work items
 
-1. Add `scripts/windows-toast.ps1` with `param([string]$Title, [string]$Message)`.
-   Try, in order:
-   1. `BurntToast` module if `Get-Module -ListAvailable BurntToast` returns it;
-   2. WinRT `Windows.UI.Notifications.ToastNotificationManager` with
-      `CreateToastNotifier("OMP Toolkit")`;
-   3. exit 0 without a toast, after printing `toast_unavailable`.
-      The extension calls it with `powershell.exe -NoProfile -ExecutionPolicy
-   Bypass -File <path> -Title "OMP Toolkit" -Message <text>`. Toast failures
-      must not fail a health check.
+1. Confirm session payload telemetry:
+   - Inspect live `agent_end` event object and `ctx.models.current()` in
+     `apps/omp-extension/src/auto-heal.ts` for token usage fields.
+   - **Pre-decided branch:** if token counts are exposed on `agent_end`,
+     `costProxy` = mean tokens per non-error run; otherwise `costProxy` =
+     `agent_run(all) / session_start` (runs per session).
 
-2. Add incident recording in the extension:
-   - `HealthSnapshot` gains optional
-     `incident?: { id: string; at: number; kind: "all-failed" | "restore-failed" | "lock-timeout" | "history-error"; detail: string }`.
-   - Set `incident` when every probed account fails, when a restore attempt
-     throws, when the lock times out, or when the history DB fails.
-   - Write an `incident` event with `incidentId = incident.id` and call the
-     toast. Throttle to one toast per `kind` per 15 minutes.
-   - Clear `incident` and write `incident_resolved` with the same
-     `incidentId` after a subsequent healthy check or successful restore.
+2. Extend domain history types and wire session event recording:
+   - Add `"agent_run"` to `HistoryEventKind` in `packages/core/src/history.ts`.
+   - In `apps/omp-extension/src/auto-heal.ts`: on `agent_end` when
+     `ctx.agent.kind === "main"`, record one `agent_run` history event:
+     - `provider`: current model provider from `ctx.models.current()`;
+     - `status`: `"error"` if last assistant message `stopReason === "error"`,
+       else `"ok"`;
+     - `detail`: model id (plus formatted `tok=<n>` if token counts exist).
+   - Wrap history writes in try/catch; history failure must never crash an
+     agent session (emit at most one process warning).
 
-3. Render the incident in the monitor:
-   - `packages/tui/src/provider-usage-view.ts` adds one red line immediately
-     below the summary when `options.showHealth` and the snapshot has an
-     incident newer than 24 hours: `INCIDENT <kind> · <age> · <detail>`.
-   - The line truncates detail to fit the 86-column frame.
-   - The footer continues to show `health <age>`.
+3. Build execution quality reporting CLI:
+   - Add `scripts/reliability/execution-report.ts` and `"execution:report": "bun scripts/reliability/execution-report.ts"` in `package.json`.
+   - Flags: `--days=<n>` (default 14), `--machine=<id|all>` (default `all`).
+   - Output one table row per machine:
+     `machine | days | runs | error | errorRate | sessions | costProxy | manual`.
+   - Output a final `POOLED` summary row summing runs, errors, and sessions
+     arithmetically (never averaging percentages).
+   - If history DB is missing or has zero `agent_run` rows, print
+     `no execution data` and exit 1.
 
-4. Run the proof:
-   - Machine 1 starts its 30-day proof on day 51 after Phase 2 acceptance.
-   - Install machine 2 on day 51 with the same independent setup.
-   - Both machines run `bun run monitor:orca` and the in-process recovery
-     timer.
-   - Before day 51, opt in `<account>` on machine 1 with
-     `/gemini-auto-restore <account>`; that setup action is not counted.
-   - Weekly: `bun run reliability:report --days=7 --machine all`; record the
-     output in the weekly review note.
-   - Day 80: run `bun run reliability:report --days=30 --machine all`; it must
-     exit 0.
-   - Days 81–90: buffer for regressions; no new feature work.
-
-### Operating cadence
-
-- **Monday, 15 minutes:** run `bun run reliability:report --days=7`; choose one
-  fix at most.
-- **Friday, 10 minutes:** confirm `monitor-age` is fresh; copy the history DB to
-  `~/.omp/agent/backups/history-<date>.db`.
-- **Incident:** run `bun run doctor`; read the monitor banner; do not edit
-  policies by hand unless the report shows a lock or restore failure.
+4. Accrue baseline data:
+   - Operate normally across both machines for $\ge 14$ consecutive days after
+     telemetry lands.
+   - At Phase 1 exit gate, run `bun run execution:report --days=14` on machine 1
+     and machine 2; record printed tables and the pooled baseline rate in that
+     week's Monday review note.
 
 ### Acceptance
 
 - `bun run check` passes.
-- Force an all-accounts-failed snapshot; the monitor shows one `INCIDENT`
-  line, the history DB has one `incident` event, and one toast is attempted.
-- Resolve the incident with a healthy check; `incident_resolved` is written
-  and the banner disappears.
-- `bun run reliability:report --days=30 --machine all` exits 0 with the
-  expected table on day 80.
+- Trigger an agent session ending in success and one ending in error;
+  `agent_run` rows accumulate in `omp-toolkit-history.db` with matching
+  status.
+- `bun run execution:report --days=14` on machine 1 prints $\ge 30$ runs with
+  a calculated error rate.
+- Forcing a history write failure emits one warning without interrupting the
+  agent session.
+- Baseline outputs from both machines are recorded in the weekly review note,
+  documenting the baseline `errorEndedRate` and `costProxy`.
+
+---
+
+## Phase 2 — Improve execution quality (Days 33–50)
+
+**Outcome:** apply strictly pre-evidenced interventions sequentially, keeping
+only changes that measurably maintain or improve execution quality.
+
+### Ranked intervention menu
+
+Interventions must be executed one at a time in this exact priority order. An
+item may be skipped only with written justification recorded in the Monday
+review note; unranked or off-menu interventions are prohibited:
+
+1. **Lock evaluated model roles in user config:**
+   - Manually apply the winning Pair A configuration (`deepseek/deepseek-flash`
+     for plan and default) to `~/.omp/agent/config.yml` with executor
+     `thinking_level: low`, reserving `high` for single verification retries.
+2. **Apply plan-to-executor handoff contract template:**
+   - Apply `templates/plan-exec-handoff/` as the default working persona via
+     `/template apply plan-exec-handoff`.
+3. **Re-evaluate model pairings on catalog shifts:**
+   - Run `bun scripts/eval/eval-model-roles.ts --live --report` at phase start.
+     Re-lock roles only if the scorecard winner changes by the established
+     decision rule (first-pass solve rate $\to$ plan acceptance $\to$ cost).
+4. **Targeted wire normalizer fixes:**
+   - Apply fixes to `apps/omp-extension/src/gemini-normalizer.ts` only when an
+     active wire failure is reproduced by a failing test in the test suite.
+5. **Tighten context-economy rules:**
+   - Adjust `.omp/AGENTS.md` and template instructions only where Phase 1
+     baseline data exposes clustered error patterns by provider or model.
+
+### Keep / kill measurement rule
+
+- After applying an intervention, observe for $\ge 7$ consecutive days.
+- **Keep:** pooled `errorEndedRate` over the 7-day window does not exceed
+  the trailing 7 days before it, **and** `costProxy` is not worse by $> 10\%$.
+- **Kill / Revert:** if error rate regresses or cost exceeds threshold, revert
+  the configuration or code change immediately and record the revert in the
+  Monday review note.
+- If a 7-day window yields $< 30$ runs, extend observation until 30 runs
+  accrue or Day 50 is reached.
+
+### Acceptance
+
+- Every attempted intervention has a documented kept/reverted verdict with
+  supporting before/after report metrics in the Monday review notes.
+- `bun run check` passes after every code or template modification.
+- Unattempted menu items are explicitly accounted for as cut under the
+  Day 51 slippage rule or skipped with recorded reasons.
+
+---
+
+## Phase 3 — Prove both gates (Days 51–90)
+
+**Outcome:** both machines achieve the 30-day zero-manual-fix reliability proof
+under a frozen system while final execution quality is verified.
+
+### Work items
+
+1. **System freeze (Day 51):**
+   - Strictly no new features, refactors, or menu interventions after Day 50.
+   - Code changes permitted during Days 51–90 strictly to fix an active
+     blocking incident. Maintain-only bugfixes to desktop or TUI are allowed
+     only if they touch zero health, policy, or session telemetry code and are
+     logged in the Monday review.
+
+2. **Continuous dual-machine operation:**
+   - Machine 1 and machine 2 run `bun run monitor:orca` and the in-process
+     recovery timer continuously.
+   - Both machines operate with independent state and zero manual policy edits.
+
+3. **Day 80 audit:**
+   - Run `bun run reliability:report --days=30 --machine all` on each machine
+     (must exit 0).
+   - Run `bun run execution:report --days=30 --machine all` on each machine
+     and calculate pooled metrics over Days 51–80.
+
+4. **Days 81–90 buffer:**
+   - Reserved strictly for unexpected regression handling.
+
+### Proof-break and restart rule
+
+- Any manual route fix (`/gemini-enable`, `/gemini-heal`, `/gemini-restore`) or
+  any incident remaining unresolved $> 15$ minutes breaks the 30-day count.
+- **One restart permitted:** if a break occurs on or before Day 60, the
+  operator may restart the 30-day window, concluding by Day 90 (consuming the
+  buffer).
+- If a break occurs after Day 60, or if a second break occurs, the cycle
+  concludes at Day 90 as **failed**. Final reports are run and published in the
+  review note without alteration.
+
+### Acceptance
+
+- `bun run check` passes.
+- On Day 80 (or end of restart window), `bun run reliability:report --days=30 --machine all`
+  exits 0 on machine 1 and machine 2.
+- `bun run execution:report --days=30` pooled data contains $\ge 30$ samples
+  and satisfies the $\ge 25\%$ error-rate improvement and $\le 10\%$ cost
+  threshold.
+- `git log` over Days 51–90 confirms compliance with the feature freeze.
+
+---
+
+## Operating cadence
+
+- **Monday, 15 minutes:**
+  - Run `bun run reliability:report --days=7`.
+  - Run `bun run execution:report --days=7` (once Phase 1 telemetry lands).
+  - Select at most one fix or intervention for the week.
+  - Append report tables and decisions to the machine-local weekly review note
+    (never committed to git, as it contains local hostnames).
+- **Friday, 10 minutes:**
+  - Confirm `monitor-age` is fresh on both machines.
+  - Backup history database: copy `omp-toolkit-history.db` to
+    `~/.omp/agent/backups/history-<YYYY-MM-DD>.db`.
+- **Incident response:**
+  - Run `bun run doctor`.
+  - Read monitor `INCIDENT` banner.
+  - Never edit policies by hand unless doctor/report identifies an unrecoverable
+    lock or file corruption failure.
+
+---
 
 ## Definition of done
 
-The 90-day roadmap is complete when all of the following are true:
+The 90-day roadmap is complete when all of the following conditions are met:
 
-- Machine 1 and machine 2 each have 30 consecutive days with route-check
-  coverage for every day.
-- `bun run reliability:report --days=30 --machine all` exits 0 on each machine.
-- Manual interventions: 0 on both machines.
-- Late incidents: 0 on both machines.
-- The monitor heartbeat is fresh on both machines.
-- No policy was edited by hand during the proof window.
-- The second machine uses independent state; no sync or shared database.
+1. **North-star execution quality met:** pooled `errorEndedRate` over the
+   30-day proof window (Days 51–80) improved by $\ge 25\%$ compared to Phase 1
+   baseline, with `costProxy` not worse by $> 10\%$, and $\ge 30$ runs
+   recorded in both baseline and proof windows.
+2. **Reliability proof exit 0:** `bun run reliability:report --days=30 --machine all`
+   exits 0 on machine 1 and machine 2.
+3. **Zero manual fixes:** 0 manual route interventions on both machines
+   during the proof window.
+4. **Zero late incidents:** 0 incidents unresolved after 15 minutes on either
+   machine.
+5. **Fresh heartbeats:** monitor heartbeat is fresh on both machines.
+6. **No manual edits:** no routing policy was modified by hand during the
+   proof window.
+7. **Independence:** machine 2 operated entirely on local state without
+   cross-machine sync or shared storage.
+8. **Audited interventions:** every Phase 2 menu intervention has an
+   empirical kept or reverted verdict logged in the review notes.
 
 > This roadmap deliberately excludes public distribution, a provider SDK, a web
-> dashboard, and macOS/Linux support until the 30-day proof is complete. The
-> desktop widget is a monitor host and does not change the Windows-only 30-day
+> dashboard, and macOS/Linux support until the next roadmap cycle. The desktop
+> widget is a monitor host and does not alter the Windows-only 30-day
 > reliability proof.
