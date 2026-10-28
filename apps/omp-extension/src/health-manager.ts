@@ -4,11 +4,13 @@ import {
   type Account,
   excludedEmails,
   type HealAction,
-  type HealthResult,
+  type HealthIncident,
+  type HealthSnapshot,
   type HealthState,
   mergeHealthResults,
   nextStreaks,
   type Policy,
+  parseHealthSnapshot,
   type ProbeResult as Result,
   restorableEmails,
   type StreakState,
@@ -23,6 +25,15 @@ import {
 import { withLock } from "./lock";
 import { RoutingPolicyStore } from "./policy-store";
 import { AntigravityProbeClient } from "./probe-client";
+import { dispatchToast } from "./toast";
+
+export function incidentKindForError(error: unknown): HealthIncident["kind"] | null {
+  const msg = error instanceof Error ? error.message : String(error);
+  if (msg.includes("lock_timeout")) {
+    return "lock-timeout";
+  }
+  return null;
+}
 export interface HealthManagerOptions {
   probeClient?: AntigravityProbeClient;
   policyStore?: RoutingPolicyStore;
@@ -220,21 +231,85 @@ export class AntigravityHealthManager {
     return false;
   }
 
-  readSnapshot(): { checkedAt: number; results: HealthResult[] } | null {
+  readSnapshot(): HealthSnapshot | null {
     try {
-      const file = path.join(this.targetDir, "gemini-health-snapshot.json");
-      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
-        checkedAt?: number;
-        results?: HealthResult[];
-      };
-      if (!parsed || !Array.isArray(parsed.results)) return null;
-      return {
-        checkedAt: Number(parsed.checkedAt) || 0,
-        results: parsed.results,
-      };
+      const file = path.join(this.targetDir, "gemini-health-latest.json");
+      if (!fs.existsSync(file)) return null;
+      return parseHealthSnapshot(fs.readFileSync(file, "utf8"));
     } catch {
       return null;
     }
+  }
+
+  getIncident(): HealthIncident | null {
+    return this.readSnapshot()?.incident ?? null;
+  }
+
+  setIncident(
+    kind: HealthIncident["kind"],
+    detail: string,
+    options: { skipHistory?: boolean } = {},
+  ): HealthIncident {
+    const currentSnapshot = this.readSnapshot();
+    if (currentSnapshot?.incident?.kind === kind) {
+      return currentSnapshot.incident;
+    }
+
+    const incident: HealthIncident = {
+      id: crypto.randomUUID(),
+      at: Date.now(),
+      kind,
+      detail,
+    };
+
+    const file = path.join(this.targetDir, "gemini-health-latest.json");
+    const snapshot: HealthSnapshot = {
+      checkedAt: currentSnapshot?.checkedAt ?? Date.now(),
+      results: currentSnapshot?.results ?? [],
+      incident,
+    };
+    writeFileAtomic(file, `${JSON.stringify(snapshot, null, 2)}\n`);
+
+    if (!options.skipHistory) {
+      this.recordHistory([
+        {
+          at: incident.at,
+          kind: "incident",
+          provider: PROVIDER,
+          incidentId: incident.id,
+          detail: `${kind}: ${detail}`,
+        },
+      ]);
+    }
+
+    dispatchToast(kind, `${kind}: ${detail}`);
+    return incident;
+  }
+
+  clearIncident(kind?: HealthIncident["kind"]): boolean {
+    const currentSnapshot = this.readSnapshot();
+    if (!currentSnapshot?.incident) return false;
+    if (kind && currentSnapshot.incident.kind !== kind) return false;
+
+    const resolvedId = currentSnapshot.incident.id;
+    const resolvedKind = currentSnapshot.incident.kind;
+    const file = path.join(this.targetDir, "gemini-health-latest.json");
+    const snapshot: HealthSnapshot = {
+      checkedAt: currentSnapshot.checkedAt,
+      results: currentSnapshot.results,
+    };
+    writeFileAtomic(file, `${JSON.stringify(snapshot, null, 2)}\n`);
+
+    this.recordHistory([
+      {
+        at: Date.now(),
+        kind: "incident_resolved",
+        provider: PROVIDER,
+        incidentId: resolvedId,
+        detail: `resolved: ${resolvedKind}`,
+      },
+    ]);
+    return true;
   }
 
   // --- History Recording ---
@@ -242,11 +317,15 @@ export class AntigravityHealthManager {
   recordHistory(events: HistoryEventInput[]): void {
     try {
       this.historyStore.recordEvents(events);
+      if (this.getIncident()?.kind === "history-error") {
+        this.clearIncident("history-error");
+      }
       this.historyWarning = null;
     } catch (error) {
       if (this.historyWarning !== null) return;
       this.historyWarning = short(error);
       console.warn(`[omp-toolkit] history write failed: ${this.historyWarning}`);
+      this.setIncident("history-error", this.historyWarning, { skipHistory: true });
     }
   }
 
@@ -258,15 +337,52 @@ export class AntigravityHealthManager {
     const streaks = nextStreaks(this.readStreaks(), results, at, RESTORE_GAP_MS);
     this.writeStreaks(streaks);
 
+    const prevSnapshot = this.readSnapshot();
     const snapshotResults = options.merge
-      ? mergeHealthResults(this.readSnapshot()?.results ?? [], results, at)
+      ? mergeHealthResults(prevSnapshot?.results ?? [], results, at)
       : results.map((result) => ({ ...result, checkedAt: at }));
 
-    const snapshotFile = path.join(this.targetDir, "gemini-health-snapshot.json");
-    writeFileAtomic(
-      snapshotFile,
-      `${JSON.stringify({ checkedAt: at, results: snapshotResults }, null, 2)}\n`,
-    );
+    let incident = prevSnapshot?.incident;
+    const allFailed =
+      results.length > 0 && results.every((r) => r.status === "hang" || r.status === "error");
+
+    if (allFailed) {
+      if (incident?.kind !== "all-failed") {
+        const id = crypto.randomUUID();
+        const detail = `${results.length}/${results.length} accounts failing`;
+        incident = { id, at, kind: "all-failed", detail };
+        this.recordHistory([
+          {
+            at,
+            kind: "incident",
+            provider: PROVIDER,
+            incidentId: id,
+            detail: `all-failed: ${detail}`,
+          },
+        ]);
+        dispatchToast("all-failed", `All ${results.length} accounts failed`);
+      }
+    } else if (results.some((r) => r.status === "ok") && incident?.kind === "all-failed") {
+      const resolvedId = incident.id;
+      incident = undefined;
+      this.recordHistory([
+        {
+          at,
+          kind: "incident_resolved",
+          provider: PROVIDER,
+          incidentId: resolvedId,
+          detail: "resolved: all-failed",
+        },
+      ]);
+    }
+
+    const snapshotFile = path.join(this.targetDir, "gemini-health-latest.json");
+    const snapshotData: HealthSnapshot = {
+      checkedAt: at,
+      results: snapshotResults,
+      ...(incident ? { incident } : {}),
+    };
+    writeFileAtomic(snapshotFile, `${JSON.stringify(snapshotData, null, 2)}\n`);
 
     const prefix = options.source ? `${options.source} ` : "";
     this.recordHistory(
@@ -290,76 +406,82 @@ export class AntigravityHealthManager {
     return withLock(
       "applyHeal",
       async () => {
-        if (results.length === 0) {
-          return { changed: [], skipped: [], reason: "no accounts to check" };
-        }
-        const bad = results.filter(
-          (result) => result.status === "hang" || result.status === "error",
-        );
-        if (bad.length === 0) {
-          return { changed: [], skipped: [], reason: "all accounts healthy" };
-        }
-        if (bad.length >= results.length) {
-          return {
-            changed: [],
-            skipped: [],
-            reason: "all accounts failing; provider-wide issue, no exclusion applied",
-          };
-        }
-
-        const policies = await this.readPolicies();
-        const state = this.readState();
-        const managed = new Set(state.excluded);
-        const alreadyExcluded = excludedEmails(policies);
-        const changed: string[] = [];
-        const skipped: string[] = [];
-
-        for (const result of bad) {
-          if (alreadyExcluded.has(result.email)) {
-            if (managed.has(result.email)) continue;
-            skipped.push(result.email);
-            continue;
+        try {
+          if (results.length === 0) {
+            return { changed: [], skipped: [], reason: "no accounts to check" };
           }
-          const existing = policies.find(
-            (policy) => policy?.provider === PROVIDER && policy?.account?.email === result.email,
+          const bad = results.filter(
+            (result) => result.status === "hang" || result.status === "error",
           );
-          if (existing) {
-            skipped.push(result.email);
-            continue;
+          if (bad.length === 0) {
+            return { changed: [], skipped: [], reason: "all accounts healthy" };
           }
-          policies.push({
-            provider: PROVIDER,
-            account: { email: result.email },
-            reservePct: 100,
-          });
-          managed.add(result.email);
-          changed.push(result.email);
-        }
+          if (bad.length >= results.length) {
+            return {
+              changed: [],
+              skipped: [],
+              reason: "all accounts failing; provider-wide issue, no exclusion applied",
+            };
+          }
 
-        if (changed.length > 0) {
-          await this.policyStore.writePolicies(policies);
-          this.writeState({ excluded: [...managed] });
-          this.recordHistory(
-            changed.map((email) => ({
-              at: Date.now(),
-              kind: "policy_change" as const,
+          const policies = await this.readPolicies();
+          const state = this.readState();
+          const managed = new Set(state.excluded);
+          const alreadyExcluded = excludedEmails(policies);
+          const changed: string[] = [];
+          const skipped: string[] = [];
+
+          for (const result of bad) {
+            if (alreadyExcluded.has(result.email)) {
+              if (managed.has(result.email)) continue;
+              skipped.push(result.email);
+              continue;
+            }
+            const existing = policies.find(
+              (policy) => policy?.provider === PROVIDER && policy?.account?.email === result.email,
+            );
+            if (existing) {
+              skipped.push(result.email);
+              continue;
+            }
+            policies.push({
               provider: PROVIDER,
-              account: email,
-              detail: source,
-            })),
-          );
-        }
+              account: { email: result.email },
+              reservePct: 100,
+            });
+            managed.add(result.email);
+            changed.push(result.email);
+          }
 
-        return {
-          changed,
-          skipped,
-          reason:
-            changed.length > 0
-              ? "temporary reservePct=100 applied"
-              : skipped.length > 0
-                ? "failing accounts already have exclusions/policies"
-                : "no new exclusions",
-        };
+          if (changed.length > 0) {
+            await this.policyStore.writePolicies(policies);
+            this.writeState({ excluded: [...managed] });
+            this.recordHistory(
+              changed.map((email) => ({
+                at: Date.now(),
+                kind: "policy_change" as const,
+                provider: PROVIDER,
+                account: email,
+                detail: source,
+              })),
+            );
+          }
+
+          return {
+            changed,
+            skipped,
+            reason:
+              changed.length > 0
+                ? "temporary reservePct=100 applied"
+                : skipped.length > 0
+                  ? "failing accounts already have exclusions/policies"
+                  : "no new exclusions",
+          };
+        } catch (error) {
+          const kind = incidentKindForError(error);
+          if (kind) this.setIncident(kind, short(error));
+          throw error;
+        }
       },
       this.getLockOptions(),
     );
@@ -369,33 +491,43 @@ export class AntigravityHealthManager {
     return withLock(
       "restoreManaged",
       async () => {
-        const state = this.readState();
-        if (state.excluded.length === 0) return [];
-        const managed = new Set(state.excluded);
-        const policies = await this.readPolicies();
-        const next = policies.filter(
-          (policy) =>
-            !(
-              policy?.provider === PROVIDER &&
-              typeof policy?.account?.email === "string" &&
-              managed.has(policy.account.email)
-            ),
-        );
-        if (next.length !== policies.length) await this.policyStore.writePolicies(next);
-        const streaks = this.readStreaks();
-        for (const email of managed) delete streaks[email];
-        this.writeStreaks(streaks);
-        this.writeState({ excluded: [] });
-        this.recordHistory(
-          [...managed].map((email) => ({
-            at: Date.now(),
-            kind: "restore" as const,
-            provider: PROVIDER,
-            account: email,
-            detail: "manual",
-          })),
-        );
-        return [...managed];
+        try {
+          const state = this.readState();
+          if (state.excluded.length === 0) return [];
+          const managed = new Set(state.excluded);
+          const policies = await this.readPolicies();
+          const next = policies.filter(
+            (policy) =>
+              !(
+                policy?.provider === PROVIDER &&
+                typeof policy?.account?.email === "string" &&
+                managed.has(policy.account.email)
+              ),
+          );
+          if (next.length !== policies.length) await this.policyStore.writePolicies(next);
+          const streaks = this.readStreaks();
+          for (const email of managed) delete streaks[email];
+          this.writeStreaks(streaks);
+          this.writeState({ excluded: [] });
+          this.recordHistory(
+            [...managed].map((email) => ({
+              at: Date.now(),
+              kind: "restore" as const,
+              provider: PROVIDER,
+              account: email,
+              detail: "manual",
+            })),
+          );
+          const currentInc = this.getIncident();
+          if (currentInc?.kind === "restore-failed" || currentInc?.kind === "lock-timeout") {
+            this.clearIncident();
+          }
+          return [...managed];
+        } catch (error) {
+          const kind = incidentKindForError(error) ?? "restore-failed";
+          this.setIncident(kind, short(error));
+          throw error;
+        }
       },
       this.getLockOptions(),
     );
@@ -405,66 +537,76 @@ export class AntigravityHealthManager {
     return withLock(
       "maybeRestoreManaged",
       async () => {
-        const state = this.readState();
-        const streaks = this.readStreaks();
-        let sidecar: AutoRestoreSidecar = { enabled: [] };
         try {
-          sidecar = this.readAutoRestore();
-        } catch {
-          // if corrupt, do not crash health checks
-        }
-        const optedIn = new Set(sidecar.enabled);
-        const policies = await this.readPolicies();
-
-        const managed = new Set(state.excluded);
-        const manuallyExcluded = new Set<string>();
-        for (const policy of policies) {
-          if (
-            policy?.provider === PROVIDER &&
-            typeof policy?.account?.email === "string" &&
-            (policy.reservePct ?? 0) >= 100 &&
-            !managed.has(policy.account.email)
-          ) {
-            manuallyExcluded.add(policy.account.email);
+          const state = this.readState();
+          const streaks = this.readStreaks();
+          let sidecar: AutoRestoreSidecar = { enabled: [] };
+          try {
+            sidecar = this.readAutoRestore();
+          } catch {
+            // if corrupt, do not crash health checks
           }
-        }
+          const optedIn = new Set(sidecar.enabled);
+          const policies = await this.readPolicies();
 
-        const eligible = restorableEmails(
-          state,
-          streaks,
-          RESTORE_STREAK,
-          optedIn,
-          manuallyExcluded,
-        );
-        if (eligible.length === 0) return [];
-
-        const eligibleSet = new Set(eligible);
-        const next = policies.filter(
-          (policy) =>
-            !(
+          const managed = new Set(state.excluded);
+          const manuallyExcluded = new Set<string>();
+          for (const policy of policies) {
+            if (
               policy?.provider === PROVIDER &&
               typeof policy?.account?.email === "string" &&
-              eligibleSet.has(policy.account.email)
-            ),
-        );
-        if (next.length !== policies.length) await this.policyStore.writePolicies(next);
+              (policy.reservePct ?? 0) >= 100 &&
+              !managed.has(policy.account.email)
+            ) {
+              manuallyExcluded.add(policy.account.email);
+            }
+          }
 
-        for (const email of eligible) {
-          managed.delete(email);
-          delete streaks[email];
+          const eligible = restorableEmails(
+            state,
+            streaks,
+            RESTORE_STREAK,
+            optedIn,
+            manuallyExcluded,
+          );
+          if (eligible.length === 0) return [];
+
+          const eligibleSet = new Set(eligible);
+          const next = policies.filter(
+            (policy) =>
+              !(
+                policy?.provider === PROVIDER &&
+                typeof policy?.account?.email === "string" &&
+                eligibleSet.has(policy.account.email)
+              ),
+          );
+          if (next.length !== policies.length) await this.policyStore.writePolicies(next);
+
+          for (const email of eligible) {
+            managed.delete(email);
+            delete streaks[email];
+          }
+          this.writeState({ excluded: [...managed] });
+          this.writeStreaks(streaks);
+          this.recordHistory(
+            eligible.map((email) => ({
+              at: Date.now(),
+              kind: "restore" as const,
+              provider: PROVIDER,
+              account: email,
+              detail: "auto",
+            })),
+          );
+          const currentInc = this.getIncident();
+          if (currentInc?.kind === "restore-failed" || currentInc?.kind === "lock-timeout") {
+            this.clearIncident();
+          }
+          return eligible;
+        } catch (error) {
+          const kind = incidentKindForError(error) ?? "restore-failed";
+          this.setIncident(kind, short(error));
+          throw error;
         }
-        this.writeState({ excluded: [...managed] });
-        this.writeStreaks(streaks);
-        this.recordHistory(
-          eligible.map((email) => ({
-            at: Date.now(),
-            kind: "restore" as const,
-            provider: PROVIDER,
-            account: email,
-            detail: "auto",
-          })),
-        );
-        return eligible;
       },
       this.getLockOptions(),
     );
@@ -474,36 +616,42 @@ export class AntigravityHealthManager {
     return withLock(
       "removeExclusion",
       async () => {
-        const policies = await this.readPolicies();
-        const next = policies.filter(
-          (policy) =>
-            !(
-              policy?.provider === PROVIDER &&
-              typeof policy?.account?.email === "string" &&
-              policy.account.email.toLowerCase() === email.toLowerCase()
-            ),
-        );
-        if (next.length !== policies.length) {
-          await this.policyStore.writePolicies(next);
+        try {
+          const policies = await this.readPolicies();
+          const next = policies.filter(
+            (policy) =>
+              !(
+                policy?.provider === PROVIDER &&
+                typeof policy?.account?.email === "string" &&
+                policy.account.email.toLowerCase() === email.toLowerCase()
+              ),
+          );
+          if (next.length !== policies.length) {
+            await this.policyStore.writePolicies(next);
+          }
+
+          const state = this.readState();
+          state.excluded = state.excluded.filter((e) => e.toLowerCase() !== email.toLowerCase());
+          this.writeState({ excluded: state.excluded });
+
+          const streaks = this.readStreaks();
+          delete streaks[email];
+          this.writeStreaks(streaks);
+
+          this.recordHistory([
+            {
+              at: Date.now(),
+              kind: "restore" as const,
+              provider: PROVIDER,
+              account: email,
+              detail,
+            },
+          ]);
+        } catch (error) {
+          const kind = incidentKindForError(error);
+          if (kind) this.setIncident(kind, short(error));
+          throw error;
         }
-
-        const state = this.readState();
-        state.excluded = state.excluded.filter((e) => e.toLowerCase() !== email.toLowerCase());
-        this.writeState({ excluded: state.excluded });
-
-        const streaks = this.readStreaks();
-        delete streaks[email];
-        this.writeStreaks(streaks);
-
-        this.recordHistory([
-          {
-            at: Date.now(),
-            kind: "restore" as const,
-            provider: PROVIDER,
-            account: email,
-            detail,
-          },
-        ]);
       },
       this.getLockOptions(),
     );
