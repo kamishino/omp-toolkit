@@ -45,9 +45,17 @@ export function restorableEmails(
   optedIn: ReadonlySet<string> = new Set(),
   manuallyExcluded: ReadonlySet<string> = new Set(),
 ): string[] {
+  const excludedLower = new Set(state.excluded.map((e) => e.toLowerCase()));
+  const optedInLower = new Set([...optedIn].map((e) => e.toLowerCase()));
+  const streaksByLower = new Map(
+    Object.entries(streaks).map(([email, entry]) => [email.toLowerCase(), entry]),
+  );
+
   return [...new Set([...state.excluded, ...manuallyExcluded])].filter((email) => {
-    if (!state.excluded.includes(email) && !optedIn.has(email)) return false;
-    return (streaks[email]?.ok ?? 0) >= threshold;
+    const lower = email.toLowerCase();
+    if (!excludedLower.has(lower) && !optedInLower.has(lower)) return false;
+    const streak = streaks[email] ?? streaksByLower.get(lower);
+    return (streak?.ok ?? 0) >= threshold;
   });
 }
 

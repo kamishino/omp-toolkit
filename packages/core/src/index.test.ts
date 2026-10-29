@@ -260,6 +260,20 @@ describe("health domain", () => {
     expect(restorableEmails(state, streaks, 3, optedIn, manual)).toEqual(["both@example.com"]);
   });
 
+  test("restorableEmails handles case-insensitive emails across state, streaks, and opt-in", () => {
+    const state = { excluded: ["User@Example.com"] };
+    const streaks = { "user@example.com": { ok: 3, lastAt: 0 } };
+    expect(restorableEmails(state, streaks, 3)).toEqual(["User@Example.com"]);
+
+    const manualState = { excluded: [] };
+    const manual = new Set(["MixedCase@Example.com"]);
+    const optedIn = new Set(["mixedcase@example.com"]);
+    const manualStreaks = { "MIXEDCASE@EXAMPLE.COM": { ok: 3, lastAt: 0 } };
+    expect(restorableEmails(manualState, manualStreaks, 3, optedIn, manual)).toEqual([
+      "MixedCase@Example.com",
+    ]);
+  });
+
   test("finds reservePct exclusions only for Antigravity", () => {
     const emails = excludedEmails([
       {
