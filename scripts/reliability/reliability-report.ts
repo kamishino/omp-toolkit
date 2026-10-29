@@ -1,12 +1,26 @@
-import { getHistoryStore } from "../../apps/omp-extension/src/history-store";
+import {
+  getHistoryStore,
+  type ReliabilityHistoryStore,
+} from "../../apps/omp-extension/src/history-store";
 
-export function generateReport(): void {
-  const args = process.argv.slice(2);
+export interface ReliabilityReportOptions {
+  args?: string[];
+  store?: ReliabilityHistoryStore;
+  out?: (msg: string) => void;
+}
+
+export function runReliabilityReport(options: ReliabilityReportOptions = {}): {
+  exitCode: number;
+  lines: string[];
+} {
+  const args = options.args ?? process.argv.slice(2);
+  const out = options.out ?? console.log;
+
   if (args.includes("--help") || args.includes("-h")) {
-    console.log(
-      "Usage: bun scripts/reliability/reliability-report.ts [--days=<n>] [--machine=<id|all>]",
-    );
-    process.exit(0);
+    const helpMsg =
+      "Usage: bun scripts/reliability/reliability-report.ts [--days=<n>] [--machine=<id|all>]";
+    out(helpMsg);
+    return { exitCode: 0, lines: [helpMsg] };
   }
 
   const daysArg = args.find((arg) => arg.startsWith("--days="));
@@ -16,17 +30,22 @@ export function generateReport(): void {
   const machineArg = args.find((arg) => arg.startsWith("--machine="));
   const machineFilter = machineArg?.slice("--machine=".length) ?? "all";
 
-  const store = getHistoryStore();
+  const store = options.store ?? getHistoryStore();
   const res = store.buildReport({ days, machineFilter });
   if (res.status !== "success") {
-    console.log(res.message);
-    process.exit(1);
+    out(res.message);
+    return { exitCode: 1, lines: [res.message] };
   }
 
   for (const line of res.data.lines) {
-    console.log(line);
+    out(line);
   }
-  process.exit(res.data.allPass ? 0 : 1);
+  return { exitCode: res.data.allPass ? 0 : 1, lines: res.data.lines };
+}
+
+export function generateReport(): void {
+  const res = runReliabilityReport();
+  process.exit(res.exitCode);
 }
 
 if (import.meta.main) {
