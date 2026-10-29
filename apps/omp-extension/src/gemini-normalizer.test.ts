@@ -127,6 +127,35 @@ describe("gemini-normalizer", () => {
       expect(normalized.length).toBe(1);
       expect(normalized[0].content).toBe("Valid message");
     });
+
+    test("does not append user continuation when assistant turn ends on tool_calls", () => {
+      const messages: WireMessage[] = [
+        { role: "user", content: "Check status" },
+        {
+          role: "assistant",
+          content: "Checking.",
+          tool_calls: [{ id: "call_1", type: "function", function: { name: "get_status" } }],
+        },
+      ];
+      const normalized = normalizeMessagesArray(messages);
+      expect(normalized.length).toBe(2);
+      expect(normalized[1].role).toBe("assistant");
+    });
+
+    test("scrubs reflective monologue from historical assistant array content", () => {
+      const messages: WireMessage[] = [
+        {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Looking back at my decisions. I will proceed with the build." },
+          ],
+        },
+        { role: "user", content: "Next prompt" },
+      ];
+      const normalized = normalizeMessagesArray(messages);
+      const content = normalized[0].content as Array<{ type: string; text?: string }>;
+      expect(content[0].text).toBe("I will proceed with the build.");
+    });
   });
 
   describe("normalizeContentsArray", () => {
@@ -205,6 +234,28 @@ describe("gemini-normalizer", () => {
       expect(cleanedEmpty[0].parts.length).toBe(1);
       expect(cleanedEmpty[0].parts[0].functionCall).toBeDefined();
     });
+
+    test("does not append user continuation when model turn ends on functionCall part", () => {
+      const contents: WireContent[] = [
+        { role: "user", parts: [{ text: "Run probe" }] },
+        { role: "model", parts: [{ functionCall: { name: "probe", args: {} } }] },
+      ];
+      const normalized = normalizeContentsArray(contents);
+      expect(normalized.length).toBe(2);
+      expect(normalized[1].role).toBe("model");
+    });
+
+    test("drops model entry completely when its only text part scrubs to empty", () => {
+      const contents: WireContent[] = [
+        { role: "user", parts: [{ text: "Hello" }] },
+        { role: "model", parts: [{ text: "Looking back at what happened." }] },
+        { role: "user", parts: [{ text: "Proceed" }] },
+      ];
+      const normalized = normalizeContentsArray(contents);
+      expect(normalized.length).toBe(2);
+      expect(normalized[0].parts[0].text).toBe("Hello");
+      expect(normalized[1].parts[0].text).toBe("Proceed");
+    });
   });
 
   describe("registerGeminiNormalizer", () => {
@@ -272,6 +323,36 @@ describe("gemini-normalizer", () => {
       if (!fn) throw new Error("Expected handler to be registered");
       const result = fn({ payload }, mockCtx);
       expect(result?.messages?.length).toBe(2);
+    });
+
+    test("applies normalization when ctx.model is undefined but payload.model is Gemini", () => {
+      type Handler = (
+        event: { payload?: ProviderPayload },
+        ctx: ExtensionContext,
+      ) => ProviderPayload | undefined;
+      let handlerFn: Handler | undefined;
+
+      const mockPi = {
+        on(_event: string, handler: unknown) {
+          handlerFn = handler as Handler;
+        },
+      } as unknown as ExtensionAPI;
+      registerGeminiNormalizer(mockPi);
+
+      const mockCtx = {} as unknown as ExtensionContext;
+
+      const payload: ProviderPayload = {
+        model: "gemini-3.8-flash",
+        messages: [
+          { role: "user", content: "Query" },
+          { role: "assistant", content: "Answer" },
+        ],
+      };
+      const fn = handlerFn;
+      if (!fn) throw new Error("Expected handler to be registered");
+      const result = fn({ payload }, mockCtx);
+      expect(result?.messages?.length).toBe(3);
+      expect(result?.messages?.[2].role).toBe("user");
     });
   });
 });

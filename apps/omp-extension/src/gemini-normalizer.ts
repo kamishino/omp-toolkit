@@ -77,23 +77,47 @@ export function normalizeMessagesArray(messages: WireMessage[]): WireMessage[] {
 
   const cleaned: WireMessage[] = validMessages.map((msg, index) => {
     const isHistorical = index < validMessages.length - 1;
-    let content = msg.content;
+    const content = msg.content;
+    const hasTools = Boolean(msg.tool_calls?.length || msg.function_call);
 
-    if (msg.role === "assistant" && typeof content === "string") {
-      if (isHistorical) {
-        content = scrubReflectiveMonologue(content);
+    if (msg.role === "assistant") {
+      if (typeof content === "string") {
+        let text = content;
+        if (isHistorical) {
+          text = scrubReflectiveMonologue(text);
+        }
+        if (hasTools) {
+          text = stripPreToolChatter(text);
+        }
+        return { ...msg, content: text };
       }
-      if (msg.tool_calls?.length || msg.function_call) {
-        content = stripPreToolChatter(content);
+      if (Array.isArray(content)) {
+        const mapped = content.map((part) => {
+          if (part && typeof part === "object" && typeof part.text === "string") {
+            let text = part.text;
+            if (isHistorical) {
+              text = scrubReflectiveMonologue(text);
+            }
+            if (hasTools) {
+              text = stripPreToolChatter(text);
+            }
+            return { ...part, text };
+          }
+          return part;
+        });
+        return { ...msg, content: mapped };
       }
-      return { ...msg, content };
     }
 
     return msg;
   });
 
   const last = cleaned[cleaned.length - 1];
-  if (last.role === "assistant" || last.role === "model") {
+  if (
+    (last.role === "assistant" || last.role === "model") &&
+    !last.tool_calls?.length &&
+    !last.function_call
+  ) {
     cleaned.push({
       role: "user",
       content: "Proceed with the pending task.",
@@ -116,28 +140,27 @@ export function normalizeContentsArray(contents: WireContent[]): WireContent[] {
   );
   if (validContents.length === 0) return validContents;
 
-  const cleaned: WireContent[] = validContents.map((entry, index) => {
+  const cleaned: WireContent[] = validContents.flatMap((entry, index) => {
     const isHistorical = index < validContents.length - 1;
     if (entry.role === "model") {
       const hasFunctionCall = entry.parts.some((p) =>
         Boolean(p && typeof p === "object" && "functionCall" in p),
       );
-      let parts = entry.parts.map((part) => {
-        if (part && typeof part === "object" && typeof part.text === "string") {
-          let text = part.text;
-          if (isHistorical) {
-            text = scrubReflectiveMonologue(text);
+      const parts = entry.parts
+        .map((part) => {
+          if (part && typeof part === "object" && typeof part.text === "string") {
+            let text = part.text;
+            if (isHistorical) {
+              text = scrubReflectiveMonologue(text);
+            }
+            if (hasFunctionCall) {
+              text = stripPreToolChatter(text);
+            }
+            return { ...part, text };
           }
-          if (hasFunctionCall) {
-            text = stripPreToolChatter(text);
-          }
-          return { ...part, text };
-        }
-        return part;
-      });
-
-      if (parts.length > 1) {
-        parts = parts.filter(
+          return part;
+        })
+        .filter(
           (p) =>
             !(
               p &&
@@ -147,19 +170,27 @@ export function normalizeContentsArray(contents: WireContent[]): WireContent[] {
               p.text.trim().length === 0
             ),
         );
+
+      if (parts.length === 0) {
+        return [];
       }
 
-      return { ...entry, parts };
+      return [{ ...entry, parts }];
     }
-    return entry;
+    return [entry];
   });
 
-  const last = cleaned[cleaned.length - 1];
-  if (last.role === "model") {
-    cleaned.push({
-      role: "user",
-      parts: [{ text: "Proceed with the required action." }],
-    });
+  if (cleaned.length > 0) {
+    const last = cleaned[cleaned.length - 1];
+    const hasFunctionCall =
+      last.role === "model" &&
+      last.parts.some((p) => Boolean(p && typeof p === "object" && "functionCall" in p));
+    if (last.role === "model" && !hasFunctionCall) {
+      cleaned.push({
+        role: "user",
+        parts: [{ text: "Proceed with the required action." }],
+      });
+    }
   }
 
   return cleaned;
@@ -175,7 +206,7 @@ export function registerGeminiNormalizer(pi: ExtensionAPI): void {
     if (!payload || typeof payload !== "object") return payload;
 
     const providerId = ctx.model?.provider;
-    const modelId = ctx.model?.id;
+    const modelId = ctx.model?.id ?? payload.model;
 
     if (!isGeminiRequest(providerId, modelId)) {
       return payload;
