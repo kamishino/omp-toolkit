@@ -15,7 +15,7 @@ import {
 import type { UsageReport } from "./types";
 
 describe("core pacing domain", () => {
-  test("extractPacingSamples extracts only muse-code with valid weekly resetsAt > now", () => {
+  test("extractPacingSamples extracts valid weekly resetsAt > now across providers", () => {
     const now = 1_000_000_000_000;
     const reports: UsageReport[] = [
       {
@@ -70,9 +70,15 @@ describe("core pacing domain", () => {
     ];
 
     const extracted = extractPacingSamples(reports, now);
-    expect(extracted.length).toBe(1);
-    expect(extracted[0].account).toBe("muse-ok@example.com");
+    expect(extracted.length).toBe(2);
+    expect(extracted[0].account).toBe("gemini@example.com");
     expect(extracted[0].sample).toEqual({
+      at: now,
+      resetsAt: now + 500_000,
+      usedFraction: 0.5,
+    });
+    expect(extracted[1].account).toBe("muse-ok@example.com");
+    expect(extracted[1].sample).toEqual({
       at: now,
       resetsAt: now + 200_000_000,
       usedFraction: 0.45,

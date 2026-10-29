@@ -408,7 +408,7 @@ describe("isDashboard validator", () => {
     expect(isDashboard(malformed)).toBe(false);
   });
 
-  test("omits pacing when a provider has multiple accounts", () => {
+  test("includes pacing per account when a provider has multiple accounts", () => {
     const now = 1_000_000_000_000;
     const resetsAt = now + 400_000_000;
     const reports: UsageReport[] = [
@@ -441,7 +441,8 @@ describe("isDashboard validator", () => {
     expect(museProvider?.rows.length).toBe(2);
     for (const row of museProvider?.rows ?? []) {
       const weekly = row.limits.find((l) => l.label === "Weekly");
-      expect(weekly?.pacing).toBeUndefined();
+      expect(weekly?.pacing).toBeDefined();
+      expect(weekly?.pacing?.todayCeilingFraction).toBeGreaterThan(0);
     }
   });
 });

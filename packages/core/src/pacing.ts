@@ -19,10 +19,6 @@ export function extractPacingSamples(
   const extracted: Array<{ account: string; sample: PacingSample }> = [];
 
   for (const report of reports) {
-    if (report.provider !== "muse-code") {
-      continue;
-    }
-
     const limits = report.limits ?? [];
     const weeklyLimit = limits.find(
       (limit) => (limit.window?.label ?? limit.label ?? "").toLowerCase() === "weekly",

@@ -24,22 +24,22 @@ describe("provider-usage pacing-store", () => {
       const now = 1_000_000_000_000;
       const resetsAt = now + 400_000_000;
 
-      const nonMuseReport: UsageReport[] = [
+      const nonWeeklyReport: UsageReport[] = [
         {
           provider: "google-antigravity",
           metadata: { email: "anti@example.com" },
           limits: [
             {
-              label: "Weekly",
-              window: { label: "Weekly", resetsAt },
+              label: "5 Hours",
+              window: { label: "5 Hours", resetsAt },
               amount: { usedFraction: 0.1 },
             },
           ],
         },
       ];
 
-      // 1. Non-muse writes nothing
-      const emptyRes = recordAndLoadPacingSamples(nonMuseReport, {
+      // 1. Report without weekly limit writes nothing
+      const emptyRes = recordAndLoadPacingSamples(nonWeeklyReport, {
         now,
         filePath: fixture.filePath,
       });
