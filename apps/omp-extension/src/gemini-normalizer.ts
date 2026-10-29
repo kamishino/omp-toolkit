@@ -53,7 +53,12 @@ export function scrubReflectiveMonologue(text: string): string {
  * Malformed_Function_Call errors on strict Gemini endpoints.
  */
 export function stripPreToolChatter(text: string): string {
-  return text.replace(/^(?:I will now|Let me|I am going to)\s+[^\n.]+(?:\.|\n)+/gi, "").trim();
+  return text
+    .replace(
+      /^(?:I will now|Let me|I am going to|I will|I'll now|I'll|First, I will|Now, let's|Allow me to)\s+[^\n.]+(?:\.|\n)+/gi,
+      "",
+    )
+    .trim();
 }
 
 /**
@@ -113,13 +118,37 @@ export function normalizeContentsArray(contents: WireContent[]): WireContent[] {
 
   const cleaned: WireContent[] = validContents.map((entry, index) => {
     const isHistorical = index < validContents.length - 1;
-    if (entry.role === "model" && isHistorical) {
-      const parts = entry.parts.map((part) => {
+    if (entry.role === "model") {
+      const hasFunctionCall = entry.parts.some((p) =>
+        Boolean(p && typeof p === "object" && "functionCall" in p),
+      );
+      let parts = entry.parts.map((part) => {
         if (part && typeof part === "object" && typeof part.text === "string") {
-          return { ...part, text: scrubReflectiveMonologue(part.text) };
+          let text = part.text;
+          if (isHistorical) {
+            text = scrubReflectiveMonologue(text);
+          }
+          if (hasFunctionCall) {
+            text = stripPreToolChatter(text);
+          }
+          return { ...part, text };
         }
         return part;
       });
+
+      if (parts.length > 1) {
+        parts = parts.filter(
+          (p) =>
+            !(
+              p &&
+              typeof p === "object" &&
+              "text" in p &&
+              typeof p.text === "string" &&
+              p.text.trim().length === 0
+            ),
+        );
+      }
+
       return { ...entry, parts };
     }
     return entry;

@@ -50,6 +50,14 @@ describe("gemini-normalizer", () => {
 
       const input2 = "Let me inspect the code.\nDone.";
       expect(stripPreToolChatter(input2)).toBe("Done.");
+
+      expect(stripPreToolChatter("I'll now search the codebase.\nFound 5 files.")).toBe(
+        "Found 5 files.",
+      );
+      expect(stripPreToolChatter("Allow me to examine the logs.\nError on line 12.")).toBe(
+        "Error on line 12.",
+      );
+      expect(stripPreToolChatter("First, I will check git status.\nClean.")).toBe("Clean.");
     });
   });
 
@@ -171,6 +179,31 @@ describe("gemini-normalizer", () => {
       const normalized = normalizeContentsArray(malformed);
       expect(normalized.length).toBe(1);
       expect(normalized[0].parts[0].text).toBe("Valid content");
+    });
+    test("strips pre-tool chatter and filters empty text parts in model turns with function calls", () => {
+      const contents: WireContent[] = [
+        {
+          role: "model",
+          parts: [
+            { text: "I will now read the file.\nTarget line." },
+            { functionCall: { name: "read", args: { path: "test.ts" } } },
+          ],
+        },
+      ];
+
+      const normalized = normalizeContentsArray(contents);
+      expect(normalized[0].parts[0].text).toBe("Target line.");
+
+      const emptyPartContents: WireContent[] = [
+        {
+          role: "model",
+          parts: [{ text: "   " }, { functionCall: { name: "read", args: { path: "test.ts" } } }],
+        },
+      ];
+
+      const cleanedEmpty = normalizeContentsArray(emptyPartContents);
+      expect(cleanedEmpty[0].parts.length).toBe(1);
+      expect(cleanedEmpty[0].parts[0].functionCall).toBeDefined();
     });
   });
 
