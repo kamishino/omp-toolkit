@@ -36,22 +36,18 @@ Interpretation:
 `health ... (stale)` means the snapshot is older than 15 minutes. Run
 `/gemini-health` or the health CLI.
 
-## Two-machine rollout
+## Additional workstation setup (optional)
 
-The 90-day execution-quality and reliability roadmap requires two independent
-Windows machines running the toolkit concurrently. State is strictly
-independent:
+The toolkit is scoped to one primary workstation. To run it on an additional
+machine, repeat the same independent setup there: each machine keeps its own
+agent directory (`~/.omp/agent`), history database (`omp-toolkit-history.db`),
+machine identity (`omp-toolkit-machine.json`), and background monitor. There is
+no synchronization between machines — no shared database, no synced config,
+no cross-machine lock.
 
-- Each machine has its own agent directory (`~/.omp/agent`), history database
-  (`omp-toolkit-history.db`), machine identity (`omp-toolkit-machine.json`),
-  and background monitor.
-- **Zero synchronization:** no shared database, no synced config, no
-  cross-machine lock.
+### Per-workstation setup checklist
 
-### Machine 2 operator checklist
-
-Follow these steps to bring machine 2 into the rollout:
-
+Follow these steps on the new workstation:
 1. **Clone repository:**
    ```bash
    git clone https://github.com/kamishino/omp-toolkit.git
@@ -83,7 +79,7 @@ Follow these steps to bring machine 2 into the rollout:
    bun run monitor:orca
    ```
 7. **Manual account opt-in (if applicable):**
-   If machine 2 contains a manual reserve policy (`reservePct: 100`), opt in:
+   If the workstation contains a manual reserve policy (`reservePct: 100`), opt in:
    ```text
    /gemini-auto-restore <account>
    ```
