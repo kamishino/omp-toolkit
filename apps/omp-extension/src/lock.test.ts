@@ -115,4 +115,57 @@ describe("exclusive lock (lock.ts)", () => {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  test("does not steal a freshly created empty lock file", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "lock-empty-"));
+    const lockPath = path.join(tempDir, "empty.lock");
+    fs.writeFileSync(lockPath, "", "utf8");
+
+    try {
+      await expect(
+        acquireLock("contender", {
+          lockPath,
+          timeoutMs: 150,
+          sleepMs: 20,
+          staleMs: 30_000,
+        }),
+      ).rejects.toThrow("lock_timeout");
+      expect(fs.existsSync(lockPath)).toBe(true);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("reclaims unparseable lock file if mtime exceeds stale threshold", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "lock-corrupt-"));
+    const lockPath = path.join(tempDir, "corrupt.lock");
+    fs.writeFileSync(lockPath, "{ not valid json", "utf8");
+    const oldTime = (Date.now() - 40_000) / 1000;
+    fs.utimesSync(lockPath, oldTime, oldTime);
+
+    try {
+      const token = await acquireLock("reclaimer", {
+        lockPath,
+        timeoutMs: 300,
+        staleMs: 30_000,
+      });
+      expect(typeof token).toBe("string");
+      releaseLock(token, { lockPath });
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("creates parent directories recursively if lockPath is nested", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "lock-mkdir-"));
+    const lockPath = path.join(tempDir, "nested", "deep", "nested.lock");
+
+    try {
+      const token = await acquireLock("nested", { lockPath });
+      expect(fs.existsSync(lockPath)).toBe(true);
+      releaseLock(token, { lockPath });
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
 });

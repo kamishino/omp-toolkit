@@ -56,6 +56,7 @@ export async function acquireLock(operation: string, options: LockOptions = {}):
   const token = crypto.randomUUID();
   const machineId = resolveMachineId(lockFilePath);
   const deadline = Date.now() + timeoutMs;
+  fs.mkdirSync(path.dirname(lockFilePath), { recursive: true });
 
   while (true) {
     try {
@@ -76,16 +77,28 @@ export async function acquireLock(operation: string, options: LockOptions = {}):
         // Inspect lock to see if stale
         let isStale = false;
         try {
-          const content = fs.readFileSync(lockFilePath, "utf8");
-          const parsed = JSON.parse(content) as LockPayload;
-          if (typeof parsed?.acquiredAt === "number" && Date.now() - parsed.acquiredAt > staleMs) {
+          let basis: number | undefined;
+          try {
+            const content = fs.readFileSync(lockFilePath, "utf8");
+            const parsed = JSON.parse(content) as Partial<LockPayload>;
+            if (typeof parsed?.acquiredAt === "number" && Number.isFinite(parsed.acquiredAt)) {
+              basis = parsed.acquiredAt;
+            }
+          } catch {
+            // Empty or malformed JSON falls through to file mtime basis
+          }
+
+          if (basis === undefined) {
+            basis = fs.statSync(lockFilePath).mtimeMs;
+          }
+
+          if (Date.now() - basis > staleMs) {
             isStale = true;
           }
         } catch {
-          // If unreadable or corrupt, treat as stale
+          // File vanished between openSync and statSync: retry openSync
           isStale = true;
         }
-
         if (isStale) {
           try {
             fs.unlinkSync(lockFilePath);
