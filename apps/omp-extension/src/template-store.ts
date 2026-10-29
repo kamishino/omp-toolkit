@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  checkoutProbePath,
   compareTemplateToLive,
   isValidTemplateName,
   resolveCheckoutCandidates,
@@ -13,6 +14,8 @@ import {
   templateMatchesLive,
 } from "@omp-toolkit/core";
 import { short, writeFileAtomic } from "./fs-util";
+
+const MAX_TEMPLATE_BACKUPS = 10;
 
 function isRegularFile(filePath: string): boolean {
   try {
@@ -37,7 +40,7 @@ export function resolveCheckoutRoot(
 ): string {
   const envOverride = env.OMP_TOOLKIT_HOME?.trim();
   if (envOverride && envOverride.length > 0) {
-    const probe = path.join(envOverride, "scripts", "monitor", "orca-monitor.ts");
+    const probe = checkoutProbePath(envOverride);
     if (!isRegularFile(probe)) {
       throw new Error(`OMP_TOOLKIT_HOME is not an omp-toolkit checkout: ${envOverride}`);
     }
@@ -46,7 +49,7 @@ export function resolveCheckoutRoot(
 
   const candidates = resolveCheckoutCandidates(env, cwd, home);
   for (const candidate of candidates) {
-    const probe = path.join(candidate, "scripts", "monitor", "orca-monitor.ts");
+    const probe = checkoutProbePath(candidate);
     if (isRegularFile(probe)) {
       return path.resolve(candidate);
     }
@@ -57,7 +60,7 @@ export function resolveCheckoutRoot(
   );
 }
 
-export function readLiveContents(agentDirPath: string): TemplateContents {
+function readLiveContents(agentDirPath: string): TemplateContents {
   const contents: TemplateContents = {};
   for (const file of TEMPLATE_LIVE_FILES) {
     const filePath = path.join(agentDirPath, file);
@@ -68,7 +71,7 @@ export function readLiveContents(agentDirPath: string): TemplateContents {
   return contents;
 }
 
-export function readTemplateContents(templateDir: string): TemplateContents {
+function readTemplateContents(templateDir: string): TemplateContents {
   const contents: TemplateContents = {};
   for (const file of TEMPLATE_LIVE_FILES) {
     const filePath = path.join(templateDir, templateFileName(file));
@@ -223,6 +226,22 @@ export function applyTemplate(
         `apply failed (${short(err)}); rollback failed (${short(rollbackErr)}); restore manually from ${backupDir ?? "none"}`,
       );
     }
+  }
+
+  try {
+    const backupsRoot = path.join(agentDirPath, "backups");
+    if (fs.existsSync(backupsRoot)) {
+      const entries = fs
+        .readdirSync(backupsRoot, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .sort((a, b) => b.localeCompare(a));
+      for (let i = MAX_TEMPLATE_BACKUPS; i < entries.length; i++) {
+        fs.rmSync(path.join(backupsRoot, entries[i]), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // Best-effort backup retention pruning must never fail an apply
   }
 
   return {

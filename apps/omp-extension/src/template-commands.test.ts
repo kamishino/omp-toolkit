@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { parseTemplateArgs, TEMPLATE_USAGE } from "./template-commands";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
+import { parseTemplateArgs, registerTemplateCommands, TEMPLATE_USAGE } from "./template-commands";
 
 describe("template-commands parser", () => {
   test("empty args or whitespace returns help action", () => {
@@ -98,5 +102,88 @@ describe("template-commands parser", () => {
     expect(() => parseTemplateArgs("delete --force old-tmpl")).toThrow(TEMPLATE_USAGE);
     expect(() => parseTemplateArgs("delete old-tmpl --bogus")).toThrow(TEMPLATE_USAGE);
     expect(() => parseTemplateArgs("delete old-tmpl --force extra")).toThrow(TEMPLATE_USAGE);
+  });
+});
+
+describe("registerTemplateCommands handler", () => {
+  test("executes save, list, apply, and error paths via registered command handler", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "tmpl-cmd-test-"));
+    const agentDir = path.join(root, "agent");
+    const checkout = path.join(root, "checkout");
+    const templatesDir = path.join(checkout, "templates");
+    const probe = path.join(checkout, "scripts", "monitor", "orca-monitor.ts");
+
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.mkdirSync(templatesDir, { recursive: true });
+    fs.mkdirSync(path.dirname(probe), { recursive: true });
+    fs.writeFileSync(probe, "// probe");
+
+    const origHome = process.env.OMP_TOOLKIT_HOME;
+    const origAgentDir = process.env.PI_CODING_AGENT_DIR;
+    process.env.OMP_TOOLKIT_HOME = checkout;
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    try {
+      let commandHandler: ((args: string, ctx: ExtensionContext) => Promise<void>) | undefined;
+      const sentMessages: Array<{ customType: string; content: string }> = [];
+      const notifications: Array<{ message: string; type?: string }> = [];
+
+      const mockPi = {
+        registerCommand(_name: string, opts: { handler: typeof commandHandler }) {
+          commandHandler = opts.handler;
+        },
+        sendMessage(msg: { customType: string; content: string }) {
+          sentMessages.push(msg);
+        },
+      } as unknown as ExtensionAPI;
+
+      const mockCtx = {
+        ui: {
+          notify(message: string, type?: string) {
+            notifications.push({ message, type });
+          },
+        },
+      } as unknown as ExtensionContext;
+
+      registerTemplateCommands(mockPi, {
+        reloadIfAvailable: async () => {},
+      });
+
+      expect(commandHandler).toBeDefined();
+      if (!commandHandler) throw new Error("commandHandler not registered");
+      const handler = commandHandler;
+
+      // Seed live file
+      fs.writeFileSync(path.join(agentDir, "AGENTS.md"), "agents v1\n");
+
+      // 1. Save demo
+      await handler("save demo", mockCtx);
+      expect(notifications.some((n) => n.message.includes('Saved template "demo"'))).toBe(true);
+
+      // 2. List templates
+      await handler("list", mockCtx);
+      expect(sentMessages.some((m) => m.content.includes("demo"))).toBe(true);
+
+      // 3. Modify live file, then apply demo
+      fs.writeFileSync(path.join(agentDir, "AGENTS.md"), "agents modified live\n");
+      await handler("apply demo", mockCtx);
+      expect(sentMessages.some((m) => m.content.includes('Applied template "demo"'))).toBe(true);
+      expect(fs.readFileSync(path.join(agentDir, "AGENTS.md"), "utf8")).toBe("agents v1\n");
+
+      // 4. Apply non-existent template -> notifies error, live file untouched
+      await handler("apply nonexistent", mockCtx);
+      expect(
+        notifications.some(
+          (n) => n.type === "error" && n.message.includes("Template command failed"),
+        ),
+      ).toBe(true);
+      expect(fs.readFileSync(path.join(agentDir, "AGENTS.md"), "utf8")).toBe("agents v1\n");
+    } finally {
+      if (origHome !== undefined) process.env.OMP_TOOLKIT_HOME = origHome;
+      else delete process.env.OMP_TOOLKIT_HOME;
+      if (origAgentDir !== undefined) process.env.PI_CODING_AGENT_DIR = origAgentDir;
+      else delete process.env.PI_CODING_AGENT_DIR;
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });

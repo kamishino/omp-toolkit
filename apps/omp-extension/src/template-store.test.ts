@@ -310,4 +310,39 @@ describe("template-store module", () => {
       h.cleanup();
     }
   });
+
+  test("applyTemplate prunes backups exceeding retention limit of 10", () => {
+    const h = createTestHarness();
+    try {
+      // Seed a template
+      const tmplDir = path.join(h.templatesDir, "demo");
+      fs.mkdirSync(tmplDir, { recursive: true });
+      fs.writeFileSync(path.join(tmplDir, "AGENTS.template.md"), "agents template\n");
+
+      // Seed live file so backup is triggered
+      fs.writeFileSync(path.join(h.agentDir, "AGENTS.md"), "live initial\n");
+
+      // Seed 12 fake backup dirs
+      const backupsRoot = path.join(h.agentDir, "backups");
+      fs.mkdirSync(backupsRoot, { recursive: true });
+      for (let i = 1; i <= 12; i++) {
+        const pad = String(i).padStart(2, "0");
+        fs.mkdirSync(path.join(backupsRoot, `2026-01-${pad}T00-00-00-000Z`));
+      }
+
+      const applyRes = applyTemplate(h.templatesDir, h.agentDir, "demo");
+      expect(applyRes.backupDir).not.toBeNull();
+      if (!applyRes.backupDir) throw new Error("expected backupDir");
+
+      const remaining = fs
+        .readdirSync(backupsRoot, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
+
+      expect(remaining.length).toBe(10);
+      expect(remaining).toContain(path.basename(applyRes.backupDir));
+    } finally {
+      h.cleanup();
+    }
+  });
 });
