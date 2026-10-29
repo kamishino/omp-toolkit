@@ -1,57 +1,32 @@
 /**
- * Gemini 3.8 route health widget + temporary account circuit breaker.
- *
- * Why: OMP pins a session to one OAuth account. A hung Gemini route (request
- * accepted, no first SSE event) is not a usage/auth failure, so the pin never
- * rotates and fallback chains do not fire. This extension probes every
- * Antigravity account directly and can temporarily reserve (exclude) the
- * accounts whose route is hung.
+ * Gemini route health widget, account circuit breaker, and wire normalizer.
  *
  * Commands:
- *   /gemini-health [--confirm]   probe all accounts and update the widget
- *   /gemini-heal [--dry-run]     probe + reserve hung accounts (temporary)
- *   /gemini-restore              remove only the exclusions added by heal
+ *   /gemini-health-widget [on|off]  toggle TUI health widget
+ *   /gemini-health [--confirm]      probe all accounts and update widget
+ *   /gemini-warmup <email>|--all    warm up eligible Antigravity accounts
+ *   /gemini-check <email>           probe single account route (unhang check)
+ *   /gemini-heal [--dry-run]        probe + reserve hung accounts (temporary)
+ *   /gemini-restore                 remove exclusions added by heal
+ *   /gemini-enable <email> [--force] explicitly remove an account exclusion
+ *   /gemini-auto-restore [<email>|off <email>] manage manual exclusion streak restore
+ *   /template <save|apply|list|show|delete> global AGENTS.md + RULES.md bundles
  *
  * Tool: gemini_health { heal?: boolean, confirm?: boolean }
- *
- * The probe uses the same wire envelope OMP uses for Antigravity. If Google
- * changes the model id or client version gate, update MODEL_WIRE / UA_VERSION.
+ * Provider: deepseek (usage and balance telemetry)
+ * CLI: --warmup, --check, --watch, --json
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import { deepSeekUsageReport } from "@omp-toolkit/core";
+import { deepSeekUsageReport, resolveAgentDir } from "@omp-toolkit/core";
 import { AutoHealCoordinator } from "./auto-heal";
-import {
-  agentDir,
-  applyHeal,
-  checkAll,
-  loadAccounts,
-  maybeRestoreManaged,
-  PROVIDER,
-  policyStore,
-  probe,
-  probeClient,
-  readSnapshot,
-  recordHealth,
-  restoreManaged,
-} from "./circuit-breaker";
 import { runExtensionCli } from "./cli";
 import { registerCommandsAndTools } from "./commands";
+import { PROVIDER } from "./config";
 import { registerGeminiNormalizer } from "./gemini-normalizer";
+import { healthManager } from "./health-manager";
 import { registerTemplateCommands } from "./template-commands";
 import type { WarmUpAdapter, WarmUpDependencies } from "./warmup";
-
-export {
-  applyHeal,
-  checkAll,
-  loadAccounts,
-  maybeRestoreManaged,
-  policyStore,
-  probe,
-  probeClient,
-  recordHealth,
-  restoreManaged,
-};
 
 function reloadIfAvailable(ctx: ExtensionContext): Promise<void> | undefined {
   if (ctx && typeof ctx === "object" && "reload" in ctx && typeof ctx.reload === "function") {
@@ -62,15 +37,15 @@ function reloadIfAvailable(ctx: ExtensionContext): Promise<void> | undefined {
 
 const antigravityAdapter: WarmUpAdapter = {
   provider: PROVIDER,
-  loadAccounts,
-  probe,
+  loadAccounts: () => healthManager.loadAccounts(),
+  probe: (a) => healthManager.probe(a),
 };
 const warmUpAdapters = new Map<string, WarmUpAdapter>([[PROVIDER, antigravityAdapter]]);
 const warmUpDeps: WarmUpDependencies = {
-  agentDir: agentDir(),
+  agentDir: resolveAgentDir(),
   adapters: warmUpAdapters,
-  readSnapshot,
-  recordHealth,
+  readSnapshot: () => healthManager.readSnapshot(),
+  recordHealth: (r, o) => healthManager.recordHealth(r, o),
 };
 
 export default function geminiHealthExtension(pi: ExtensionAPI) {

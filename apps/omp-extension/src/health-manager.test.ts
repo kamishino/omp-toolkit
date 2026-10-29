@@ -51,6 +51,14 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
       { index: 1, email: "ok@example.com", project: "p1", status: "ok", ms: 30 },
     ]);
     expect(healthyAction.reason).toBe("all accounts healthy");
+
+    const failAction = await manager.applyHeal([
+      { index: 1, email: "f1@example.com", project: "p1", status: "hang", ms: 15000 },
+      { index: 2, email: "f2@example.com", project: "p2", status: "hang", ms: 15000 },
+    ]);
+    expect(failAction.reason).toContain("all accounts failing");
+
+    await expect(manager.removeExclusion("nonexistent@example.com")).resolves.toBeUndefined();
   });
   test("applyHeal applies reservePct=100 for minority failure and skips already excluded", async () => {
     const fs = require("node:fs");
@@ -63,6 +71,7 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
       const recordedHistory: HistoryEventInput[] = [];
       const mockPolicyStore = {
         readPolicies: async () => policies,
+        readPoliciesStrict: async () => policies,
         writePolicies: async (p: Policy[]) => {
           policies = p;
         },
@@ -214,6 +223,7 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
       let policies: Policy[] = [];
       const mockPolicyStore = {
         readPolicies: async () => policies,
+        readPoliciesStrict: async () => policies,
         writePolicies: async (p: Policy[]) => {
           policies = p;
         },
@@ -274,6 +284,7 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
       ];
       const mockPolicyStore = {
         readPolicies: async () => policies,
+        readPoliciesStrict: async () => policies,
         writePolicies: async (p: Policy[]) => {
           policies = p;
         },
@@ -315,7 +326,7 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
     expect(incidentKindForError("string error")).toBeNull();
   });
 
-  test("recordHealth manages all-failed incident lifecycle in gemini-health-latest.json and history", () => {
+  test("recordHealth manages all-failed incident lifecycle in gemini-health-latest.json and history", async () => {
     const fs = require("node:fs");
     const os = require("node:os");
     const path = require("node:path");
@@ -336,7 +347,7 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
         { index: 1, email: "alpha@example.com", project: "p1", status: "hang" as const, ms: 15000 },
         { index: 2, email: "beta@example.com", project: "p2", status: "error" as const, ms: 500 },
       ];
-      manager.recordHealth(failedResults);
+      await manager.recordHealth(failedResults);
 
       // File on disk must be gemini-health-latest.json
       const latestPath = path.join(tempDir, "gemini-health-latest.json");
@@ -355,7 +366,7 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
       const recoveredResults = [
         { index: 1, email: "alpha@example.com", project: "p1", status: "ok" as const, ms: 50 },
       ];
-      manager.recordHealth(recoveredResults);
+      await manager.recordHealth(recoveredResults);
 
       const updatedSnapshot = manager.readSnapshot();
       expect(updatedSnapshot?.incident).toBeUndefined();
@@ -363,6 +374,173 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
       const resolvedEvent = recordedEvents.find((e) => e.kind === "incident_resolved");
       expect(resolvedEvent).toBeDefined();
       expect(resolvedEvent?.incidentId).toBe(incidentEvent?.incidentId);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("recordHealth evaluates allFailed on merged snapshot rather than single-account check", async () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-merged-"));
+    try {
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
+      });
+
+      // Seed snapshot with 2 accounts (alpha OK, beta OK)
+      await manager.recordHealth([
+        { index: 1, email: "alpha@example.com", project: "p1", status: "ok", ms: 100 },
+        { index: 2, email: "beta@example.com", project: "p2", status: "ok", ms: 100 },
+      ]);
+
+      // Single account check on beta hangs with merge: true
+      await manager.recordHealth(
+        [{ index: 2, email: "beta@example.com", project: "p2", status: "hang", ms: 15000 }],
+        { merge: true, source: "check" },
+      );
+
+      // alpha is still OK in snapshot, so no all-failed incident should exist!
+      expect(manager.readSnapshot()?.incident).toBeUndefined();
+
+      // Now single account check on alpha also hangs with merge: true
+      await manager.recordHealth(
+        [{ index: 1, email: "alpha@example.com", project: "p1", status: "hang", ms: 15000 }],
+        { merge: true, source: "check" },
+      );
+
+      // Now ALL accounts in snapshot are failing -> incident triggers!
+      expect(manager.readSnapshot()?.incident?.kind).toBe("all-failed");
+
+      // Single account recovery on alpha with merge: true
+      await manager.recordHealth(
+        [{ index: 1, email: "alpha@example.com", project: "p1", status: "ok", ms: 120 }],
+        { merge: true, source: "check" },
+      );
+
+      // One account is OK -> all-failed resolved!
+      expect(manager.readSnapshot()?.incident).toBeUndefined();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("applyHeal upgrades existing partial reservePct < 100 policy to 100", async () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-partial-"));
+    try {
+      let policies: Policy[] = [
+        {
+          provider: "google-antigravity",
+          account: { email: "partial@example.com" },
+          reservePct: 20,
+        },
+      ];
+      const mockPolicyStore = {
+        readPolicies: async () => policies,
+        readPoliciesStrict: async () => policies,
+        writePolicies: async (p: Policy[]) => {
+          policies = p;
+        },
+      };
+
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
+        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
+      });
+
+      // 1 ok, 1 hang (the partial one)
+      const action = await manager.applyHeal([
+        { index: 1, email: "ok@example.com", project: "p1", status: "ok", ms: 100 },
+        { index: 2, email: "partial@example.com", project: "p2", status: "hang", ms: 15000 },
+      ]);
+
+      expect(action.changed).toEqual(["partial@example.com"]);
+      expect(policies[0].reservePct).toBe(100);
+      expect(manager.readState().excluded).toContain("partial@example.com");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("applyHeal rejects and aborts write when strict policy read fails", async () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-strict-"));
+    try {
+      let writeCalled = false;
+      const mockPolicyStore = {
+        readPolicies: async () => [],
+        readPoliciesStrict: async () => {
+          throw new Error("CLI failure");
+        },
+        writePolicies: async () => {
+          writeCalled = true;
+        },
+      };
+
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
+        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
+      });
+
+      await expect(
+        manager.applyHeal([
+          { index: 1, email: "ok@example.com", project: "p1", status: "ok", ms: 100 },
+          { index: 2, email: "bad@example.com", project: "p2", status: "hang", ms: 15000 },
+        ]),
+      ).rejects.toThrow("CLI failure");
+
+      expect(writeCalled).toBe(false);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("maybeRestoreManaged restores manual exclusion with differing sidecar casing", async () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-casing-"));
+    try {
+      let policies: Policy[] = [
+        {
+          provider: "google-antigravity",
+          account: { email: "User@Example.com" },
+          reservePct: 100,
+        },
+      ];
+      const mockPolicyStore = {
+        readPolicies: async () => policies,
+        readPoliciesStrict: async () => policies,
+        writePolicies: async (p: Policy[]) => {
+          policies = p;
+        },
+      };
+
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
+        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
+      });
+
+      // Sidecar has lowercase
+      manager.writeAutoRestore({ enabled: ["user@example.com"] });
+      // Streaks has lowercase
+      manager.writeStreaks({ "user@example.com": { ok: 3, lastAt: 0 } });
+
+      const restored = await manager.maybeRestoreManaged();
+      expect(restored).toEqual(["User@Example.com"]);
+      expect(policies.length).toBe(0);
+      // Streaks map should have cleaned up the key
+      expect(manager.readStreaks()["user@example.com"]).toBeUndefined();
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

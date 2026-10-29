@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import type { Policy, ProbeResult } from "@omp-toolkit/core";
-import { AUTO_HEAL_COOLDOWN_MS, PROVIDER, RESTORE_STREAK, recordHistory } from "./circuit-breaker";
+import { AUTO_HEAL_COOLDOWN_MS, PROVIDER, RESTORE_STREAK } from "./config";
 import { short } from "./fs-util";
 import { healthManager } from "./health-manager";
 import { closeHistory, type HistoryEventInput } from "./history-store";
@@ -169,21 +169,13 @@ export class AutoHealCoordinator {
   private readonly recordHistoryFn: (events: HistoryEventInput[]) => void;
   private recoveryTimer: NodeJS.Timeout | null = null;
   private warnedNoIdle = false;
-  private consecutiveErrorStrikes = 0;
-
-  getConsecutiveErrorStrikes(): number {
-    return this.consecutiveErrorStrikes;
-  }
-
-  resetErrorStrikes(): void {
-    this.consecutiveErrorStrikes = 0;
-  }
 
   constructor(options: AutoHealCoordinatorOptions = {}) {
     this.cooldownMs = options.cooldownMs ?? AUTO_HEAL_COOLDOWN_MS;
     this.provider = options.provider ?? PROVIDER;
     this.recoveryIntervalMs = options.recoveryIntervalMs ?? RECOVERY_INTERVAL_MS;
-    this.recordHistoryFn = options.recordHistoryFn ?? recordHistory;
+    this.recordHistoryFn =
+      options.recordHistoryFn ?? ((events) => healthManager.recordHistory(events));
   }
 
   getRecoveryTimer(): NodeJS.Timeout | null {
@@ -210,9 +202,7 @@ export class AutoHealCoordinator {
     const hasExclusions = await healthManager.hasExclusionsToRecover();
     if (!hasExclusions) return;
 
-    await this.runExclusive(ctx, "Recovery tick", async () => {
-      await this.refresh(ctx, false);
-    });
+    await this.runExclusive(ctx, "Recovery tick", () => this.refreshInner(ctx, false));
   }
   isRunning(): boolean {
     return this.running;
@@ -240,33 +230,35 @@ export class AutoHealCoordinator {
     confirm = false,
   ): Promise<{ results: ProbeResult[]; restored: string[]; policies: Policy[] }> {
     const results = await healthManager.checkAll(confirm);
-    healthManager.recordHealth(results);
+    await healthManager.recordHealth(results);
     const restored = await healthManager.maybeRestoreManaged();
     const policies = await healthManager.readPolicies();
     publish(ctx, results, policies);
     return { results, restored, policies };
   }
 
-  async refresh(ctx: ExtensionContext, notify = false): Promise<void> {
-    await this.runExclusive(ctx, "Gemini health check", async () => {
-      try {
-        const { results, restored } = await this.probeAndPublish(ctx, false);
-        if (restored.length > 0) {
-          ctx.ui.notify(
-            `Gemini health: restored ${restored.join(", ")} after ${RESTORE_STREAK} healthy checks.`,
-            "info",
-          );
-        }
-        if (notify) {
-          ctx.ui.notify(
-            summary(results),
-            results.every((r) => r.status === "ok") ? "info" : "warning",
-          );
-        }
-      } catch (error) {
-        ctx.ui.notify(`Gemini health check failed: ${short(error)}`, "error");
+  private async refreshInner(ctx: ExtensionContext, notify: boolean): Promise<void> {
+    try {
+      const { results, restored } = await this.probeAndPublish(ctx, false);
+      if (restored.length > 0) {
+        ctx.ui.notify(
+          `Gemini health: restored ${restored.join(", ")} after ${RESTORE_STREAK} healthy checks.`,
+          "info",
+        );
       }
-    });
+      if (notify) {
+        ctx.ui.notify(
+          summary(results),
+          results.every((r) => r.status === "ok") ? "info" : "warning",
+        );
+      }
+    } catch (error) {
+      ctx.ui.notify(`Gemini health check failed: ${short(error)}`, "error");
+    }
+  }
+
+  async refresh(ctx: ExtensionContext, notify = false): Promise<void> {
+    await this.runExclusive(ctx, "Gemini health check", () => this.refreshInner(ctx, notify));
   }
 
   async autoHeal(ctx: ExtensionContext, trigger: string): Promise<void> {
@@ -274,7 +266,7 @@ export class AutoHealCoordinator {
     this.running = true;
     try {
       const results = await healthManager.checkAll(true);
-      healthManager.recordHealth(results);
+      await healthManager.recordHealth(results);
       const restored = await healthManager.maybeRestoreManaged();
       const policies = await healthManager.readPolicies();
       publish(ctx, results, policies);
@@ -307,9 +299,10 @@ export class AutoHealCoordinator {
         this.recoveryTimer = setInterval(() => {
           void this.tickRecovery(ctx);
         }, this.recoveryIntervalMs);
+        (this.recoveryTimer as { unref?: () => void }).unref?.();
       }
       if (ctx.agent.kind !== "main" || ctx.mode !== "tui") return;
-      recordHistory([{ at: Date.now(), kind: "session_start", detail: "tui" }]);
+      healthManager.recordHistory([{ at: Date.now(), kind: "session_start", detail: "tui" }]);
       if (!widgetEnabled()) return;
       ctx.ui.setStatus("gemini-health", "Gemini 3.8: checking…");
       ctx.ui.setWidget("gemini-health", ["Gemini health: checking…"], {
@@ -337,30 +330,9 @@ export class AutoHealCoordinator {
           const status = last?.stopReason === "error" ? "error" : "ok";
           const tok = extractRunTokens(event, last);
 
-          let strikeTag = "";
-          if (status === "ok") {
-            this.consecutiveErrorStrikes = 0;
-          } else {
-            this.consecutiveErrorStrikes++;
-            if (this.consecutiveErrorStrikes === 1) {
-              strikeTag = " [strike 1]";
-              ctx.ui.notify(
-                "Two-strike escalation: Strike 1 error detected. Escalating reasoning for retry.",
-                "warning",
-              );
-            } else {
-              strikeTag = " [strike 2 - halted]";
-              ctx.ui.notify(
-                "Two-strike escalation: Strike 2 error. Halting automated retry loop to prevent runaway token burn.",
-                "error",
-              );
-            }
-          }
+          const detail = tok === null ? modelId : `${modelId} tok=${tok}`;
 
-          const baseDetail = tok === null ? modelId : `${modelId} tok=${tok}`;
-          const detail = `${baseDetail}${strikeTag}`;
-
-          const eventsToRecord: HistoryEventInput[] = [
+          this.recordHistoryFn([
             {
               at: Date.now(),
               kind: "agent_run",
@@ -368,18 +340,7 @@ export class AutoHealCoordinator {
               status,
               detail,
             },
-          ];
-
-          if (status === "error" && this.consecutiveErrorStrikes >= 2) {
-            eventsToRecord.push({
-              at: Date.now(),
-              kind: "alert",
-              provider,
-              detail: "two-strike escalation limit reached",
-            });
-          }
-
-          this.recordHistoryFn(eventsToRecord);
+          ]);
         } catch {
           // recordHistory handles warn-once internally
         }

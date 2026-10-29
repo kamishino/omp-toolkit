@@ -5,7 +5,9 @@ import {
   type Policy,
   resolveWidgetStatePath,
 } from "@omp-toolkit/core";
-import { RESTORE_STREAK, readStreaks, writeFileAtomic } from "./circuit-breaker";
+import { RESTORE_STREAK } from "./config";
+import { writeFileAtomic } from "./fs-util";
+import { healthManager } from "./health-manager";
 
 export interface WidgetContext {
   hasUI: boolean;
@@ -20,7 +22,7 @@ export interface WidgetContext {
   };
 }
 
-export function widgetStatePath(): string {
+function widgetStatePath(): string {
   return resolveWidgetStatePath();
 }
 
@@ -37,7 +39,7 @@ export function setWidgetEnabled(enabled: boolean): void {
   writeFileAtomic(widgetStatePath(), `${JSON.stringify({ enabled }, null, 2)}\n`);
 }
 
-export function statusTag(result: HealthResult): string {
+function statusTag(result: HealthResult): string {
   switch (result.status) {
     case "ok":
       return "OK  ";
@@ -65,7 +67,7 @@ export function healthLines(
 ): string[] {
   if (results.length === 0) return ["Gemini health: no Antigravity accounts found"];
   const excluded = excludedEmails(policies);
-  const streaks = readStreaks();
+  const streaks = healthManager.readStreaks();
   const lines = [`Gemini 3.8 route health · ${new Date().toLocaleTimeString()}`];
   for (const result of results) {
     const ms = result.ms > 0 ? `${(result.ms / 1000).toFixed(1)}s` : "-";
@@ -96,8 +98,13 @@ export function publish(
   policies: Policy[],
   restoreStreak = RESTORE_STREAK,
 ): void {
-  if (!ctx.hasUI || ctx.mode !== "tui" || !widgetEnabled()) return;
+  if (!ctx.hasUI || ctx.mode !== "tui") return;
   try {
+    if (!widgetEnabled()) {
+      ctx.ui.setStatus("gemini-health", undefined);
+      ctx.ui.setWidget("gemini-health", undefined);
+      return;
+    }
     ctx.ui.setStatus("gemini-health", summary(results));
     ctx.ui.setWidget("gemini-health", healthLines(results, policies, restoreStreak), {
       placement: "belowEditor",

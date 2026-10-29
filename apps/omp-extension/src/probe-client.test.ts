@@ -127,4 +127,53 @@ describe("AntigravityProbeClient", () => {
     expect(result.status).toBe("hang");
     expect(result.detail).toContain("no first event");
   });
+
+  test("loadAccounts handles case mismatch and index 0", async () => {
+    const client = new AntigravityProbeClient({
+      execFileFn: async (_file, args) => {
+        if (args.includes("usage")) {
+          return {
+            stdout: JSON.stringify({
+              reports: [{ metadata: { email: "user@example.com", projectId: "proj-zero" } }],
+            }),
+          };
+        }
+        if (args.includes("--list")) {
+          return {
+            stdout: "0. User@Example.com\n",
+          };
+        }
+        return { stdout: "" };
+      },
+    });
+
+    const accounts = await client.loadAccounts();
+    expect(accounts).toEqual([{ index: 0, email: "user@example.com", project: "proj-zero" }]);
+  });
+
+  test("probe accumulates split chunks across chunk boundaries", async () => {
+    const encoder = new TextEncoder();
+    const chunks = [encoder.encode("da"), encoder.encode('ta: {"candidates":[]}\n\n')];
+    let chunkIndex = 0;
+
+    const stream = new ReadableStream({
+      pull(controller) {
+        if (chunkIndex < chunks.length) {
+          controller.enqueue(chunks[chunkIndex++]);
+        } else {
+          controller.close();
+        }
+      },
+    });
+
+    const client = new AntigravityProbeClient({
+      execFileFn: async () => ({ stdout: "valid-token" }),
+      fetchFn: async () => new Response(stream, { status: 200 }),
+    });
+
+    const account: Account = { index: 1, email: "split@example.com", project: "p-split" };
+    const result = await client.probe(account);
+    expect(result.status).toBe("ok");
+    expect(result.email).toBe("split@example.com");
+  });
 });

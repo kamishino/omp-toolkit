@@ -5,6 +5,7 @@ import {
   extractTokenTotal,
   parseLastAssistantMessage,
 } from "./auto-heal";
+import { healthManager } from "./health-manager";
 import type { HistoryEventInput } from "./history-store";
 
 describe("AutoHealCoordinator recovery timer", () => {
@@ -67,6 +68,39 @@ describe("AutoHealCoordinator recovery timer", () => {
     isIdleVal = true;
     await coordinator.tickRecovery(mockCtx as never);
     expect(refreshCalled).toBe(false);
+  });
+
+  test("tickRecovery runs probeAndPublish without deadlock when idle and exclusions present", async () => {
+    const coordinator = new AutoHealCoordinator();
+    let probeAndPublishCalled = false;
+    const notifications: string[] = [];
+
+    const origHasExclusions = healthManager.hasExclusionsToRecover;
+    healthManager.hasExclusionsToRecover = async () => true;
+
+    (
+      coordinator as unknown as { probeAndPublish: (ctx: unknown) => Promise<unknown> }
+    ).probeAndPublish = async () => {
+      probeAndPublishCalled = true;
+      return { results: [], restored: [], policies: [] };
+    };
+
+    const mockCtx = {
+      isIdle: () => true,
+      ui: {
+        notify: (msg: string) => {
+          notifications.push(msg);
+        },
+      },
+    };
+
+    try {
+      await coordinator.tickRecovery(mockCtx as never);
+      expect(probeAndPublishCalled).toBe(true);
+      expect(notifications.some((n) => n.includes("already running"))).toBe(false);
+    } finally {
+      healthManager.hasExclusionsToRecover = origHasExclusions;
+    }
   });
 });
 
@@ -250,10 +284,9 @@ describe("agent_run recording in agent_end event", () => {
 
     expect(recorded).toHaveLength(4);
     expect(recorded[3][0].status).toBe("error");
-    expect(recorded[3][0].detail).toContain("[strike 1]");
-    expect(notifications.some((n) => n.message.includes("Strike 1"))).toBe(true);
+    expect(recorded[3][0].detail).toBe("gemini-3.8-flash");
 
-    // Turn 5: Strike 2 error status -> records alert event and notifies error
+    // Turn 5: Subsequent error status
     handlers.agent_end(
       {
         messages: [{ role: "assistant", stopReason: "error", error: "compile failure" }],
@@ -262,12 +295,9 @@ describe("agent_run recording in agent_end event", () => {
     );
 
     expect(recorded).toHaveLength(5);
-    expect(recorded[4]).toHaveLength(2); // agent_run + alert
+    expect(recorded[4]).toHaveLength(1);
     expect(recorded[4][0].status).toBe("error");
-    expect(recorded[4][0].detail).toContain("[strike 2 - halted]");
-    expect(recorded[4][1].kind).toBe("alert");
-    expect(recorded[4][1].detail).toBe("two-strike escalation limit reached");
-    expect(notifications.some((n) => n.message.includes("Strike 2"))).toBe(true);
+    expect(recorded[4][0].detail).toBe("gemini-3.8-flash");
 
     // Firing agent_end in non-TUI mode does not record
     const mockCtxRpc = {

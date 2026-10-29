@@ -1,9 +1,16 @@
 import type { WarmUpRequest } from "@omp-toolkit/core";
-import { PROVIDER, RESTORE_STREAK, short, sleep } from "./circuit-breaker";
+import { PROVIDER, RESTORE_STREAK } from "./config";
+import { short } from "./fs-util";
 import { healthManager } from "./health-manager";
 import { closeHistory } from "./history-store";
 import { runWarmUp, type WarmUpDependencies } from "./warmup";
 import { table } from "./widget";
+
+function sleep(ms: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(resolve, ms);
+  return promise;
+}
 
 export async function runExtensionCli(
   argv: string[],
@@ -83,7 +90,7 @@ export async function runExtensionCli(
 
   const runOnce = async (): Promise<boolean> => {
     const results = await healthManager.checkAll(confirm);
-    healthManager.recordHealth(results);
+    await healthManager.recordHealth(results);
     const restored = await healthManager.maybeRestoreManaged();
     const policies = await healthManager.readPolicies();
     if (json) {

@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import os from "node:os";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import type { Policy, ProbeResult } from "@omp-toolkit/core";
+import type { Account, Policy, ProbeResult } from "@omp-toolkit/core";
 import { type CommandDependencies, registerCommandsAndTools } from "./commands";
 import { healthManager } from "./health-manager";
+import type { WarmUpDependencies } from "./warmup";
 import { widgetEnabled } from "./widget";
 
 interface RegisteredCommand {
@@ -30,7 +32,8 @@ describe("registerCommandsAndTools", () => {
   const origRecordHealth = healthManager.recordHealth.bind(healthManager);
   const origMaybeRestore = healthManager.maybeRestoreManaged.bind(healthManager);
   const origReadPolicies = healthManager.readPolicies.bind(healthManager);
-
+  const origLoadAccounts = healthManager.loadAccounts.bind(healthManager);
+  const origRemoveExclusion = healthManager.removeExclusion.bind(healthManager);
   beforeAll(() => {
     healthManager.checkAll = async () => [
       {
@@ -42,7 +45,7 @@ describe("registerCommandsAndTools", () => {
       },
     ];
     healthManager.restoreManaged = async () => ["alpha@example.com"];
-    healthManager.recordHealth = () => {};
+    healthManager.recordHealth = async () => {};
     healthManager.maybeRestoreManaged = async () => ["alpha@example.com"];
     healthManager.readPolicies = async () => [];
     healthManager.applyHeal = async (_results, reason) => ({
@@ -51,6 +54,12 @@ describe("registerCommandsAndTools", () => {
       skipped: [],
       reason: reason ?? "heal",
     });
+    healthManager.loadAccounts = async () => [
+      { index: 0, email: "alpha@example.com", project: "test-proj" },
+      { index: 1, email: "ambig@example.com", project: "test-proj" },
+      { index: 2, email: "ambig@domain.com", project: "test-proj" },
+    ];
+    healthManager.removeExclusion = async () => {};
   });
 
   afterAll(() => {
@@ -60,6 +69,8 @@ describe("registerCommandsAndTools", () => {
     healthManager.recordHealth = origRecordHealth;
     healthManager.maybeRestoreManaged = origMaybeRestore;
     healthManager.readPolicies = origReadPolicies;
+    healthManager.loadAccounts = origLoadAccounts;
+    healthManager.removeExclusion = origRemoveExclusion;
   });
 
   function createTestHarness() {
@@ -135,20 +146,24 @@ describe("registerCommandsAndTools", () => {
       restoreManaged: async () => ["alpha@example.com"],
     };
 
-    const mockWarmUpDeps = {
-      client: {
-        probeAccount: async () => ({
-          status: "ok" as const,
-          latencyMs: 100,
-          rawStatus: "ok",
-        }),
-      },
-      policyStore: {
-        readPolicies: async () => [],
-      },
-      accounts: async () => [{ email: "alpha@example.com" }],
+    const mockWarmUpDeps: WarmUpDependencies = {
+      agentDir: os.tmpdir(),
+      adapters: new Map([
+        [
+          "google-antigravity",
+          {
+            provider: "google-antigravity",
+            loadAccounts: async () => [
+              { index: 0, email: "alpha@example.com", project: "test-proj" },
+            ],
+            probe: async (a: Account) => ({ ...a, status: "ok" as const, ms: 50 }),
+          },
+        ],
+      ]),
+      readSnapshot: () => null,
+      recordHealth: async () => {},
+      sleep: async () => {},
     };
-
     const deps: CommandDependencies = {
       warmUpDeps: mockWarmUpDeps as unknown as CommandDependencies["warmUpDeps"],
       coordinator: mockCoordinator as unknown as CommandDependencies["coordinator"],
@@ -283,8 +298,8 @@ describe("registerCommandsAndTools", () => {
     expect(isReloaded()).toBe(true);
   });
 
-  test("gemini-enable requires email argument and enforces --force when needed", async () => {
-    const { commands, mockCtx, notifications } = createTestHarness();
+  test("gemini-enable requires email argument, resolves account, and enables", async () => {
+    const { commands, mockCtx, notifications, sentMessages } = createTestHarness();
     const handler = commands["gemini-enable"].handler;
 
     // Empty argument
@@ -293,7 +308,26 @@ describe("registerCommandsAndTools", () => {
 
     // Unknown email
     await handler("nonexistent@example.com", mockCtx);
-    expect(notifications.some((n) => n.message.includes("No exclusion found"))).toBe(true);
+    expect(notifications.some((n) => n.message.includes("No Antigravity account found"))).toBe(
+      true,
+    );
+
+    // Ambiguous local part
+    await handler("ambig", mockCtx);
+    expect(notifications.some((n) => n.message.includes("Multiple accounts match"))).toBe(true);
+
+    // Known account but not excluded
+    await handler("alpha@example.com", mockCtx);
+    expect(
+      notifications.some((n) => n.message.includes("No exclusion found for alpha@example.com")),
+    ).toBe(true);
+
+    // Excluded account -> enables successfully
+    healthManager.readPolicies = async () => [
+      { provider: "google-antigravity", account: { email: "alpha@example.com" }, reservePct: 100 },
+    ];
+    await handler("alpha@example.com", mockCtx);
+    expect(sentMessages.some((m) => m.customType === "gemini-enable")).toBe(true);
   });
 
   test("gemini-auto-restore lists status when given empty arguments", async () => {

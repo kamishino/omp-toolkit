@@ -2,11 +2,12 @@ import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import type { Account, ProbeResult, Status } from "@omp-toolkit/core";
+import { PROVIDER } from "./config";
 import { short } from "./fs-util";
 
 const execFileAsync = promisify(execFile);
 
-export const DEFAULT_PROVIDER = "google-antigravity";
+export const DEFAULT_PROVIDER = PROVIDER;
 export const DEFAULT_MODEL_WIRE = "gemini-3.8-flash-high";
 export const DEFAULT_PROBE_TIMEOUT_MS = 15_000;
 export const DEFAULT_PROBE_PROMPT = "Reply with exactly: OK";
@@ -104,7 +105,7 @@ export class AntigravityProbeClient {
     const map = new Map<string, number>();
     for (const line of String(stdout).split(/\r?\n/)) {
       const match = /^(\d+)\.\s+(\S+@\S+)\s*$/.exec(line.trim());
-      if (match) map.set(match[2], Number(match[1]));
+      if (match) map.set(match[2].toLowerCase(), Number(match[1]));
     }
     return map;
   }
@@ -124,8 +125,8 @@ export class AntigravityProbeClient {
     for (const report of reports) {
       const email = report?.metadata?.email;
       const project = report?.metadata?.projectId;
-      const index = typeof email === "string" ? indexByEmail.get(email) : undefined;
-      if (typeof email === "string" && typeof project === "string" && index) {
+      const index = typeof email === "string" ? indexByEmail.get(email.toLowerCase()) : undefined;
+      if (typeof email === "string" && typeof project === "string" && index !== undefined) {
         accounts.push({ index, email, project });
       }
     }
@@ -211,11 +212,12 @@ export class AntigravityProbeClient {
 
       try {
         const decoder = new TextDecoder();
+        let buffer = "";
         for (let i = 0; i < 4; i += 1) {
           const { value, done } = await reader.read();
           if (done) break;
-          const text = decoder.decode(value, { stream: true });
-          if (text.includes("data:")) {
+          buffer += decoder.decode(value, { stream: true });
+          if (buffer.includes("data:")) {
             return {
               ...account,
               status: "ok",

@@ -1,24 +1,32 @@
-import { describe, expect, test } from "bun:test";
-import type { HealthResult, Policy } from "@omp-toolkit/core";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { type HealthResult, type Policy, resolveWidgetStatePath } from "@omp-toolkit/core";
 import {
   healthLines,
   publish,
   setWidgetEnabled,
-  statusTag,
   summary,
   table,
   type WidgetContext,
   widgetEnabled,
-  widgetStatePath,
 } from "./widget";
 
 describe("widget presentation module", () => {
-  test("statusTag returns consistent padded labels", () => {
-    expect(statusTag({ email: "a@b.com", status: "ok", ms: 100 })).toBe("OK  ");
-    expect(statusTag({ email: "a@b.com", status: "hang", ms: 100 })).toBe("HANG");
-    expect(statusTag({ email: "a@b.com", status: "auth", ms: 100 })).toBe("AUTH");
-    expect(statusTag({ email: "a@b.com", status: "model-error", ms: 100 })).toBe("MODEL");
-    expect(statusTag({ email: "a@b.com", status: "error", ms: 100 })).toBe("ERR ");
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "widget-test-"));
+    process.env.PI_CODING_AGENT_DIR = tempDir;
+  });
+
+  afterEach(() => {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
   });
 
   test("summary formats ok and hang counts accurately", () => {
@@ -61,8 +69,8 @@ describe("widget presentation module", () => {
     expect(lines[1]).toContain("recovered");
   });
 
-  test("widgetStatePath resolves expected file name", () => {
-    expect(widgetStatePath()).toContain("gemini-health-widget.json");
+  test("resolveWidgetStatePath resolves expected file name", () => {
+    expect(resolveWidgetStatePath()).toContain("gemini-health-widget.json");
   });
 
   test("widgetEnabled and setWidgetEnabled persist toggle", () => {
@@ -95,6 +103,23 @@ describe("widget presentation module", () => {
     expect(statuses[0]?.[1]).toBe("Gemini 3.8: 1/1 ok");
     expect(widgets.length).toBe(1);
     expect(widgets[0]?.[0]).toBe("gemini-health");
+  });
+  test("publish clears status and widget when widget is disabled", () => {
+    setWidgetEnabled(false);
+    const statuses: Array<[string, string | undefined]> = [];
+    const widgets: Array<[string, string[] | undefined]> = [];
+    const ctx: WidgetContext = {
+      hasUI: true,
+      mode: "tui",
+      ui: {
+        setStatus: (key, text) => statuses.push([key, text]),
+        setWidget: (key, lines) => widgets.push([key, lines]),
+      },
+    };
+
+    publish(ctx, [{ email: "a@b.com", status: "ok", ms: 250 }], []);
+    expect(statuses).toEqual([["gemini-health", undefined]]);
+    expect(widgets).toEqual([["gemini-health", undefined]]);
   });
 
   test("publish gracefully swallows UI errors", () => {

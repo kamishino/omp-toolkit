@@ -1,7 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import type { AutoHealCoordinator } from "./auto-heal";
-import { PROVIDER, RESTORE_STREAK, recordHistory, short } from "./circuit-breaker";
+import { PROVIDER, RESTORE_STREAK } from "./config";
+import { short } from "./fs-util";
 import { healthManager } from "./health-manager";
 import { runWarmUp, type WarmUpDependencies } from "./warmup";
 import { publish, setWidgetEnabled, table, widgetEnabled } from "./widget";
@@ -196,7 +197,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         try {
           const { results, restored } = await coordinator.probeAndPublish(ctx, true);
           if (dryRun) {
-            recordHistory([
+            healthManager.recordHistory([
               {
                 at: Date.now(),
                 kind: "manual_intervention",
@@ -218,7 +219,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           const action = await healthManager.applyHeal(results, "heal");
           const nextPolicies = await healthManager.readPolicies();
           publish(ctx, results, nextPolicies);
-          recordHistory([
+          healthManager.recordHistory([
             {
               at: Date.now(),
               kind: "manual_intervention",
@@ -254,7 +255,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     handler: async (_args, ctx) => {
       try {
         const removed = await healthManager.restoreManaged();
-        recordHistory([
+        healthManager.recordHistory([
           {
             at: Date.now(),
             kind: "manual_intervention",
@@ -285,7 +286,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
       }
     },
   });
-
+  // Resolves against live Antigravity accounts; removed accounts must be cleared manually via omp config.
   pi.registerCommand("gemini-enable", {
     description:
       "Explicitly remove a Gemini account exclusion and re-enable it (requires --force if latest check is not OK)",
@@ -300,34 +301,29 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         return;
       }
       try {
+        const resolution = await healthManager.resolveAccount(needle);
+        if (resolution.status !== "found") {
+          ctx.ui.notify(resolution.error, "warning");
+          return;
+        }
+        const account = resolution.account;
+        const target = account.email;
+
         const policies = await healthManager.readPolicies();
-        const matches = policies.filter(
+        const hasExclusion = policies.some(
           (policy) =>
             policy?.provider === PROVIDER &&
             typeof policy?.account?.email === "string" &&
-            (policy.account.email.toLowerCase() === needle ||
-              policy.account.email.toLowerCase().split("@")[0] === needle),
+            policy.account.email.toLowerCase() === target.toLowerCase(),
         );
-        if (matches.length === 0) {
-          ctx.ui.notify(`No exclusion found for ${needle}`, "info");
+        if (!hasExclusion) {
+          ctx.ui.notify(`No exclusion found for ${target}`, "info");
           return;
         }
-        const emails = new Set(
-          matches
-            .map((policy) => policy.account?.email)
-            .filter((email): email is string => typeof email === "string"),
-        );
-        if (emails.size > 1) {
-          ctx.ui.notify(
-            `Multiple accounts match "${needle}": ${[...emails].join(", ")}. Use the full email.`,
-            "warning",
-          );
-          return;
-        }
-        const target = [...emails][0];
+
         const latest = healthManager
           .readSnapshot()
-          ?.results.find((result) => result.email.toLowerCase() === target?.toLowerCase());
+          ?.results.find((result) => result.email.toLowerCase() === target.toLowerCase());
         if (latest && latest.status !== "ok" && !force) {
           ctx.ui.notify(
             `Refusing to enable ${latest.email}: latest check is ${latest.status.toUpperCase()}. Run /gemini-health, or use --force.`,
@@ -341,10 +337,10 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
             "warning",
           );
         }
-        if (target) {
-          await healthManager.removeExclusion(target, "gemini-enable");
-        }
-        const message = `Enabled ${[...emails].join(", ")}`;
+
+        await healthManager.removeExclusion(target, "gemini-enable");
+
+        const message = `Enabled ${target}`;
         ctx.ui.notify(message, "info");
         pi.sendMessage(
           {
@@ -437,7 +433,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
             (e) => e.toLowerCase() !== targetEmail.toLowerCase(),
           );
           healthManager.writeAutoRestore(sidecar);
-          recordHistory([
+          healthManager.recordHistory([
             {
               at: Date.now(),
               kind: "policy_change",
@@ -466,7 +462,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         if (!sidecar.enabled.some((e) => e.toLowerCase() === email.toLowerCase())) {
           sidecar.enabled.push(email);
           healthManager.writeAutoRestore(sidecar);
-          recordHistory([
+          healthManager.recordHistory([
             {
               at: Date.now(),
               kind: "policy_change",
@@ -501,7 +497,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     approval: "write",
     async execute(_id, params, _signal, _onUpdate, ctx) {
       const results = await healthManager.checkAll(params.confirm);
-      healthManager.recordHealth(results);
+      await healthManager.recordHealth(results);
       const restored = params.heal ? await healthManager.maybeRestoreManaged() : [];
       const policies = await healthManager.readPolicies();
       publish(ctx, results, policies);
