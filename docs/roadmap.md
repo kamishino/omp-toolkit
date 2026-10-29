@@ -447,6 +447,44 @@ The 90-day roadmap is complete when all of the following conditions are met:
 8. **Audited interventions:** every Phase 2 menu intervention has an
    empirical kept or reverted verdict logged in the review notes.
 
+---
+
+## MoSCoW feature backlog (open horizon)
+
+This open-horizon backlog prioritizes features for the solo operator across two Windows workstations and four providers, without a calendar deadline. Detailed evidence, quantitative benchmark citations, and rejected candidate analyses are documented in [docs/research/moscow-feature-prioritization.md](research/moscow-feature-prioritization.md).
+
+| Tier | Candidate / Task | Done-Signal |
+| :--- | :--- | :--- |
+| **MUST** | **Fix & Validate `costProxy` Token Extraction (`C01`)**<br>`apps/omp-extension/src/auto-heal.ts` | `execution:report --days=14` outputs distinct `tok=<n>` values across sessions of varying length, resolving constant `tok=1200` anomaly. |
+| **SHOULD** | **Lock Pair A Model Roles in User Config (`C02`)**<br>`~/.omp/agent/config.yml` | `config.yml` contains `deepseek/deepseek-flash` with `thinking_level: low`; `execution:report` verifies execution with low cost proxy. |
+| **SHOULD** | **Apply Handoff Contract Template (`C03`)**<br>`~/.omp/agent/AGENTS.md` | `/template apply plan-exec-handoff` executed; zero-invention contract active. |
+| **SHOULD** | **Audit Probe Wire Pins vs Upstream (`C04`)**<br>`apps/omp-extension/src/probe-client.ts` | Pins verified against upstream OMP 18.12.x; audit logged in `docs/runbook.md`.<br>*Conflict:* Off-menu during Phase 2; execute during Phase 0 maintenance or post-Day 90. |
+| **SHOULD** | **Add Missing Colocated Tests (`C05`)**<br>`commands.test.ts`, `reliability/*.test.ts` | Colocated unit tests for slash commands and report CLIs pass in `bun run check`.<br>*Conflict:* Off-menu during Phase 2; execute during Phase 0 maintenance or post-Day 90. |
+| **SHOULD** | **Deduplicate Pacing Sample Stores (`C06`)**<br>`apps/desktop/` & `apps/provider-usage/` | Common store helper extracted without violating `packages/core` zero-I/O purity.<br>*Conflict:* Off-menu during Phase 2; execute during Phase 0 maintenance or post-Day 90. |
+
+- **Could (Contingent / Ergonomics):**
+  - `C07`: Re-evaluate model pairings on catalog shifts (`scripts/eval/eval-model-roles.ts`) — Trigger: upstream provider model or pricing change.
+  - `C08`: Gemini wire-normalizer targeted fixes (`apps/omp-extension/src/gemini-normalizer.ts`) — Trigger: active wire failure reproduced by failing test.
+  - `C09`: Tighten context-economy instructions (`.omp/AGENTS.md`) — Trigger: baseline error clusters by provider/model.
+  - `C10`: Programmatic two-strike escalation in extension (`apps/omp-extension`) — Trigger: baseline reveals multi-strike retry loops.
+  - `C11`: Multi-account weekly pacing calculations (`packages/core/src/pacing.ts`, `builder.ts`).
+  - `C12`: Cross-platform OS incident toast notifications (`apps/omp-extension/src/toast.ts` macOS/Linux).
+  - `C13`: Desktop provider logo for `muse-code` (`apps/desktop/src/renderer/provider-logos.ts`).
+  - `C14`: External Graphify & Repomix developer skills (external `skill://` only, never repo dependencies).
+- **Won't (This Backlog — Prohibited / Excluded / Refuted):**
+  - `C15`: Reverse proxy stream compression (`billion-context`) — *Refuted by measurement (0% token savings, +8.3% payload bloat, idle 50k threshold).*
+  - `C16`: Graphify inside `packages/core` & in-process repo map — *Prohibited (violates pure zero-I/O domain boundary; superseded by LSP).*
+  - `C17`: Public packaging, npm distribution & signed binaries — *Excluded (operator runs from source; deferred past Day 90).*
+  - `C18`: Standalone web dashboard server — *Excluded (desktop widget and TUI monitor satisfy all observability needs).*
+  - `C19`: Provider SDK & generalized plugin interfaces — *Excluded (dead weight for fixed 4-provider deployment).*
+  - `C20`: Additional usage providers (Copilot, Anthropic) — *Excluded (scope locked strictly to 4 active providers).*
+  - `C21`: Cross-platform reliability proof parity — *Excluded (30-day proof strictly scoped to 2 Windows machines).*
+  - `C22`: Periodic background idle route probing — *Prohibited (violates zero-idle-token invariant ADR-0001).*
+  - `C23`: Cross-machine state synchronization / distributed DB — *Prohibited (violates two-machine independence invariant).*
+  - `C24`: Lower-model fallback or thinking degradation on error — *Prohibited (compromises code generation quality).*
+
+- **Freeze Rule Conflict:** Any development scheduled between Days 51 and 90 violates the Day 51 system freeze.
+
 > This roadmap deliberately excludes public distribution, a provider SDK, a web
 > dashboard, and macOS/Linux support until the next roadmap cycle. The desktop
 > widget is a monitor host and does not alter the Windows-only 30-day
