@@ -9,6 +9,7 @@ import {
   resolveHeartbeatPath,
   resolveHistoryDbPath,
 } from "@omp-toolkit/core";
+import { writeFileAtomic } from "./fs-util";
 
 export interface EventRow {
   at: number;
@@ -86,28 +87,13 @@ export type ExecutionReportResult =
 
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 
-function writeAtomic(file: string, content: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(temp, content);
-  try {
-    fs.renameSync(temp, file);
-  } catch {
-    fs.writeFileSync(file, content);
-    try {
-      fs.rmSync(temp, { force: true });
-    } catch {
-      // Best-effort temp cleanup
-    }
-  }
-}
-
 /**
  * Deep module encapsulating the OMP reliability history SQLite database,
  * schema migrations, machine identity resolution, and analytical reporting.
  */
 export class ReliabilityHistoryStore {
   private db: Database | null = null;
+  private dbReadonly = false;
   private cachedMachine: MachineIdentity | null = null;
   readonly dbPath: string;
   readonly agentDir: string;
@@ -118,14 +104,20 @@ export class ReliabilityHistoryStore {
   }
 
   getDatabase(readonly = false): Database {
-    if (this.db) return this.db;
+    if (this.db) {
+      if (!(this.dbReadonly && !readonly)) {
+        return this.db;
+      }
+      this.db.close();
+      this.db = null;
+    }
     if (!readonly) {
       fs.mkdirSync(path.dirname(this.dbPath), { recursive: true });
     }
     const db = new Database(this.dbPath, { create: !readonly, readonly });
+    db.exec("PRAGMA busy_timeout = 5000");
     if (!readonly) {
       db.exec("PRAGMA journal_mode = WAL");
-      db.exec("PRAGMA busy_timeout = 5000");
       db.exec(`
         CREATE TABLE IF NOT EXISTS events (
           id INTEGER PRIMARY KEY,
@@ -150,6 +142,7 @@ export class ReliabilityHistoryStore {
       db.query("DELETE FROM events WHERE at < ?").run(Date.now() - RETENTION_MS);
     }
     this.db = db;
+    this.dbReadonly = readonly;
     return db;
   }
 
@@ -187,7 +180,7 @@ export class ReliabilityHistoryStore {
         hostname: os.hostname(),
         createdAt: Date.now(),
       };
-      writeAtomic(file, `${JSON.stringify(created, null, 2)}\n`);
+      writeFileAtomic(file, `${JSON.stringify(created, null, 2)}\n`);
       this.cachedMachine = created;
       return created;
     }
@@ -235,7 +228,7 @@ export class ReliabilityHistoryStore {
         `SELECT at, machine_id, kind, provider, account, status, incident_id, detail
          FROM events
          WHERE at >= ?
-         ORDER BY at ASC`,
+         ORDER BY at ASC, id ASC`,
       )
       .all(sinceMs) as EventRow[];
   }
@@ -258,7 +251,11 @@ export class ReliabilityHistoryStore {
     }
   }
 
-  aggregateMachineStats(rows: EventRow[], machineFilter = "all"): Map<string, MachineStats> {
+  aggregateMachineStats(
+    rows: EventRow[],
+    machineFilter = "all",
+    now = Date.now(),
+  ): Map<string, MachineStats> {
     const statsByMachine = new Map<string, MachineStats>();
     const incidentAt = new Map<string, number>();
     const resolvedAt = new Map<string, number>();
@@ -319,7 +316,8 @@ export class ReliabilityHistoryStore {
 
     for (const [id, startAt] of incidentAt.entries()) {
       const endAt = resolvedAt.get(id);
-      if (endAt === undefined || endAt - startAt > 900_000) {
+      const isLate = endAt === undefined ? now - startAt > 900_000 : endAt - startAt > 900_000;
+      if (isLate) {
         const ownerRow = rows.find((r) => r.incident_id === id && r.kind === "incident");
         if (ownerRow) {
           const stats = statsByMachine.get(ownerRow.machine_id);
@@ -359,7 +357,7 @@ export class ReliabilityHistoryStore {
 
     const localMachine = this.readLocalMachine();
     const localHeartbeat = this.readLocalHeartbeat();
-    const statsByMachine = this.aggregateMachineStats(rows, machineFilter);
+    const statsByMachine = this.aggregateMachineStats(rows, machineFilter, now);
     if (statsByMachine.size === 0) {
       return { status: "no_matching_records", message: "no history" };
     }
@@ -619,18 +617,6 @@ export function resetHistoryCachesForTest(): void {
     sharedStore.close();
     sharedStore = null;
   }
-}
-
-export function machineId(): string {
-  return getHistoryStore().machineId();
-}
-
-export function historyPath(): string {
-  return getHistoryStore().dbPath;
-}
-
-export function recordEvent(event: HistoryEventInput): void {
-  getHistoryStore().recordEvent(event);
 }
 
 export function recordEvents(events: HistoryEventInput[]): void {

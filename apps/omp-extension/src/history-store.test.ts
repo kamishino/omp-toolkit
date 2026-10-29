@@ -1,8 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ReliabilityHistoryStore } from "./history-store";
+import {
+  closeHistory,
+  getHistoryStore,
+  ReliabilityHistoryStore,
+  recordEvents,
+  resetHistoryCachesForTest,
+} from "./history-store";
 
 describe("ReliabilityHistoryStore", () => {
   test("persists, queries, and aggregates history events cleanly", () => {
@@ -53,7 +60,7 @@ describe("ReliabilityHistoryStore", () => {
     expect(queried[0].kind).toBe("route_check");
     expect(queried[0].status).toBe("ok");
 
-    const stats = store.aggregateMachineStats(queried, "all");
+    const stats = store.aggregateMachineStats(queried, "all", now);
     const machStats = stats.get("mach-1");
     expect(machStats).toBeDefined();
     expect(machStats?.checks).toBe(2);
@@ -62,8 +69,10 @@ describe("ReliabilityHistoryStore", () => {
     expect(machStats?.restores).toBe(1);
     expect(machStats?.manual).toBe(1);
     expect(machStats?.incidents).toBe(1);
-    expect(machStats?.late).toBe(1); // Unresolved incident is counted as late
+    expect(machStats?.late).toBe(0); // Unresolved incident 3s ago is within 15min SLA
 
+    const lateStats = store.aggregateMachineStats(queried, "all", now + 1_000_000);
+    expect(lateStats.get("mach-1")?.late).toBe(1); // Exceeding 15min without resolution is late
     store.close();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -146,5 +155,186 @@ describe("ReliabilityHistoryStore", () => {
       store.close();
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  });
+
+  test("getDatabase smoothly transitions from readonly to writable without SQLITE_READONLY error", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "db-ro-trans-"));
+    const dbPath = path.join(tmpDir, "history.db");
+    const store = new ReliabilityHistoryStore(dbPath, tmpDir);
+
+    try {
+      const now = Date.now();
+      // First open writable to initialize DB schema
+      store.recordEvents([{ at: now - 1000, kind: "session_start" }]);
+      store.close();
+
+      // Now reopen in readonly mode via queryEvents
+      const initialRows = store.queryEvents(0);
+      expect(initialRows.length).toBe(1);
+
+      // Subsequent write must upgrade or reopen writable connection rather than crashing
+      expect(() => {
+        store.recordEvents([{ at: now, kind: "session_start" }]);
+      }).not.toThrow();
+
+      const updatedRows = store.queryEvents(0);
+      expect(updatedRows.length).toBe(2);
+    } finally {
+      store.close();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("aggregateMachineStats accurately flags active incidents as late only after 15 minutes", () => {
+    const store = new ReliabilityHistoryStore();
+    const now = 1_000_000;
+    const rows = [
+      {
+        at: now - 60_000, // 1 minute old
+        machine_id: "m-1",
+        kind: "incident",
+        incident_id: "inc-fresh",
+        provider: null,
+        account: null,
+        status: null,
+        detail: null,
+      },
+      {
+        at: now - 901_000, // 15m 1s old
+        machine_id: "m-1",
+        kind: "incident",
+        incident_id: "inc-stale",
+        provider: null,
+        account: null,
+        status: null,
+        detail: null,
+      },
+    ];
+
+    const stats = store.aggregateMachineStats(rows, "all", now);
+    const mStats = stats.get("m-1");
+    expect(mStats?.incidents).toBe(2);
+    expect(mStats?.late).toBe(1); // Only the 15m1s incident is late
+  });
+});
+
+describe("ReliabilityHistoryStore singleton and persistence", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-history-test-"));
+    process.env.PI_CODING_AGENT_DIR = tempDir;
+    delete process.env.OMP_TOOLKIT_HISTORY_DB;
+    resetHistoryCachesForTest();
+    closeHistory();
+  });
+
+  afterEach(() => {
+    closeHistory();
+    resetHistoryCachesForTest();
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch {
+      // Best effort cleanup.
+    }
+  });
+
+  test("creates database and inserts a single event with machine id", () => {
+    recordEvents([
+      {
+        at: 1_700_000_000_000,
+        kind: "session_start",
+        detail: "test",
+      },
+    ]);
+
+    const file = getHistoryStore().dbPath;
+    expect(fs.existsSync(file)).toBe(true);
+
+    const db = new Database(file, { readonly: true });
+    const rows = db.query("SELECT * FROM events").all() as Array<{
+      id: number;
+      at: number;
+      machine_id: string;
+      kind: string;
+      detail: string;
+    }>;
+    db.close();
+
+    expect(rows.length).toBe(1);
+    expect(rows[0].at).toBe(1_700_000_000_000);
+    expect(rows[0].kind).toBe("session_start");
+    expect(rows[0].detail).toBe("test");
+    expect(rows[0].machine_id).toBe(getHistoryStore().machineId());
+    expect(rows[0].machine_id.length).toBeGreaterThan(10);
+  });
+
+  test("machineId returns the same id on repeated calls and writes machine file", () => {
+    const id1 = getHistoryStore().machineId();
+    const id2 = getHistoryStore().machineId();
+    expect(id1).toBe(id2);
+
+    const machineFile = path.join(tempDir, "omp-toolkit-machine.json");
+    expect(fs.existsSync(machineFile)).toBe(true);
+    const parsed = JSON.parse(fs.readFileSync(machineFile, "utf8"));
+    expect(parsed.id).toBe(id1);
+    expect(parsed.hostname).toBe(os.hostname());
+    expect(typeof parsed.createdAt).toBe("number");
+  });
+
+  test("recordEvents inserts multiple rows in a single call", () => {
+    recordEvents([
+      { at: 1_700_000_000_001, kind: "route_check", status: "ok" },
+      { at: 1_700_000_000_002, kind: "policy_change", detail: "heal" },
+    ]);
+
+    const db = new Database(getHistoryStore().dbPath, { readonly: true });
+    const count = db.query("SELECT count(*) as count FROM events").get() as { count: number };
+    db.close();
+
+    expect(count.count).toBe(2);
+  });
+
+  test("deletes events older than 30 days upon database reopen", () => {
+    const staleTime = Date.now() - 31 * 24 * 60 * 60 * 1_000;
+    recordEvents([
+      {
+        at: staleTime,
+        kind: "route_check",
+        status: "ok",
+      },
+    ]);
+
+    closeHistory();
+
+    // Reopen and trigger retention by recording a fresh event
+    recordEvents([
+      {
+        at: Date.now(),
+        kind: "session_start",
+      },
+    ]);
+
+    const db = new Database(getHistoryStore().dbPath, { readonly: true });
+    const staleRows = db.query("SELECT * FROM events WHERE at = ?").all(staleTime);
+    const allRows = db.query("SELECT count(*) as count FROM events").get() as { count: number };
+    db.close();
+
+    expect(staleRows.length).toBe(0);
+    expect(allRows.count).toBe(1);
+  });
+
+  test("throws when machine identity file is corrupt and error contains file path", () => {
+    const machineFile = path.join(tempDir, "omp-toolkit-machine.json");
+    fs.writeFileSync(machineFile, "{ corrupt json ...", "utf8");
+
+    expect(() => {
+      recordEvents([{ at: Date.now(), kind: "session_start" }]);
+    }).toThrow(machineFile);
+  });
+
+  test("recordEvents([]) does not create a database file", () => {
+    recordEvents([]);
+    expect(fs.existsSync(getHistoryStore().dbPath)).toBe(false);
   });
 });
