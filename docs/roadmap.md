@@ -34,6 +34,7 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `C01` | Fix & Validate `costProxy` Token Extraction | commit `b23598b`, deployed via Step 0 | `extractRunTokens` sums real per-message usage (unit-verified); tests isolated from `~/.omp/agent/omp-toolkit-history.db`; live distinct `tok=` values appear after first post-deploy runs (historical rows remain `tok=1200`) |
 | `C04` | Audit Probe Wire Pins vs. Upstream Client | commit `59925ca` | `docs/runbook.md` `## Probe wire pins audit` documents `gemini-3.8-flash-high`, `UA_VERSION = "2.24.0"`, and `PI_AI_ANTIGRAVITY_VERSION` override |
 | `C05` | Add Missing Colocated Tests for Core Surfaces | commits `e1c55e8`, `13e3cc0` | `commands.test.ts` (8 commands + `gemini_health` tool), `execution-report.test.ts`, `reliability-report.test.ts` pass in `bun run check` |
+| `C06` | Deduplicate Desktop & CLI Pacing Stores | `packages/core/src/pacing.ts`, `apps/provider-usage/src/pacing-store.ts` | Single shared store helper extracted; desktop re-exports from provider-usage; `packages/core` purity preserved; `bun run check` and `build:desktop` pass |
 
 ---
 
@@ -58,12 +59,7 @@ No open development Musts. A new item is promoted to Must only when daily operat
 
 High-leverage execution quality and reliability improvements backed by measured empirical benchmarks or regression prevention.
 
-| ID | Feature / Task | Target / Location | Done-Signal | Effort |
-| :--- | :--- | :--- | :--- | :---: |
-| **`C06`** | **Deduplicate Desktop & CLI Pacing Stores** | `apps/desktop/src/pacing-store.ts`<br>`apps/provider-usage/src/pacing-store.ts` | Single shared store helper extracted outside `packages/core` (preserving core zero-I/O purity); duplicate files removed; `check` passes. | S ($1\text{ h}$) |
-
-*Detailed Rationale:*
-- **`C06`:** Eliminates near-duplicate atomic file operations between desktop and terminal CLI (the two stores differ only in path-resolution option: `agentDir` vs `env`).
+No open Shoulds. All prioritized high-leverage items are complete.
 
 ---
 
@@ -117,14 +113,9 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 
 ## Recommended Execution Sequence
 
-One item at a time. The only open item is:
+All Must and Should development items are complete.
 
-1. **`[SHOULD]` Deduplicate Desktop & CLI Pacing Stores (`C06`)**
-   - *Target:* Shared adapter utility outside `packages/core`.
-   - *Action:* Extract common `writeFileAtomic` and `recordAndLoadPacingSamples` logic without violating `packages/core` purity, unifying the two call shapes (desktop `agentDir`, provider-usage `env`) behind one helper signature.
-   - *Done Signal:* Duplicate files in `apps/desktop/` and `apps/provider-usage/` removed; both import shared helper; `bun run check` passes.
-
-After `C06`, work is pulled from `## Could Have` only when its named trigger fires.
+Work is pulled from `## Could Have` only when its named trigger fires.
 
 ---
 
