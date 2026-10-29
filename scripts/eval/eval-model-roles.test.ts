@@ -130,4 +130,18 @@ describe("eval-model-roles harness", () => {
     expect(markdown).toContain("| **First-Pass Solve Rate** |");
     expect(markdown).toContain("| **Total Cost (USD)** |");
   });
+
+  test("Pair A maintains cost leadership across all dry-run tasks", () => {
+    const tasks = BENCHMARK_TASKS.map((t) => t.id);
+    const summaryA = calculateSummary(
+      PAIR_CONFIGS.A,
+      tasks.map((id) => mockMetricsForDryRun(id, "A")),
+    );
+    const summaryB = calculateSummary(
+      PAIR_CONFIGS.B,
+      tasks.map((id) => mockMetricsForDryRun(id, "B")),
+    );
+    expect(summaryA.summary.totalCostUsd).toBeLessThan(summaryB.summary.totalCostUsd);
+    expect(summaryA.summary.firstPassSolveRate).toBe(100);
+  });
 });
