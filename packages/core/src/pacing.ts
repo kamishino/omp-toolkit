@@ -88,6 +88,38 @@ export function appendPacingSample(
 
   return pruned;
 }
+export function updatePacingSamples(
+  accounts: Record<string, PacingSample[]>,
+  reports: UsageReport[],
+  now: number,
+): { accounts: Record<string, PacingSample[]>; modified: boolean } {
+  const extracted = extractPacingSamples(reports, now);
+  let modified = false;
+
+  for (const [acc, list] of Object.entries(accounts)) {
+    const pruned = prunePacingSamples(list, now);
+    if (pruned.length !== list.length) {
+      accounts[acc] = pruned;
+      modified = true;
+    }
+  }
+
+  for (const { account, sample } of extracted) {
+    const existing = accounts[account] ?? [];
+    const updated = appendPacingSample(existing, sample, now);
+    if (
+      updated.length !== existing.length ||
+      (updated.length > 0 &&
+        existing.length > 0 &&
+        updated[updated.length - 1] !== existing[existing.length - 1])
+    ) {
+      accounts[account] = updated;
+      modified = true;
+    }
+  }
+
+  return { accounts, modified };
+}
 
 export function parsePacingSamplesFile(raw: string): Record<string, PacingSample[]> {
   try {

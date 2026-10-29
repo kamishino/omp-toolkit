@@ -1,17 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  appendPacingSample,
-  extractPacingSamples,
   type PacingSample,
   parsePacingSamplesFile,
-  prunePacingSamples,
   resolvePacingSamplesPath,
   serializePacingSamplesFile,
   type UsageReport,
+  updatePacingSamples,
 } from "@omp-toolkit/core";
 
-function writeFileAtomic(file: string, content: string): void {
+export function writeFileAtomic(file: string, content: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(temp, content);
@@ -27,16 +25,21 @@ function writeFileAtomic(file: string, content: string): void {
   }
 }
 
+export interface PacingStoreOptions {
+  agentDir?: string;
+  env?: Record<string, string | undefined>;
+  now?: number;
+  filePath?: string;
+}
+
 export function recordAndLoadPacingSamples(
   reports: UsageReport[],
-  options?: {
-    env?: Record<string, string | undefined>;
-    now?: number;
-    filePath?: string;
-  },
+  options?: PacingStoreOptions,
 ): Record<string, PacingSample[]> {
   const now = options?.now ?? Date.now();
-  const filePath = options?.filePath ?? resolvePacingSamplesPath(options?.env);
+  const env =
+    options?.env ?? (options?.agentDir ? { PI_CODING_AGENT_DIR: options.agentDir } : process.env);
+  const filePath = options?.filePath ?? resolvePacingSamplesPath(env);
 
   let raw = "";
   let accounts: Record<string, PacingSample[]> = {};
@@ -51,30 +54,8 @@ export function recordAndLoadPacingSamples(
   }
 
   try {
-    const extracted = extractPacingSamples(reports, now);
-    let modified = false;
-
-    for (const [acc, list] of Object.entries(accounts)) {
-      const pruned = prunePacingSamples(list, now);
-      if (pruned.length !== list.length) {
-        accounts[acc] = pruned;
-        modified = true;
-      }
-    }
-
-    for (const { account, sample } of extracted) {
-      const existing = accounts[account] ?? [];
-      const updated = appendPacingSample(existing, sample, now);
-      if (
-        updated.length !== existing.length ||
-        (updated.length > 0 &&
-          existing.length > 0 &&
-          updated[updated.length - 1] !== existing[existing.length - 1])
-      ) {
-        accounts[account] = updated;
-        modified = true;
-      }
-    }
+    const { accounts: updated, modified } = updatePacingSamples(accounts, reports, now);
+    accounts = updated;
 
     const serialized = serializePacingSamplesFile(accounts);
     if (modified || (raw.length === 0 && Object.keys(accounts).length > 0)) {

@@ -10,6 +10,7 @@ import {
   parsePacingSamplesFile,
   prunePacingSamples,
   serializePacingSamplesFile,
+  updatePacingSamples,
 } from "./pacing";
 import type { UsageReport } from "./types";
 
@@ -136,6 +137,52 @@ describe("core pacing domain", () => {
       validSample,
       sameValLater,
     ]);
+  });
+  test("updatePacingSamples prunes and appends samples returning modified flag", () => {
+    const now = 1_000_000_000_000;
+    const reports: UsageReport[] = [
+      {
+        provider: "muse-code",
+        metadata: { email: "muse@example.com" },
+        limits: [
+          {
+            label: "Weekly",
+            window: { label: "Weekly", resetsAt: now + 500_000 },
+            amount: { usedFraction: 0.2 },
+          },
+        ],
+      },
+    ];
+
+    // Initial update from empty
+    const initial = updatePacingSamples({}, reports, now);
+    expect(initial.modified).toBe(true);
+    expect(initial.accounts["muse@example.com"]).toHaveLength(1);
+    expect(initial.accounts["muse@example.com"][0].usedFraction).toBe(0.2);
+
+    // Second update with same report shortly after -> not modified
+    const second = updatePacingSamples(initial.accounts, reports, now + 60_000);
+    expect(second.modified).toBe(false);
+    expect(second.accounts["muse@example.com"]).toHaveLength(1);
+
+    // Third update with changed fraction -> modified
+    const changedReports: UsageReport[] = [
+      {
+        provider: "muse-code",
+        metadata: { email: "muse@example.com" },
+        limits: [
+          {
+            label: "Weekly",
+            window: { label: "Weekly", resetsAt: now + 500_000 },
+            amount: { usedFraction: 0.35 },
+          },
+        ],
+      },
+    ];
+    const third = updatePacingSamples(second.accounts, changedReports, now + 120_000);
+    expect(third.modified).toBe(true);
+    expect(third.accounts["muse@example.com"]).toHaveLength(2);
+    expect(third.accounts["muse@example.com"][1].usedFraction).toBe(0.35);
   });
 
   test("parsePacingSamplesFile and serializePacingSamplesFile handle roundtrip and malformed input", () => {
