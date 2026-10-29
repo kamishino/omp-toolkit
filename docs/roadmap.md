@@ -1,491 +1,178 @@
-# OMP Toolkit 90-day execution-quality roadmap
+# OMP Toolkit Roadmap (MoSCoW)
 
-## North star and success metric
-
-- **North star:** measurably better agent execution quality at no worse cost,
-  for one operator across two independent Windows machines and four OMP
-  providers (Google Antigravity, OpenAI Codex, Muse Code, DeepSeek), while
-  finishing the 30-consecutive-day zero-manual-fix reliability proof as an
-  unwaivable exit gate.
-- **North-star metric (pooled across both machines):**
-  - `errorEndedRate = agent_run(status="error") / agent_run(all)`.
-  - `costProxy`: mean tokens per non-error run if per-run token totals are
-    available in `agent_end` payloads; otherwise `agent_run(all) / session_start`
-    (runs per session).
-  - **Success at Day 90:** `errorEndedRate` improved by $\ge 25\%$ relative to
-    baseline, `costProxy` not worse than baseline by $> 10\%$, and $\ge 30$
-    `agent_run` samples present in each measurement window (baseline and Days
-    51–80). If a window has $< 30$ samples, the metric gate is reported as
-    `insufficient data` and is treated as not met.
-- **Mandatory reliability gate:**
-  - **Manual route fix:** any `/gemini-enable`, `/gemini-heal`, or
-    `/gemini-restore` invocation, or any incident that remains unresolved for
-    more than 15 minutes.
-  - **Not a manual route fix:** restarting OMP, Orca, or the monitor after a
-    reboot; running the one-time `/gemini-auto-restore` opt-in; reading the
-    monitor.
-  - **Proof:** `bun run reliability:report --days=30 --machine all` exits 0 only
-    when every machine has route-check coverage for every day, zero manual
-    interventions, and zero late incidents during the Days 51–80 proof window
-    (or the single permitted restart window).
-  - **Precedence:** the cycle fails if the reliability gate fails, even if
-    execution-quality thresholds are met.
-- **Capacity:** sized for ~5 hours/week including operating cadence; strictly
-  one feature at a time.
-
-## Baseline
-
-- Reliability history SQLite database (`omp-toolkit-history.db`) with
-  machine identity and `bun run reliability:report`.
-- Gemini health probe client and circuit breaker with managed exclusions.
-- Opt-in auto-restore sidecar (`gemini-health-auto-restore.json`),
-  `/gemini-auto-restore` command, and in-process idle recovery timer
-  (`RECOVERY_INTERVAL_MS = 300_000`).
-- Cross-process lock (`apps/omp-extension/src/lock.ts`) wrapping all mutating
-  health paths (`applyHeal`, `restoreManaged`, `maybeRestoreManaged`,
-  `removeExclusion`, `writePolicies`).
-- Eval-locked model pairing (Pair A `deepseek/deepseek-flash`) and versioned
-  plan-to-executor handoff contract template (`templates/plan-exec-handoff/`).
-- Weekly pacing, multi-provider schedule, desktop tray widget, and TUI
-monitor are shipped and maintain-only this cycle.
-- Doctor diagnostic CLI (`scripts/doctor.ts`, `bun run doctor`) verifying OMP
-  version, installed files, history DB, machine identity, lock, and Orca.
-- Incident lifecycle alerting: `HealthSnapshot.incident`, `incident` and
-  `incident_resolved` event logging, PowerShell toast dispatch
-  (`scripts/windows-toast.ps1`), and TUI incident banner.
-- Execution quality telemetry: `"agent_run"` history event recording on
-  `agent_end` and `bun run execution:report` reporting CLI.
-- Two-machine rollout architecture and Machine 2 checklist documented in
-  `docs/runbook.md`.
-- **Known gaps:**
-  - Machine 2 is not yet installed (operator action, Phase 0 remainder).
-  - Account `<account>` is not yet opted in to auto-restore (sidecar absent;
-    operator action, Phase 0 remainder).
-  - No execution-quality baseline yet established (telemetry started accruing
-    on Cycle Day 1; see Status).
-
-> This roadmap is public. Personal machine names, account emails, and terminal
-> handles must not be added to it.
-
-## Phase table
-
-| Phase | Days  | Theme                        | Effort  | Exit gate                                                                                   |
-| ----- | ----: | ---------------------------- | ------: | ------------------------------------------------------------------------------------------- |
-| 0     |  1–14 | Close reliability gaps       | 12–16 h | doctor all-PASS on both machines; incident write→resolve proven; machine 2 installed        |
-| 1     | 15–32 | Instrument execution quality | 10–14 h | `execution:report` prints pooled baseline from $\ge 14$ days and $\ge 30$ samples          |
-| 2     | 33–50 | Improve execution quality    |  8–12 h | Each attempted menu intervention kept or reverted by 7-day keep/kill in Monday review notes |
-| 3     | 51–90 | Prove both gates             |   4–6 h | `reliability:report --days=30` exit 0 on both machines and north-star thresholds met        |
-
-### Strict dependencies and slippage rules
-
-- Dependencies are strict: Phase 1 starts only after Phase 0's doctor and
-  incident tests pass; Phase 2 starts only after Phase 1's baseline report is
-  recorded; Phase 3 starts strictly on Day 51.
-- **Day 51 never moves.** The 30-day proof requires an uninterrupted window
-  on a frozen system.
-- If Phase 0 or Phase 1 slips, Phase 0 and Phase 1 exit gates may **never** be
-  waived. Slippage is absorbed first by cutting Phase 2 menu interventions from
-  the bottom of the ranking, and second by consuming the Days 81–90 buffer.
-- Phase 1 baseline observation may shrink only to the 14-day minimum.
+> **Beneficiary:** Solo operator (two independent Windows workstations; four providers: Google Antigravity, OpenAI Codex, Muse Code, DeepSeek)  
+> **Horizon:** Continuous open backlog (MoSCoW prioritized; strictly one feature or intervention at a time)  
+> **Operator Capacity:** ~5 hours/week (~20 hours/month)  
+> **Evidence Foundation:** Backed by the empirical research register in [`docs/research/moscow-feature-prioritization.md`](research/moscow-feature-prioritization.md)  
 
 ---
 
-## Status (as of 2026-10-28 — Cycle Day 1)
+## North Star & Operating Principles
 
-Phase 0 and Phase 1 **code** was implemented and deployed live to Machine 1 on
-Cycle Day 1, ahead of the phase calendar. This early code deployment does not
-alter the 90-day phase calendar: baseline accrual began on Day 1, Phase 2
-menu interventions commence on Day 33, and the Day 51 system freeze and proof
-start remain immovable. No phase exit gate is fully met as of Day 1.
+All roadmap development is evaluated against these non-negotiable operational principles:
 
-### Phase verdict summary
-
-| Phase | Verdict | Evidence | Remaining |
-| ----- | ------- | -------- | --------- |
-| **0** | **Code complete (machine 1) — exit gate not met** | Commits `7796559`, `83bffe6`, `0cc1776`, `b3421f8`, `3dfa33b`; `bun run doctor` 6/6 PASS on machine 1; `bun run check` 346 tests pass | Machine 2 install + doctor verification (operator, runbook checklist); `/gemini-auto-restore <account>` opt-in; live forced-incident smoke (unit-tested only); probe-pin upstream audit |
-| **1** | **Implemented — baseline accruing, exit gate not met** | Commit `73eabd2`; live `bun run execution:report --days=14` operational | $\ge 14$ consecutive days accrual and $\ge 30$ pooled runs across both machines; baseline recorded in Monday review note; cost-proxy token validation |
-| **2** | **Not started** | Phase scheduled for Days 33–50 | Ranked intervention menu execution starting Day 33 |
-| **3** | **Not started** | Phase scheduled for Days 51–90 | Day 51 system freeze and 30-day proof window (Days 51–80) |
-
-### Day-1 metric snapshot
-
-The following metrics represent an initial Day-1 operational snapshot, **not**
-the finalized Phase 1 baseline:
-
-- **System Diagnostics (`bun run doctor`):**
-  - Machine 1: 6/6 PASS (`omp-version`, `installed-files`, `history-db`, `machine-id`, `lock-file`, `orca-terminal`), exit 0.
-- **Execution Quality (`bun run execution:report --days=14`):**
-  - Machine 1 / Pooled: 5 runs, 0 errors (`0.0%` error rate), 36 sessions, `costProxy = 1200` (`meanTok`), 0 manual interventions, exit 0.
-- **Route Reliability (`bun run reliability:report`):**
-  - `--days=1`: 35 checks, 35 ok, 0 hang, 0 error, 0 auth, 66 restores, 0 manual fixes, 0 incidents, 0 late, exit 0.
-  - `--days=7`: 224 checks, 198 ok, 18 hang, 7 error, 1 auth, 69 restores, 0 manual fixes, 0 incidents, 0 late, `monitor-age = stale`, exit 1 (6/7 days covered; pre-cycle history, not proof window).
-
-### Known issues
-
-- **costProxy validity unverified:** All initial 5 `agent_run` rows recorded
-  exactly `tok=1200`. While the token branch is active in `execution:report`,
-  a constant token value across diverse turns is unverified. Next action:
-  confirm which payload property `extractTokenTotal` matched in real OMP
-  turns before relying on `costProxy` for baseline decisions; error-rate
-  telemetry is unaffected. Until verified, `meanTok` values are provisional.
-- **Monitor heartbeat stale:** `reliability:report` indicates
-  `monitor-age = stale` on machine 1. Start continuous monitor
-  (`bun run monitor:orca`) per operating cadence.
-- **Probe pins unverified against upstream:** `DEFAULT_MODEL_WIRE = "gemini-3.8-flash-high"`
-  and `UA_VERSION = "2.24.0"` were left unchanged; no local upstream oracle was
-  available during implementation.
-
-### Deviations from spec (as-built)
-
-- **Snapshot file alignment:** Fixed snapshot producer in `health-manager.ts`
-  to write `gemini-health-latest.json` (aligning with `resolveSnapshotPath()`
-  and all consumers); the previous implementation wrote an unread
-  `gemini-health-snapshot.json`.
-- **Toast script deployment:** Added copy step in `scripts/install/install.ts`
-  to deploy `scripts/windows-toast.ps1` to `~/.omp/agent/scripts/windows-toast.ps1`
-  with timestamped backups.
-- **TUI mode gate for session telemetry:** `agent_run` recording in
-  `auto-heal.ts` is explicitly gated to `ctx.mode === "tui"` and `ctx.agent.kind === "main"`
-  to match the `session_start` recording gate and keep runs/session denominators
-  accurate.
-- **Doctor lock and Orca semantics:** `scripts/doctor.ts` passes a fresh lock
-  if its holding PID is currently active (avoiding false failures during active
-  healing) and accepts Orca's `{ ok: true, result: ... }` response envelope in
-  addition to raw JSON arrays.
-- **Execution report window:** `scripts/reliability/execution-report.ts`
-  evaluates a rolling `now - days * 86_400_000` window, whereas `reliability:report`
-  uses UTC calendar boundaries.
-
-### Pending operator actions
-
-1. **Install Machine 2:** Execute the 7-step checklist in `docs/runbook.md`
-   `## Two-machine rollout` on machine 2, then run `bun run doctor` and
-   `bun run reliability:report --days=1` there.
-2. **Opt in `<account>`:** Run `/gemini-auto-restore <account>` on machine 1 to
-   create `~/.omp/agent/gemini-health-auto-restore.json`.
-3. **Start background monitor:** Launch `bun run monitor:orca` to ensure fresh
-   heartbeat timestamps.
-4. **Begin review cadence:** Initialize the machine-local weekly review note on
-   Monday for tracking weekly reliability and execution reports.
+1. **Measurably Better Execution Quality:**
+   - North-star metric: `errorEndedRate = agent_run(status="error") / agent_run(all)`. Target: $\ge 25\%$ reduction compared to initial baseline.
+   - Cost containment: `costProxy` (mean tokens per non-error run) not degraded by $> 10\%$ relative to baseline.
+   - Measurement gate: $\ge 30$ `agent_run` samples present in every evaluation window.
+2. **Unwaivable Route Reliability Gate:**
+   - 30 consecutive days of zero manual route fixes (`/gemini-enable`, `/gemini-heal`, `/gemini-restore`) across both machines via `bun run reliability:report --days=30 --machine all`.
+   - Zero unresolved incidents ($> 15$ minutes) on either workstation.
+3. **Core Architectural Invariants:**
+   - **Zero Idle Tokens (ADR-0001):** Monitoring performs passive file reads only; no scheduled background probes while the agent is idle.
+   - **Two-Machine Independence:** Each workstation operates on local SQLite state (`omp-toolkit-history.db`); zero cross-machine sync or shared networking.
+   - **Source-Only Distribution (ADR-0003):** Runs directly from source checkout with Bun; zero public npm publishing or binary distribution overhead.
+   - **Pure Domain Boundary:** `packages/core` contains zero filesystem I/O, zero network, zero process calls, and zero ANSI escapes.
 
 ---
 
-## Phase 0 — Close reliability gaps (Days 1–14)
+## Must Have
 
-**Outcome:** the mandatory reliability proof becomes honest, complete, and
-operable across both machines.
+Critical prerequisites and metric integrity fixes without which daily operation, the reliability proof, or north-star measurement fails.
 
-### Work items
+### Operational Prerequisites (Zero Development)
 
-1. Add `scripts/doctor.ts` and `"doctor": "bun scripts/doctor.ts"` in
-   `package.json`:
-   - check OMP version via `omp --version`;
-   - check installed extension and script files exist;
-   - check history DB opens and schema version is current;
-   - check machine id file (`omp-toolkit-machine.json`) exists and is valid;
-   - check lock file (`omp-toolkit.lock`) is absent, stale, or held by a live pid (FAIL only on corrupt or fresh orphaned lock);
-   - check Orca floating selector with
-     `orca terminal list --worktree id:global-floating-terminal --json`;
-   - print PASS/FAIL per check and exit 1 on any FAIL.
+These operator actions require no codebase modifications and precede feature deployment:
 
-2. Document the two-machine rollout in `docs/runbook.md`:
-   - install on machine 1, verify baseline health and history;
-   - install the same independent setup on machine 2 during Phase 0;
-   - each machine has its own agent dir, history DB, machine id, and monitor;
-   - no sync, no shared config, no cross-machine lock.
+1. **Install Machine 2:** Execute the 7-step checklist in [`docs/runbook.md`](runbook.md#two-machine-rollout) on workstation 2; confirm all-PASS via `bun run doctor`.
+2. **Auto-Restore Opt-In:** Run `/gemini-auto-restore <account>` on workstation 1 to initialize `gemini-health-auto-restore.json`, preventing unmanaged lockout from breaking the 30-day proof.
+3. **Continuous Monitor Heartbeat:** Run `bun run monitor:orca` as a background process to ensure fresh heartbeat coverage in `reliability:report`.
+4. **Baseline Accrual:** Operate normally across both machines for $\ge 14$ consecutive days to accrue $\ge 30$ pooled `agent_run` telemetry records.
 
-3. Implement incident recording, Windows toast notifications, and monitor banner:
-   - Add `scripts/windows-toast.ps1` with `param([string]$Title, [string]$Message)`.
-     Try, in order:
-     1. `BurntToast` PowerShell module if available;
-     2. WinRT `Windows.UI.Notifications.ToastNotificationManager` with
-        `CreateToastNotifier("OMP Toolkit")`;
-     3. exit 0 without toast after printing `toast_unavailable`.
-     The extension invokes it with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File <path> -Title "OMP Toolkit" -Message <text>`. Toast failures must not fail a health check.
-   - Update `HealthSnapshot` in `packages/core/src/types.ts` with optional:
-     `incident?: { id: string; at: number; kind: "all-failed" | "restore-failed" | "lock-timeout" | "history-error"; detail: string }`.
-   - In `apps/omp-extension`: set `incident` when every probed account fails,
-     when restore throws, when lock times out, or when history DB throws. Write
-     an `incident` history event with `incidentId = incident.id` and invoke the
-     toast (throttled to 1 toast per `kind` per 15 minutes).
-   - Clear `incident` and write `incident_resolved` with the matching
-     `incidentId` after a subsequent healthy check or successful restore.
-   - In `packages/tui/src/provider-usage-view.ts`: add one red line immediately
-     below the summary when `options.showHealth` is active and the snapshot has
-     an incident newer than 24 hours: `INCIDENT <kind> · <age> · <detail>`,
-     truncating detail to fit the 86-column frame. Footer continues to show
-     `health <age>`.
+### Development Musts
 
-4. Minor maintenance items:
-   - Verify probe pins (`MODEL_WIRE`, `PI_AI_ANTIGRAVITY_VERSION` in
-     `apps/omp-extension/src/probe-client.ts`) against upstream OMP and bump if
-     stale.
-   - Audit remaining persistence/`applyHeal` flow tests in `HANDOFF.md` §8;
-     add only missing test coverage.
+| ID | Feature / Task | Target / Location | Done-Signal | Effort |
+| :--- | :--- | :--- | :--- | :---: |
+| **`C01`** | **Fix & Validate `costProxy` Token Extraction** | `apps/omp-extension/src/auto-heal.ts:32-67,254-256` | `bun run execution:report --days=14` outputs distinct `tok=<n>` values across sessions of varying length, resolving the constant `tok=1200` anomaly. | M ($5\text{ h}$) |
 
-5. Machine 2 setup and manual account opt-in:
-   - Run `bun run install:omp` on machine 2, initializing its independent
-     history DB, machine id, and monitor.
-   - Run `/gemini-auto-restore <account>` on machine 1 to opt in `<account>`.
-     Setup actions taken during Phase 0 precede the proof window and are not
-     counted as manual interventions.
-
-### Acceptance
-
-- `bun run check` passes.
-- `bun run doctor` reports all PASS on machine 1 and machine 2, and is safe
-  to run while the monitor is active.
-- Simulate an all-accounts-failed snapshot in a test harness: monitor renders
-  one `INCIDENT` line, history DB gains one `incident` event, and toast dispatch
-  is attempted.
-- Follow with a healthy check: `incident_resolved` is written and the incident
-  banner clears.
-- Machine 2 runs `bun run reliability:report --days=1` and prints its own
-  distinct machine id with $\ge 1$ check.
+*Rationale:* In `auto-heal.ts:254-256`, token extraction evaluates `event` and `last`, but `parseLastAssistantMessage` strips `usage`, causing all recorded `agent_run` events to fall back to a fixed `tok=1200`. Until resolved, `costProxy` cannot be trusted for baseline execution quality comparisons.
 
 ---
 
-## Phase 1 — Instrument execution quality (Days 15–32)
+## Should Have
 
-**Outcome:** execution quality and cost proxies are automatically recorded
-from real sessions, establishing the auditable baseline for the cycle.
+High-leverage execution quality and reliability improvements backed by measured empirical benchmarks or regression prevention.
 
-### Work items
+| ID | Feature / Task | Target / Location | Done-Signal | Effort |
+| :--- | :--- | :--- | :--- | :---: |
+| **`C02`** | **Lock Pair A Model Roles in User Config** | `~/.omp/agent/config.yml` | `config.yml` contains `deepseek/deepseek-flash` for plan & default with `thinking_level: low`; low cost proxy confirmed in `execution:report`. | S ($1\text{ h}$) |
+| **`C03`** | **Apply Handoff Contract Template** | `templates/plan-exec-handoff/` | `/template apply plan-exec-handoff` executed; `AGENTS.md` enforces zero-invention planning and 2-strike verification. | S ($1\text{ h}$) |
+| **`C04`** | **Audit Probe Wire Pins vs. Upstream Client** | `apps/omp-extension/src/probe-client.ts:10,17` | `DEFAULT_MODEL_WIRE` and `UA_VERSION` verified against upstream Antigravity client; audit logged in `docs/runbook.md`. | S ($1\text{ h}$) |
+| **`C05`** | **Add Missing Colocated Tests for Core Surfaces** | `apps/omp-extension/src/commands.ts`<br>`scripts/reliability/*.ts` | Colocated unit tests for slash commands, `gemini_health` tool, and reliability reporting CLIs pass in `bun run check`. | M ($5\text{ h}$) |
+| **`C06`** | **Deduplicate Desktop & CLI Pacing Stores** | `apps/desktop/src/pacing-store.ts`<br>`apps/provider-usage/src/pacing-store.ts` | Single shared store helper extracted outside `packages/core` (preserving core zero-I/O purity); duplicate files removed; `check` passes. | S ($1\text{ h}$) |
 
-1. Confirm session payload telemetry:
-   - Inspect live `agent_end` event object and `ctx.models.current()` in
-     `apps/omp-extension/src/auto-heal.ts` for token usage fields.
-   - **Pre-decided branch:** if token counts are exposed on `agent_end`,
-     `costProxy` = mean tokens per non-error run; otherwise `costProxy` =
-     `agent_run(all) / session_start` (runs per session).
-
-2. Extend domain history types and wire session event recording:
-   - Add `"agent_run"` to `HistoryEventKind` in `packages/core/src/history.ts`.
-   - In `apps/omp-extension/src/auto-heal.ts`: on `agent_end` when
-     `ctx.agent.kind === "main"` and `ctx.mode === "tui"` (same gate as
-     `session_start` recording, so runs/session denominators match), record
-     one `agent_run` history event:
-     - `provider`: current model provider from `ctx.models.current()`;
-     - `status`: `"error"` if last assistant message `stopReason === "error"`,
-       else `"ok"`;
-     - `detail`: model id (plus formatted `tok=<n>` if token counts exist).
-   - Wrap history writes in try/catch; history failure must never crash an
-     agent session (emit at most one process warning).
-
-3. Build execution quality reporting CLI:
-   - Add `scripts/reliability/execution-report.ts` and `"execution:report": "bun scripts/reliability/execution-report.ts"` in `package.json`.
-   - Flags: `--days=<n>` (default 14), `--machine=<id|all>` (default `all`).
-   - Output one table row per machine:
-     `machine | days | runs | error | errorRate | sessions | costProxy | manual`.
-   - Output a final `POOLED` summary row summing runs, errors, and sessions
-     arithmetically (never averaging percentages).
-   - If history DB is missing or has zero `agent_run` rows, print
-     `no execution data` and exit 1.
-
-4. Accrue baseline data:
-   - Operate normally across both machines for $\ge 14$ consecutive days after
-     telemetry lands.
-   - At Phase 1 exit gate, run `bun run execution:report --days=14` on machine 1
-     and machine 2; record printed tables and the pooled baseline rate in that
-     week's Monday review note.
-
-### Acceptance
-
-- `bun run check` passes.
-- Trigger an agent session ending in success and one ending in error;
-  `agent_run` rows accumulate in `omp-toolkit-history.db` with matching
-  status.
-- `bun run execution:report --days=14` on machine 1 prints $\ge 30$ runs with
-  a calculated error rate.
-- Forcing a history write failure emits one warning without interrupting the
-  agent session.
-- Baseline outputs from both machines are recorded in the weekly review note,
-  documenting the baseline `errorEndedRate` and `costProxy`.
+*Detailed Rationale:*
+- **`C02`:** Empirical 2x2 scorecard (`model-pairing-eval-results.md`) proves Pair A achieves 100% solve rate across tasks T1–T5 at $\$0.02$ cost (vs. $\$0.15+$ for monolithic frontier runs).
+- **`C03`:** Prevents executor initiative hallucination, which research documents as causing benchmark solve rates to drop from $36.97\%$ to $23.63\%$ when unconstrained.
+- **`C04`:** Verifies `gemini-3.8-flash-high` and `UA_VERSION = "2.24.0"` against Google gateway deprecation.
+- **`C05`:** Covers 530 LOC of untested slash command routing in `commands.ts` and reporting math in `execution-report.ts`.
+- **`C06`:** Eliminates 88 LOC of duplicate atomic file operations between desktop and terminal CLI.
 
 ---
 
-## Phase 2 — Improve execution quality (Days 33–50)
+## Could Have
 
-**Outcome:** apply strictly pre-evidenced interventions sequentially, keeping
-only changes that measurably maintain or improve execution quality.
+Contingent enhancements, minor ergonomics, and external developer tooling. These are deferred until specific triggers fire or core Shoulds are complete.
 
-### Ranked intervention menu
-
-Interventions must be executed one at a time in this exact priority order. An
-item may be skipped only with written justification recorded in the Monday
-review note; unranked or off-menu interventions are prohibited:
-
-1. **Lock evaluated model roles in user config:**
-   - Manually apply the winning Pair A configuration (`deepseek/deepseek-flash`
-     for plan and default) to `~/.omp/agent/config.yml` with executor
-     `thinking_level: low`, reserving `high` for single verification retries.
-2. **Apply plan-to-executor handoff contract template:**
-   - Apply `templates/plan-exec-handoff/` as the default working persona via
-     `/template apply plan-exec-handoff`.
-3. **Re-evaluate model pairings on catalog shifts:**
-   - Run `bun scripts/eval/eval-model-roles.ts --live --report` at phase start.
-     Re-lock roles only if the scorecard winner changes by the established
-     decision rule (first-pass solve rate $\to$ plan acceptance $\to$ cost).
-4. **Targeted wire normalizer fixes:**
-   - Apply fixes to `apps/omp-extension/src/gemini-normalizer.ts` only when an
-     active wire failure is reproduced by a failing test in the test suite.
-5. **Tighten context-economy rules:**
-   - Adjust `.omp/AGENTS.md` and template instructions only where Phase 1
-     baseline data exposes clustered error patterns by provider or model.
-
-### Keep / kill measurement rule
-
-- After applying an intervention, observe for $\ge 7$ consecutive days.
-- **Keep:** pooled `errorEndedRate` over the 7-day window does not exceed
-  the trailing 7 days before it, **and** `costProxy` is not worse by $> 10\%$.
-- **Kill / Revert:** if error rate regresses or cost exceeds threshold, revert
-  the configuration or code change immediately and record the revert in the
-  Monday review note.
-- If a 7-day window yields $< 30$ runs, extend observation until 30 runs
-  accrue or Day 50 is reached.
-
-### Acceptance
-
-- Every attempted intervention has a documented kept/reverted verdict with
-  supporting before/after report metrics in the Monday review notes.
-- `bun run check` passes after every code or template modification.
-- Unattempted menu items are explicitly accounted for as cut under the
-  Day 51 slippage rule or skipped with recorded reasons.
+| ID | Feature / Task | Target / Location | Contingent Trigger / Condition | Effort |
+| :--- | :--- | :--- | :--- | :---: |
+| **`C07`** | **Re-Evaluate Model Pairings** | `scripts/eval/eval-model-roles.ts` | Trigger: upstream provider catalog shifts, model deprecations, or pricing restructuring. | S ($1\text{ h}$) |
+| **`C08`** | **Targeted Wire-Normalizer Fixes** | `apps/omp-extension/src/gemini-normalizer.ts` | Trigger: an active wire failure reproduced by a failing test in the test suite. | M ($3\text{ h}$) |
+| **`C09`** | **Tighten Context-Economy Instructions** | `.omp/AGENTS.md` | Trigger: baseline telemetry reveals error clusters or token bloat tied to specific prompt sections. | S ($1\text{ h}$) |
+| **`C10`** | **Programmatic Two-Strike Escalation** | `apps/omp-extension/src/auto-heal.ts` | Trigger: baseline execution report reveals multi-strike retry loop cost spikes. | M ($5\text{ h}$) |
+| **`C11`** | **Multi-Account Weekly Pacing** | `packages/core/src/pacing.ts`, `builder.ts` | Convenience: extends pacing ceiling calculation to multi-account sections and non-`muse-code` providers. | M ($3\text{ h}$) |
+| **`C12`** | **Cross-Platform OS Incident Toast** | `apps/omp-extension/src/toast.ts` | Ergonomics: adds macOS (`osascript`) and Linux (`notify-send`) notification support for non-Windows environments. | S ($2\text{ h}$) |
+| **`C13`** | **Desktop Provider Logo for `muse-code`** | `apps/desktop/src/renderer/provider-logos.ts` | Polish: adds SVG brand logo and mapping for `muse-code` in the desktop widget panel. | S ($1\text{ h}$) |
+| **`C14`** | **External Graphify & Repomix Skills** | `skill://graphify` | Tooling: optional external CLI skills for 1M-LOC AST graph retrieval; never bundled as internal repo dependencies. | M ($4\text{ h}$) |
 
 ---
 
-## Phase 3 — Prove both gates (Days 51–90)
+## Won't Have (This Backlog)
 
-**Outcome:** both machines achieve the 30-day zero-manual-fix reliability proof
-under a frozen system while final execution quality is verified.
+Explicitly rejected based on empirical refutation, architectural invariants, or roadmap boundaries:
 
-### Work items
-
-1. **System freeze (Day 51):**
-   - Strictly no new features, refactors, or menu interventions after Day 50.
-   - Code changes permitted during Days 51–90 strictly to fix an active
-     blocking incident. Maintain-only bugfixes to desktop or TUI are allowed
-     only if they touch zero health, policy, or session telemetry code and are
-     logged in the Monday review.
-
-2. **Continuous dual-machine operation:**
-   - Machine 1 and machine 2 run `bun run monitor:orca` and the in-process
-     recovery timer continuously.
-   - Both machines operate with independent state and zero manual policy edits.
-
-3. **Day 80 audit:**
-   - Run `bun run reliability:report --days=30 --machine all` on each machine
-     (must exit 0).
-   - Run `bun run execution:report --days=30 --machine all` on each machine
-     and calculate pooled metrics over Days 51–80.
-
-4. **Days 81–90 buffer:**
-   - Reserved strictly for unexpected regression handling.
-
-### Proof-break and restart rule
-
-- Any manual route fix (`/gemini-enable`, `/gemini-heal`, `/gemini-restore`) or
-  any incident remaining unresolved $> 15$ minutes breaks the 30-day count.
-- **One restart permitted:** if a break occurs on or before Day 60, the
-  operator may restart the 30-day window, concluding by Day 90 (consuming the
-  buffer).
-- If a break occurs after Day 60, or if a second break occurs, the cycle
-  concludes at Day 90 as **failed**. Final reports are run and published in the
-  review note without alteration.
-
-### Acceptance
-
-- `bun run check` passes.
-- On Day 80 (or end of restart window), `bun run reliability:report --days=30 --machine all`
-  exits 0 on machine 1 and machine 2.
-- `bun run execution:report --days=30` pooled data contains $\ge 30$ samples
-  and satisfies the $\ge 25\%$ error-rate improvement and $\le 10\%$ cost
-  threshold.
-- `git log` over Days 51–90 confirms compliance with the feature freeze.
+- **`C15`: Reverse Proxy Stream Compression (`billion-context`) — REJECTED.**
+  Empirically refuted on 2026-10-29 (`billion-context-evaluation.md`). Produced 0% token savings on agent tasks; hardcoded 50k threshold stayed idle; expanded request payloads by $+8.3\%$ ($+11.1\text{ KiB}$) per turn; breaks byte-stable prefix caching (93–94% hit rate); license attribution conflicts with clean distribution.
+- **`C16`: Graphify Inside `packages/core` & In-Process Repo Map — PROHIBITED.**
+  Placing Tree-sitter parsing or file indexing into `packages/core` violates pure zero-I/O domain boundaries. Compiler LSP (`xd://lsp`) and `ast-grep outline` already provide deterministic symbol precision at $\sim 50\text{--}150$ tokens per query without persistent indexing overhead.
+- **`C17`: Public Packaging, npm Publishing & Signed Binaries — EXCLUDED.**
+  Source-only distribution policy (ADR-0003). The solo operator executes directly from git checkouts; public release infrastructure wastes weekly capacity.
+- **`C18`: Standalone Web Dashboard Server — EXCLUDED.**
+  The desktop Electron tray widget and TerminUI terminal monitor completely satisfy operator observability without maintaining a separate HTTP server process.
+- **`C19`: Provider SDK & Generalized Extension Interfaces — EXCLUDED.**
+  Purpose-built for OMP; creating generic provider SDK abstractions is dead-weight complexity for a fixed 4-provider deployment.
+- **`C20`: Additional Usage Providers (Copilot, Anthropic) — EXCLUDED.**
+  Scope is strictly locked to the 4 active providers (Google Antigravity, OpenAI Codex, Muse Code, DeepSeek).
+- **`C21`: Cross-Platform Reliability Proof Parity — EXCLUDED.**
+  The 30-day zero-manual-fix reliability proof is strictly scoped to two Windows workstations (ADR-0004). macOS and Linux remain maintain-only best-effort.
+- **`C22`: Periodic Background Idle Route Probing — PROHIBITED.**
+  Probing routes while no session is active wastes provider token quotas, violating the zero-idle-token invariant (ADR-0001).
+- **`C23`: Cross-Machine State Synchronization & Distributed DB — PROHIBITED.**
+  Violates the two-machine independence invariant. Workstations maintain isolated local SQLite databases without network synchronization.
+- **`C24`: Lower-Model Fallback or Thinking Degradation on Error — PROHIBITED.**
+  Silently falling back to weaker models or reducing thinking levels during errors degrades code quality. Route circuit breaking and auto-restore are the sole authorized remedies.
 
 ---
 
-## Operating cadence
+## Recommended Execution Sequence
 
-- **Monday, 15 minutes:**
+Development proceeds strictly one item at a time in the following priority order:
+
+```mermaid
+graph TD
+    classDef must fill:#ef4444,stroke:#b91c1c,stroke-width:2px,color:#fff;
+    classDef should fill:#f59e0b,stroke:#d97706,stroke-width:2px,color:#fff;
+
+    M1["1. [MUST] C01: Fix costProxy Token Extraction<br/>(apps/omp-extension/src/auto-heal.ts)"]:::must
+    S1["2. [SHOULD] C02: Lock Pair A Model Roles<br/>(~/.omp/agent/config.yml)"]:::should
+    S2["3. [SHOULD] C03: Apply Handoff Contract Template<br/>(templates/plan-exec-handoff/)"]:::should
+    S3["4. [SHOULD] C04: Audit Probe Wire Pins vs. Upstream<br/>(apps/omp-extension/src/probe-client.ts)"]:::should
+    S4["5. [SHOULD] C05: Add Missing Colocated Tests<br/>(commands.test.ts, reliability/*.test.ts)"]:::should
+    S5["6. [SHOULD] C06: Deduplicate Pacing Stores<br/>(apps/desktop/ & apps/provider-usage/)"]:::should
+
+    M1 --> S1 --> S2 --> S3 --> S4 --> S5
+```
+
+1. **`[MUST]` Fix & Validate `costProxy` Token Extraction (`C01`)**
+   - *Target:* `apps/omp-extension/src/auto-heal.ts:32-67,254-256`.
+   - *Action:* Inspect raw `agent_end` event payload to capture actual token totals (`totalTokens`, or `inputTokens + outputTokens`) before falling back to `last` message details.
+   - *Done Signal:* `bun run execution:report --days=14` outputs distinct `tok=<n>` values across sessions of varying length, resolving constant `tok=1200` output.
+2. **`[SHOULD]` Lock Pair A Model Roles in User Config (`C02`)**
+   - *Target:* `~/.omp/agent/config.yml`.
+   - *Action:* Set `modelRoles: { plan: "deepseek/deepseek-flash", default: "deepseek/deepseek-flash" }` with executor `thinking_level: low`.
+   - *Done Signal:* Subsequent test sessions log `provider = deepseek` in `omp-toolkit-history.db` with expected low latency and cost.
+3. **`[SHOULD]` Apply Plan-to-Executor Handoff Contract Template (`C03`)**
+   - *Target:* `~/.omp/agent/AGENTS.md`.
+   - *Action:* Run `/template apply plan-exec-handoff` inside OMP.
+   - *Done Signal:* `~/.omp/agent/AGENTS.md` matches `templates/plan-exec-handoff/AGENTS.template.md`, activating zero-invention planning and 2-strike verification.
+4. **`[SHOULD]` Audit Probe Wire Pins vs. Upstream Antigravity Client (`C04`)**
+   - *Target:* `apps/omp-extension/src/probe-client.ts:10,17`.
+   - *Action:* Verify `DEFAULT_MODEL_WIRE = "gemini-3.8-flash-high"` and `UA_VERSION = "2.24.0"` against the upstream OMP client release.
+   - *Done Signal:* Audit record logged in `docs/runbook.md`; updated pins committed if changed.
+5. **`[SHOULD]` Add Missing Colocated Tests for Core Surfaces (`C05`)**
+   - *Target:* `apps/omp-extension/src/commands.test.ts`, `scripts/reliability/execution-report.test.ts`, `scripts/reliability/reliability-report.test.ts`.
+   - *Action:* Implement deterministic unit tests covering command registration, error boundaries, argument parsing, and report table output.
+   - *Done Signal:* `bun run check` executes all new test suites with 100% pass rate.
+6. **`[SHOULD]` Deduplicate Desktop & CLI Pacing Stores (`C06`)**
+   - *Target:* Shared adapter utility outside `packages/core`.
+   - *Action:* Extract common `writeFileAtomic` and `recordAndLoadPacingSamples` logic without violating `packages/core` purity.
+   - *Done Signal:* Duplicate files in `apps/desktop/` and `apps/provider-usage/` removed; both import shared helper; `bun run check` passes.
+
+---
+
+## Operating Cadence
+
+To maintain reliability and track execution quality without administrative overhead:
+
+- **Monday (15 minutes):**
   - Run `bun run reliability:report --days=7`.
-  - Run `bun run execution:report --days=7` (once Phase 1 telemetry lands).
-  - Select at most one fix or intervention for the week.
-  - Append report tables and decisions to the machine-local weekly review note
-    (never committed to git, as it contains local hostnames).
-- **Friday, 10 minutes:**
-  - Confirm `monitor-age` is fresh on both machines.
-  - Backup history database: copy `omp-toolkit-history.db` to
-    `~/.omp/agent/backups/history-<YYYY-MM-DD>.db`.
-- **Incident response:**
+  - Run `bun run execution:report --days=7`.
+  - Select at most one fix or intervention from the sequence above for the week.
+  - Append report metrics and keep/revert decisions to the machine-local weekly review note.
+- **Friday (10 minutes):**
+  - Confirm `monitor-age` is fresh on both workstations.
+  - Backup history database: copy `omp-toolkit-history.db` to `~/.omp/agent/backups/history-<YYYY-MM-DD>.db`.
+- **Incident Response:**
   - Run `bun run doctor`.
   - Read monitor `INCIDENT` banner.
-  - Never edit policies by hand unless doctor/report identifies an unrecoverable
-    lock or file corruption failure.
-
----
-
-## Definition of done
-
-The 90-day roadmap is complete when all of the following conditions are met:
-
-1. **North-star execution quality met:** pooled `errorEndedRate` over the
-   30-day proof window (Days 51–80) improved by $\ge 25\%$ compared to Phase 1
-   baseline, with `costProxy` not worse by $> 10\%$, and $\ge 30$ runs
-   recorded in both baseline and proof windows.
-2. **Reliability proof exit 0:** `bun run reliability:report --days=30 --machine all`
-   exits 0 on machine 1 and machine 2.
-3. **Zero manual fixes:** 0 manual route interventions on both machines
-   during the proof window.
-4. **Zero late incidents:** 0 incidents unresolved after 15 minutes on either
-   machine.
-5. **Fresh heartbeats:** monitor heartbeat is fresh on both machines.
-6. **No manual edits:** no routing policy was modified by hand during the
-   proof window.
-7. **Independence:** machine 2 operated entirely on local state without
-   cross-machine sync or shared storage.
-8. **Audited interventions:** every Phase 2 menu intervention has an
-   empirical kept or reverted verdict logged in the review notes.
-
----
-
-## MoSCoW feature backlog (open horizon)
-
-This open-horizon backlog prioritizes features for the solo operator across two Windows workstations and four providers, without a calendar deadline. Detailed evidence, quantitative benchmark citations, and rejected candidate analyses are documented in [docs/research/moscow-feature-prioritization.md](research/moscow-feature-prioritization.md).
-
-| Tier | Candidate / Task | Done-Signal |
-| :--- | :--- | :--- |
-| **MUST** | **Fix & Validate `costProxy` Token Extraction (`C01`)**<br>`apps/omp-extension/src/auto-heal.ts` | `execution:report --days=14` outputs distinct `tok=<n>` values across sessions of varying length, resolving constant `tok=1200` anomaly. |
-| **SHOULD** | **Lock Pair A Model Roles in User Config (`C02`)**<br>`~/.omp/agent/config.yml` | `config.yml` contains `deepseek/deepseek-flash` with `thinking_level: low`; `execution:report` verifies execution with low cost proxy. |
-| **SHOULD** | **Apply Handoff Contract Template (`C03`)**<br>`~/.omp/agent/AGENTS.md` | `/template apply plan-exec-handoff` executed; zero-invention contract active. |
-| **SHOULD** | **Audit Probe Wire Pins vs Upstream (`C04`)**<br>`apps/omp-extension/src/probe-client.ts` | Pins verified against upstream OMP 18.12.x; audit logged in `docs/runbook.md`.<br>*Conflict:* Off-menu during Phase 2; execute during Phase 0 maintenance or post-Day 90. |
-| **SHOULD** | **Add Missing Colocated Tests (`C05`)**<br>`commands.test.ts`, `reliability/*.test.ts` | Colocated unit tests for slash commands and report CLIs pass in `bun run check`.<br>*Conflict:* Off-menu during Phase 2; execute during Phase 0 maintenance or post-Day 90. |
-| **SHOULD** | **Deduplicate Pacing Sample Stores (`C06`)**<br>`apps/desktop/` & `apps/provider-usage/` | Common store helper extracted without violating `packages/core` zero-I/O purity.<br>*Conflict:* Off-menu during Phase 2; execute during Phase 0 maintenance or post-Day 90. |
-
-- **Could (Contingent / Ergonomics):**
-  - `C07`: Re-evaluate model pairings on catalog shifts (`scripts/eval/eval-model-roles.ts`) — Trigger: upstream provider model or pricing change.
-  - `C08`: Gemini wire-normalizer targeted fixes (`apps/omp-extension/src/gemini-normalizer.ts`) — Trigger: active wire failure reproduced by failing test.
-  - `C09`: Tighten context-economy instructions (`.omp/AGENTS.md`) — Trigger: baseline error clusters by provider/model.
-  - `C10`: Programmatic two-strike escalation in extension (`apps/omp-extension`) — Trigger: baseline reveals multi-strike retry loops.
-  - `C11`: Multi-account weekly pacing calculations (`packages/core/src/pacing.ts`, `builder.ts`).
-  - `C12`: Cross-platform OS incident toast notifications (`apps/omp-extension/src/toast.ts` macOS/Linux).
-  - `C13`: Desktop provider logo for `muse-code` (`apps/desktop/src/renderer/provider-logos.ts`).
-  - `C14`: External Graphify & Repomix developer skills (external `skill://` only, never repo dependencies).
-- **Won't (This Backlog — Prohibited / Excluded / Refuted):**
-  - `C15`: Reverse proxy stream compression (`billion-context`) — *Refuted by measurement (0% token savings, +8.3% payload bloat, idle 50k threshold).*
-  - `C16`: Graphify inside `packages/core` & in-process repo map — *Prohibited (violates pure zero-I/O domain boundary; superseded by LSP).*
-  - `C17`: Public packaging, npm distribution & signed binaries — *Excluded (operator runs from source; deferred past Day 90).*
-  - `C18`: Standalone web dashboard server — *Excluded (desktop widget and TUI monitor satisfy all observability needs).*
-  - `C19`: Provider SDK & generalized plugin interfaces — *Excluded (dead weight for fixed 4-provider deployment).*
-  - `C20`: Additional usage providers (Copilot, Anthropic) — *Excluded (scope locked strictly to 4 active providers).*
-  - `C21`: Cross-platform reliability proof parity — *Excluded (30-day proof strictly scoped to 2 Windows machines).*
-  - `C22`: Periodic background idle route probing — *Prohibited (violates zero-idle-token invariant ADR-0001).*
-  - `C23`: Cross-machine state synchronization / distributed DB — *Prohibited (violates two-machine independence invariant).*
-  - `C24`: Lower-model fallback or thinking degradation on error — *Prohibited (compromises code generation quality).*
-
-- **Freeze Rule Conflict:** Any development scheduled between Days 51 and 90 violates the Day 51 system freeze.
-
-> This roadmap deliberately excludes public distribution, a provider SDK, a web
-> dashboard, and macOS/Linux support until the next roadmap cycle. The desktop
-> widget is a monitor host and does not alter the Windows-only 30-day
-> reliability proof.
+  - Never edit routing policies by hand; let the circuit breaker and recovery timer handle restoration.
