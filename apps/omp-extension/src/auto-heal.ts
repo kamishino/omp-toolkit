@@ -3,31 +3,51 @@ import type { Policy, ProbeResult } from "@omp-toolkit/core";
 import { AUTO_HEAL_COOLDOWN_MS, PROVIDER, RESTORE_STREAK, recordHistory } from "./circuit-breaker";
 import { short } from "./fs-util";
 import { healthManager } from "./health-manager";
-import { closeHistory } from "./history-store";
+import { closeHistory, type HistoryEventInput } from "./history-store";
 import { publish, summary, widgetEnabled } from "./widget";
 
-interface AssistantMessageDetails {
+export interface AssistantMessageDetails {
   role?: string;
   stopReason?: string;
   errorMessage?: string;
   error?: string;
+  usage?: unknown;
+  raw?: unknown;
 }
 
-function parseLastAssistantMessage(event: unknown): AssistantMessageDetails | null {
+export function parseLastAssistantMessage(event: unknown): AssistantMessageDetails | null {
   if (!event || typeof event !== "object" || !("messages" in event)) return null;
   const messages = event.messages;
   if (!Array.isArray(messages) || messages.length === 0) return null;
-  const last = messages[messages.length - 1];
-  if (!last || typeof last !== "object") return null;
 
-  const role = "role" in last && typeof last.role === "string" ? last.role : undefined;
+  let target: Record<string, unknown> | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m && typeof m === "object" && "role" in m && m.role === "assistant") {
+      target = m as Record<string, unknown>;
+      break;
+    }
+  }
+
+  if (!target) {
+    const last = messages[messages.length - 1];
+    if (last && typeof last === "object") {
+      target = last as Record<string, unknown>;
+    }
+  }
+  if (!target) return null;
+
+  const role = "role" in target && typeof target.role === "string" ? target.role : undefined;
   const stopReason =
-    "stopReason" in last && typeof last.stopReason === "string" ? last.stopReason : undefined;
+    "stopReason" in target && typeof target.stopReason === "string" ? target.stopReason : undefined;
   const errorMessage =
-    "errorMessage" in last && typeof last.errorMessage === "string" ? last.errorMessage : undefined;
-  const error = "error" in last && typeof last.error === "string" ? last.error : undefined;
+    "errorMessage" in target && typeof target.errorMessage === "string"
+      ? target.errorMessage
+      : undefined;
+  const error = "error" in target && typeof target.error === "string" ? target.error : undefined;
+  const usage = "usage" in target ? target.usage : undefined;
 
-  return { role, stopReason, errorMessage, error };
+  return { role, stopReason, errorMessage, error, usage, raw: target };
 }
 export function extractTokenTotal(message: unknown): number | null {
   if (!message || typeof message !== "object") return null;
@@ -36,33 +56,84 @@ export function extractTokenTotal(message: unknown): number | null {
     return typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null;
   }
 
-  // 1. Check usage sub-object
-  if ("usage" in message && message.usage && typeof message.usage === "object") {
-    const u = message.usage as Record<string, unknown>;
-    const total = validNum(u.totalTokens);
-    if (total !== null) return total;
-
-    const inTok = validNum(u.input);
-    const outTok = validNum(u.output);
-    if (inTok !== null && outTok !== null) return inTok + outTok;
-
-    const inTok2 = validNum(u.inputTokens);
-    const outTok2 = validNum(u.outputTokens);
-    if (inTok2 !== null && outTok2 !== null) return inTok2 + outTok2;
+  function sumTokens(a: unknown, b: unknown): number | null {
+    const na = validNum(a);
+    const nb = validNum(b);
+    if (na !== null && nb !== null) return na + nb;
+    if (na !== null && nb === null && b === undefined) return na;
+    if (nb !== null && na === null && a === undefined) return nb;
+    return null;
   }
 
-  // 2. Check top-level fields
-  const top = message as Record<string, unknown>;
-  const totalTop = validNum(top.totalTokens);
-  if (totalTop !== null) return totalTop;
+  function extractFromObject(obj: Record<string, unknown>): number | null {
+    // 1. Direct total tokens
+    const total = validNum(obj.totalTokens ?? obj.total_tokens ?? obj.tokens);
+    if (total !== null) return total;
 
-  const inTop = validNum(top.input);
-  const outTop = validNum(top.output);
-  if (inTop !== null && outTop !== null) return inTop + outTop;
+    // 2. input + output
+    const inOut =
+      sumTokens(obj.input, obj.output) ??
+      sumTokens(obj.inputTokens, obj.outputTokens) ??
+      sumTokens(obj.input_tokens, obj.output_tokens);
+    if (inOut !== null) return inOut;
 
-  const inTop2 = validNum(top.inputTokens);
-  const outTop2 = validNum(top.outputTokens);
-  if (inTop2 !== null && outTop2 !== null) return inTop2 + outTop2;
+    // 3. prompt + completion
+    const promptComp =
+      sumTokens(obj.promptTokens, obj.completionTokens) ??
+      sumTokens(obj.prompt_tokens, obj.completion_tokens) ??
+      sumTokens(obj.prompt, obj.completion);
+    if (promptComp !== null) return promptComp;
+
+    return null;
+  }
+
+  // 1. Check usage sub-object
+  if ("usage" in message && message.usage && typeof message.usage === "object") {
+    const fromUsage = extractFromObject(message.usage as Record<string, unknown>);
+    if (fromUsage !== null) return fromUsage;
+  }
+
+  // 2. Check tokenUsage sub-object (OpenAI / standard)
+  if ("tokenUsage" in message && message.tokenUsage && typeof message.tokenUsage === "object") {
+    const fromTokenUsage = extractFromObject(message.tokenUsage as Record<string, unknown>);
+    if (fromTokenUsage !== null) return fromTokenUsage;
+  }
+
+  // 3. Check top-level fields
+  return extractFromObject(message as Record<string, unknown>);
+}
+
+export function extractRunTokens(
+  event: unknown,
+  lastDetails?: AssistantMessageDetails | null,
+): number | null {
+  // 1. Direct event-level token usage
+  const eventTotal = extractTokenTotal(event);
+  if (eventTotal !== null) return eventTotal;
+
+  // 2. Sum over assistant messages in event.messages
+  if (event && typeof event === "object" && "messages" in event && Array.isArray(event.messages)) {
+    let sum = 0;
+    let found = false;
+    for (const msg of event.messages) {
+      if (!msg || typeof msg !== "object") continue;
+      const role = "role" in msg ? msg.role : undefined;
+      if (role !== undefined && role !== "assistant") continue;
+
+      const t = extractTokenTotal(msg);
+      if (t !== null) {
+        sum += t;
+        found = true;
+      }
+    }
+    if (found) return sum;
+  }
+
+  // 3. Fall back to raw last assistant message
+  if (lastDetails?.raw) {
+    const rawTokens = extractTokenTotal(lastDetails.raw);
+    if (rawTokens !== null) return rawTokens;
+  }
 
   return null;
 }
@@ -82,25 +153,28 @@ export const RECOVERY_INTERVAL_MS = Math.max(
   (Number(process.env.GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS ?? 300) || 300) * 1000,
 );
 
+export interface AutoHealCoordinatorOptions {
+  cooldownMs?: number;
+  provider?: string;
+  recoveryIntervalMs?: number;
+  recordHistoryFn?: (events: HistoryEventInput[]) => void;
+}
+
 export class AutoHealCoordinator {
   private lastAutoHeal = 0;
   private running = false;
   private readonly cooldownMs: number;
   private readonly provider: string;
   private readonly recoveryIntervalMs: number;
+  private readonly recordHistoryFn: (events: HistoryEventInput[]) => void;
   private recoveryTimer: NodeJS.Timeout | null = null;
   private warnedNoIdle = false;
 
-  constructor(
-    options: {
-      cooldownMs?: number;
-      provider?: string;
-      recoveryIntervalMs?: number;
-    } = {},
-  ) {
+  constructor(options: AutoHealCoordinatorOptions = {}) {
     this.cooldownMs = options.cooldownMs ?? AUTO_HEAL_COOLDOWN_MS;
     this.provider = options.provider ?? PROVIDER;
     this.recoveryIntervalMs = options.recoveryIntervalMs ?? RECOVERY_INTERVAL_MS;
+    this.recordHistoryFn = options.recordHistoryFn ?? recordHistory;
   }
 
   getRecoveryTimer(): NodeJS.Timeout | null {
@@ -252,9 +326,9 @@ export class AutoHealCoordinator {
           const provider = current?.provider ?? "unknown";
           const modelId = current?.id ? String(current.id) : "unknown";
           const status = last?.stopReason === "error" ? "error" : "ok";
-          const tok = extractTokenTotal(event) ?? extractTokenTotal(last);
+          const tok = extractRunTokens(event, last);
           const detail = tok === null ? modelId : `${modelId} tok=${tok}`;
-          recordHistory([
+          this.recordHistoryFn([
             {
               at: Date.now(),
               kind: "agent_run",

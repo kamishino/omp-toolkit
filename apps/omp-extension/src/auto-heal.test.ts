@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { AutoHealCoordinator, extractTokenTotal } from "./auto-heal";
+import {
+  AutoHealCoordinator,
+  extractRunTokens,
+  extractTokenTotal,
+  parseLastAssistantMessage,
+} from "./auto-heal";
+import type { HistoryEventInput } from "./history-store";
 
 describe("AutoHealCoordinator recovery timer", () => {
   test("initializes with default or custom recovery interval", () => {
@@ -66,23 +72,36 @@ describe("AutoHealCoordinator recovery timer", () => {
 
 describe("extractTokenTotal helper", () => {
   test("extracts tokens from usage sub-object or top-level fields", () => {
-    // usage.totalTokens
+    // usage.totalTokens and usage.total_tokens
     expect(extractTokenTotal({ usage: { totalTokens: 1500 } })).toBe(1500);
+    expect(extractTokenTotal({ usage: { total_tokens: 1600 } })).toBe(1600);
 
     // usage.input + usage.output
     expect(extractTokenTotal({ usage: { input: 800, output: 250 } })).toBe(1050);
-
-    // usage.inputTokens + usage.outputTokens
+    expect(extractTokenTotal({ usage: { input_tokens: 700, output_tokens: 300 } })).toBe(1000);
     expect(extractTokenTotal({ usage: { inputTokens: 500, outputTokens: 300 } })).toBe(800);
 
-    // top-level totalTokens
+    // usage.promptTokens + usage.completionTokens
+    expect(extractTokenTotal({ usage: { promptTokens: 400, completionTokens: 250 } })).toBe(650);
+    expect(extractTokenTotal({ usage: { prompt_tokens: 500, completion_tokens: 350 } })).toBe(850);
+    expect(extractTokenTotal({ usage: { prompt: 100, completion: 50 } })).toBe(150);
+
+    // tokenUsage sub-object
+    expect(extractTokenTotal({ tokenUsage: { totalTokens: 1800 } })).toBe(1800);
+    expect(extractTokenTotal({ tokenUsage: { input: 600, output: 400 } })).toBe(1000);
+
+    // top-level totalTokens and total_tokens
     expect(extractTokenTotal({ totalTokens: 2000 })).toBe(2000);
+    expect(extractTokenTotal({ total_tokens: 2100 })).toBe(2100);
+    expect(extractTokenTotal({ tokens: 2200 })).toBe(2200);
 
     // top-level input + output
     expect(extractTokenTotal({ input: 100, output: 50 })).toBe(150);
-
-    // top-level inputTokens + outputTokens
+    expect(extractTokenTotal({ input_tokens: 200, output_tokens: 150 })).toBe(350);
     expect(extractTokenTotal({ inputTokens: 400, outputTokens: 600 })).toBe(1000);
+
+    // partial usage (input only)
+    expect(extractTokenTotal({ usage: { input: 450 } })).toBe(450);
 
     // invalid or missing
     expect(extractTokenTotal(null)).toBeNull();
@@ -93,9 +112,59 @@ describe("extractTokenTotal helper", () => {
   });
 });
 
+describe("extractRunTokens helper", () => {
+  test("extracts event-level token usage directly", () => {
+    expect(extractRunTokens({ usage: { totalTokens: 2500 } })).toBe(2500);
+    expect(extractRunTokens({ total_tokens: 3100 })).toBe(3100);
+  });
+
+  test("sums token usage across multi-turn assistant messages", () => {
+    const event = {
+      messages: [
+        { role: "user", content: "start" },
+        { role: "assistant", usage: { input: 500, output: 100 } },
+        { role: "user", content: "continue" },
+        { role: "assistant", usage: { input: 800, output: 300 } },
+      ],
+    };
+    expect(extractRunTokens(event)).toBe(1700);
+  });
+
+  test("handles non-final assistant messages when followed by tool or user result", () => {
+    const event = {
+      messages: [
+        { role: "assistant", usage: { prompt_tokens: 1000, completion_tokens: 250 } },
+        { role: "tool", content: "command result" },
+      ],
+    };
+    const last = parseLastAssistantMessage(event);
+    expect(last?.role).toBe("assistant");
+    expect(extractRunTokens(event, last)).toBe(1250);
+  });
+
+  test("falls back to lastDetails.raw if event.messages has no usage", () => {
+    const lastDetails = {
+      role: "assistant",
+      raw: { usage: { totalTokens: 1850 } },
+    };
+    expect(extractRunTokens({}, lastDetails)).toBe(1850);
+  });
+
+  test("returns null when no usage exists in event or messages", () => {
+    expect(extractRunTokens({})).toBeNull();
+    expect(extractRunTokens(null)).toBeNull();
+    expect(extractRunTokens({ messages: [{ role: "assistant", content: "done" }] })).toBeNull();
+  });
+});
+
 describe("agent_run recording in agent_end event", () => {
-  test("records agent_run when in main TUI mode and skips in other modes", () => {
-    const coordinator = new AutoHealCoordinator();
+  test("records distinct token totals and isolates from production history", () => {
+    const recorded: HistoryEventInput[][] = [];
+    const coordinator = new AutoHealCoordinator({
+      recordHistoryFn: (events) => {
+        recorded.push(events);
+      },
+    });
     const handlers: Record<string, (...args: unknown[]) => void> = {};
     const mockPi = {
       on: (event: string, handler: (...args: unknown[]) => void) => {
@@ -114,18 +183,70 @@ describe("agent_run recording in agent_end event", () => {
       ui: { notify: () => {} },
     };
 
-    // Firing agent_end in TUI mode
-    expect(() => {
-      handlers.agent_end(
-        {
-          messages: [{ role: "assistant", stopReason: "stop" }],
-          usage: { totalTokens: 1200 },
-        },
-        mockCtxTui,
-      );
-    }).not.toThrow();
+    // Turn 1: 1850 tokens
+    handlers.agent_end(
+      {
+        messages: [
+          { role: "user", content: "first prompt" },
+          { role: "assistant", stopReason: "stop", usage: { totalTokens: 1850 } },
+        ],
+      },
+      mockCtxTui,
+    );
 
-    // Firing agent_end in non-TUI mode
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0][0].kind).toBe("agent_run");
+    expect(recorded[0][0].status).toBe("ok");
+    expect(recorded[0][0].detail).toBe("gemini-3.8-flash tok=1850");
+
+    // Turn 2: 4200 tokens across multi-turn messages
+    handlers.agent_end(
+      {
+        messages: [
+          { role: "user", content: "second prompt" },
+          {
+            role: "assistant",
+            stopReason: "stop",
+            usage: { input_tokens: 2000, output_tokens: 500 },
+          },
+          {
+            role: "assistant",
+            stopReason: "stop",
+            usage: { input_tokens: 1200, output_tokens: 500 },
+          },
+        ],
+      },
+      mockCtxTui,
+    );
+
+    expect(recorded).toHaveLength(2);
+    expect(recorded[1][0].status).toBe("ok");
+    expect(recorded[1][0].detail).toBe("gemini-3.8-flash tok=4200");
+
+    // Turn 3: Run without token counts
+    handlers.agent_end(
+      {
+        messages: [{ role: "assistant", stopReason: "stop" }],
+      },
+      mockCtxTui,
+    );
+
+    expect(recorded).toHaveLength(3);
+    expect(recorded[2][0].status).toBe("ok");
+    expect(recorded[2][0].detail).toBe("gemini-3.8-flash");
+
+    // Turn 4: Error status
+    handlers.agent_end(
+      {
+        messages: [{ role: "assistant", stopReason: "error", error: "rate limit" }],
+      },
+      mockCtxTui,
+    );
+
+    expect(recorded).toHaveLength(4);
+    expect(recorded[3][0].status).toBe("error");
+
+    // Firing agent_end in non-TUI mode does not record
     const mockCtxRpc = {
       agent: { kind: "main" },
       mode: "rpc",
@@ -134,13 +255,12 @@ describe("agent_run recording in agent_end event", () => {
       },
       ui: { notify: () => {} },
     };
-    expect(() => {
-      handlers.agent_end(
-        {
-          messages: [{ role: "assistant", stopReason: "stop" }],
-        },
-        mockCtxRpc,
-      );
-    }).not.toThrow();
+    handlers.agent_end(
+      {
+        messages: [{ role: "assistant", stopReason: "stop", usage: { totalTokens: 9999 } }],
+      },
+      mockCtxRpc,
+    );
+    expect(recorded).toHaveLength(4);
   });
 });
