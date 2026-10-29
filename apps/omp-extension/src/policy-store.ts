@@ -49,21 +49,36 @@ export class RoutingPolicyStore {
     return this.ompBinResolver();
   }
 
-  async readPolicies(): Promise<Policy[]> {
+  private async fetchPolicies(strict: boolean): Promise<Policy[]> {
     try {
       const { stdout } = await this.execFile(
         this.getOmpBin(),
         ["config", "get", this.configKey],
         DEFAULT_EXEC_OPTS,
       );
-      const parsed = JSON.parse(String(stdout).trim() || "[]");
+      const trimmed = String(stdout).trim();
+      const parsed = JSON.parse(trimmed || "[]");
       if (!Array.isArray(parsed)) {
+        if (strict) {
+          throw new Error("auth.accountPolicies is not an array");
+        }
         return [];
       }
       return parsed as Policy[];
-    } catch {
+    } catch (error) {
+      if (strict) {
+        throw error;
+      }
       return [];
     }
+  }
+
+  async readPolicies(): Promise<Policy[]> {
+    return this.fetchPolicies(false);
+  }
+
+  async readPoliciesStrict(): Promise<Policy[]> {
+    return this.fetchPolicies(true);
   }
 
   async writePolicies(policies: Policy[]): Promise<void> {
@@ -72,58 +87,5 @@ export class RoutingPolicyStore {
       ["config", "set", this.configKey, JSON.stringify(policies)],
       DEFAULT_EXEC_OPTS,
     );
-  }
-
-  async addExclusion(
-    provider: string,
-    email: string,
-    reservePct = 100,
-  ): Promise<{ changed: boolean; policies: Policy[] }> {
-    const policies = await this.readPolicies();
-    const existing = policies.find(
-      (p) => p?.provider === provider && p?.account?.email?.toLowerCase() === email.toLowerCase(),
-    );
-
-    if (existing) {
-      if (existing.reservePct === reservePct) {
-        return { changed: false, policies };
-      }
-      existing.reservePct = reservePct;
-      await this.writePolicies(policies);
-      return { changed: true, policies };
-    }
-
-    policies.push({
-      provider,
-      account: { email },
-      reservePct,
-    });
-    await this.writePolicies(policies);
-    return { changed: true, policies };
-  }
-
-  async removeExclusions(
-    provider: string,
-    emails: Set<string>,
-  ): Promise<{ removed: string[]; policies: Policy[] }> {
-    const policies = await this.readPolicies();
-    const removed: string[] = [];
-
-    const next = policies.filter((policy) => {
-      if (
-        policy?.provider === provider &&
-        typeof policy?.account?.email === "string" &&
-        emails.has(policy.account.email)
-      ) {
-        removed.push(policy.account.email);
-        return false;
-      }
-      return true;
-    });
-
-    if (removed.length > 0) {
-      await this.writePolicies(next);
-    }
-    return { removed, policies: next };
   }
 }
