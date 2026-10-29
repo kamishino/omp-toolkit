@@ -138,6 +138,19 @@ apart. Checks occur only on an event/manual probe; there is no idle polling.
 - Warm-up enforces a 60-second cooldown per account and a cross-process lock (`gemini-warmup.lock`).
 - Warm-up and Check update route health and healthy streaks, but do not change OMP routing policies.
 
+## Probe wire pins audit
+
+Probe client wire configuration lives in `apps/omp-extension/src/probe-client.ts`:
+
+- **Wire Model:** `DEFAULT_MODEL_WIRE = "gemini-3.8-flash-high"`
+- **User Agent & Version:** `DEFAULT_USER_AGENT` using `UA_VERSION = "2.24.0"`, changelist `cl=963137146`
+- **Internal Gateway Endpoint:** `https://daily-cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse`
+- **Probe Defaults:** `DEFAULT_PROBE_TIMEOUT_MS = 15_000`, `DEFAULT_CONFIRM_DELAY_MS = 1_000`
+
+### Upstream verification & override
+- **Active Status:** Verified active against the Google Antigravity developer tooling internal gateway (`v1internal`); validated in `apps/omp-extension/src/probe-client.test.ts`.
+- **Version Override:** If upstream Antigravity enforces a newer client version header, set `PI_AI_ANTIGRAVITY_VERSION` in the environment (e.g. `export PI_AI_ANTIGRAVITY_VERSION="2.25.0"` or Windows environment variables) to override the client version string without modifying code.
+
 ## Monitor
 
 ### Any terminal
