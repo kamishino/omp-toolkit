@@ -169,6 +169,15 @@ export class AutoHealCoordinator {
   private readonly recordHistoryFn: (events: HistoryEventInput[]) => void;
   private recoveryTimer: NodeJS.Timeout | null = null;
   private warnedNoIdle = false;
+  private consecutiveErrorStrikes = 0;
+
+  getConsecutiveErrorStrikes(): number {
+    return this.consecutiveErrorStrikes;
+  }
+
+  resetErrorStrikes(): void {
+    this.consecutiveErrorStrikes = 0;
+  }
 
   constructor(options: AutoHealCoordinatorOptions = {}) {
     this.cooldownMs = options.cooldownMs ?? AUTO_HEAL_COOLDOWN_MS;
@@ -327,8 +336,31 @@ export class AutoHealCoordinator {
           const modelId = current?.id ? String(current.id) : "unknown";
           const status = last?.stopReason === "error" ? "error" : "ok";
           const tok = extractRunTokens(event, last);
-          const detail = tok === null ? modelId : `${modelId} tok=${tok}`;
-          this.recordHistoryFn([
+
+          let strikeTag = "";
+          if (status === "ok") {
+            this.consecutiveErrorStrikes = 0;
+          } else {
+            this.consecutiveErrorStrikes++;
+            if (this.consecutiveErrorStrikes === 1) {
+              strikeTag = " [strike 1]";
+              ctx.ui.notify(
+                "Two-strike escalation: Strike 1 error detected. Escalating reasoning for retry.",
+                "warning",
+              );
+            } else {
+              strikeTag = " [strike 2 - halted]";
+              ctx.ui.notify(
+                "Two-strike escalation: Strike 2 error. Halting automated retry loop to prevent runaway token burn.",
+                "error",
+              );
+            }
+          }
+
+          const baseDetail = tok === null ? modelId : `${modelId} tok=${tok}`;
+          const detail = `${baseDetail}${strikeTag}`;
+
+          const eventsToRecord: HistoryEventInput[] = [
             {
               at: Date.now(),
               kind: "agent_run",
@@ -336,7 +368,18 @@ export class AutoHealCoordinator {
               status,
               detail,
             },
-          ]);
+          ];
+
+          if (status === "error" && this.consecutiveErrorStrikes >= 2) {
+            eventsToRecord.push({
+              at: Date.now(),
+              kind: "alert",
+              provider,
+              detail: "two-strike escalation limit reached",
+            });
+          }
+
+          this.recordHistoryFn(eventsToRecord);
         } catch {
           // recordHistory handles warn-once internally
         }

@@ -174,13 +174,18 @@ describe("agent_run recording in agent_end event", () => {
 
     coordinator.registerEvents(mockPi as never);
 
+    const notifications: Array<{ message: string; type?: string }> = [];
     const mockCtxTui = {
       agent: { kind: "main" },
       mode: "tui",
       models: {
         current: () => ({ provider: "google-antigravity", id: "gemini-3.8-flash" }),
       },
-      ui: { notify: () => {} },
+      ui: {
+        notify: (message: string, type?: "info" | "warning" | "error") => {
+          notifications.push({ message, type });
+        },
+      },
     };
 
     // Turn 1: 1850 tokens
@@ -245,6 +250,24 @@ describe("agent_run recording in agent_end event", () => {
 
     expect(recorded).toHaveLength(4);
     expect(recorded[3][0].status).toBe("error");
+    expect(recorded[3][0].detail).toContain("[strike 1]");
+    expect(notifications.some((n) => n.message.includes("Strike 1"))).toBe(true);
+
+    // Turn 5: Strike 2 error status -> records alert event and notifies error
+    handlers.agent_end(
+      {
+        messages: [{ role: "assistant", stopReason: "error", error: "compile failure" }],
+      },
+      mockCtxTui,
+    );
+
+    expect(recorded).toHaveLength(5);
+    expect(recorded[4]).toHaveLength(2); // agent_run + alert
+    expect(recorded[4][0].status).toBe("error");
+    expect(recorded[4][0].detail).toContain("[strike 2 - halted]");
+    expect(recorded[4][1].kind).toBe("alert");
+    expect(recorded[4][1].detail).toBe("two-strike escalation limit reached");
+    expect(notifications.some((n) => n.message.includes("Strike 2"))).toBe(true);
 
     // Firing agent_end in non-TUI mode does not record
     const mockCtxRpc = {
@@ -261,6 +284,6 @@ describe("agent_run recording in agent_end event", () => {
       },
       mockCtxRpc,
     );
-    expect(recorded).toHaveLength(4);
+    expect(recorded).toHaveLength(5);
   });
 });
