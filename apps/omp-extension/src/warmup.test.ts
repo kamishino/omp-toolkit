@@ -3,7 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { Account, HealthSnapshot, ProbeResult } from "@omp-toolkit/core";
-import { runWarmUp, type WarmUpAdapter, type WarmUpDependencies, withWarmUpLock } from "./warmup";
+import {
+  runWarmUp,
+  WARMUP_LOCK_STALE_MS,
+  type WarmUpAdapter,
+  type WarmUpDependencies,
+} from "./warmup";
 
 describe("warm-up orchestrator", () => {
   let tmpDir: string;
@@ -61,7 +66,9 @@ describe("warm-up orchestrator", () => {
       agentDir: tmpDir,
       adapters: new Map([[adapter.provider, adapter]]),
       readSnapshot: () => snapshot,
-      recordHealth: (results) => recorded.push(results),
+      recordHealth: (results) => {
+        recorded.push(results);
+      },
       sleep: async () => {},
     };
 
@@ -171,26 +178,61 @@ describe("warm-up orchestrator", () => {
     expect(run.report.results[1].status).toBe("ok");
   });
 
-  test("withWarmUpLock rejects concurrent acquisition and allows sequential", async () => {
-    const { promise: lockAcquired, resolve: markAcquired } = Promise.withResolvers<void>();
-    const { promise: blockPromise, resolve: unblock } = Promise.withResolvers<void>();
+  test("runWarmUp rejects if lock is held and recovers stale lock", async () => {
+    const adapter = makeAdapter();
+    const deps: WarmUpDependencies = {
+      agentDir: tmpDir,
+      adapters: new Map([[adapter.provider, adapter]]),
+      readSnapshot: () => ({ checkedAt: 1000, results: [] }),
+      recordHealth: () => {},
+      sleep: async () => {},
+    };
 
-    const run1 = withWarmUpLock(tmpDir, async () => {
-      markAcquired();
-      await blockPromise;
-      return "done1";
-    });
-
-    await lockAcquired;
-
-    await expect(withWarmUpLock(tmpDir, async () => "done2")).rejects.toThrow(
-      "another warm-up is already running",
+    const lockPath = path.join(tmpDir, "gemini-warmup.lock");
+    fs.writeFileSync(
+      lockPath,
+      JSON.stringify({
+        token: "holder",
+        pid: process.pid,
+        machineId: "mach-1",
+        operation: "gemini-warmup",
+        acquiredAt: Date.now(),
+      }),
+      "utf8",
     );
 
-    unblock();
-    expect(await run1).toBe("done1");
+    // Fresh lock -> rejects with "another warm-up is already running"
+    await expect(
+      runWarmUp(deps, {
+        provider: "google-antigravity",
+        action: "check",
+        account: "alpha@example.com",
+      }),
+    ).rejects.toThrow("another warm-up is already running");
 
-    const run3 = await withWarmUpLock(tmpDir, async () => "done3");
-    expect(run3).toBe("done3");
+    // Backdate lock past WARMUP_LOCK_STALE_MS
+    const staleTime = (Date.now() - (WARMUP_LOCK_STALE_MS + 10_000)) / 1000;
+    fs.utimesSync(lockPath, staleTime, staleTime);
+    fs.writeFileSync(
+      lockPath,
+      JSON.stringify({
+        token: "holder",
+        pid: process.pid,
+        machineId: "mach-1",
+        operation: "gemini-warmup",
+        acquiredAt: Date.now() - (WARMUP_LOCK_STALE_MS + 10_000),
+      }),
+      "utf8",
+    );
+    fs.utimesSync(lockPath, staleTime, staleTime);
+
+    // Stale lock recovered -> proceeds
+    const res = await runWarmUp(deps, {
+      provider: "google-antigravity",
+      action: "check",
+      account: "alpha@example.com",
+    });
+    expect(res.report.results).toHaveLength(1);
+    expect(res.report.results[0].status).toBe("ok");
   });
 });

@@ -12,7 +12,7 @@ import {
   warmUpEligibility,
 } from "@omp-toolkit/core";
 import { short, writeFileAtomic } from "./fs-util";
-
+import { withLock } from "./lock";
 export interface WarmUpAdapter {
   readonly provider: string;
   loadAccounts(): Promise<Account[]>;
@@ -26,7 +26,7 @@ export interface WarmUpDependencies {
   recordHealth(
     results: ProbeResult[],
     options?: { merge?: boolean; source?: "warmup" | "check" },
-  ): void;
+  ): Promise<void> | void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -51,7 +51,7 @@ export function readWarmUpCooldowns(agentDir: string): {
       const valid: Record<string, number> = {};
       for (const [email, ts] of Object.entries(parsed.lastWarmupAt)) {
         if (typeof ts === "number" && Number.isFinite(ts) && ts >= 0) {
-          valid[email] = ts;
+          valid[email.toLowerCase()] = ts;
         }
       }
       return { lastWarmupAt: valid };
@@ -68,63 +68,6 @@ export function writeWarmUpCooldowns(
 ): void {
   const filePath = path.join(agentDir, "gemini-warmup-state.json");
   writeFileAtomic(filePath, `${JSON.stringify(state, null, 2)}\n`);
-}
-
-export async function withWarmUpLock<T>(agentDir: string, fn: () => Promise<T>): Promise<T> {
-  const lockPath = path.join(agentDir, "gemini-warmup.lock");
-  fs.mkdirSync(agentDir, { recursive: true });
-  const token = `${process.pid}-${Date.now()}-${crypto.randomUUID()}`;
-
-  let acquired = false;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const fd = fs.openSync(lockPath, "wx");
-      try {
-        fs.writeFileSync(
-          fd,
-          JSON.stringify({ token, pid: process.pid, startedAt: Date.now() }),
-          "utf8",
-        );
-      } finally {
-        fs.closeSync(fd);
-      }
-      acquired = true;
-      break;
-    } catch (error) {
-      if ((error as { code?: string })?.code !== "EEXIST" || attempt === 1) {
-        throw error;
-      }
-      try {
-        const stat = fs.statSync(lockPath);
-        if (Date.now() - stat.mtimeMs >= WARMUP_LOCK_STALE_MS) {
-          fs.rmSync(lockPath, { force: true });
-          continue;
-        }
-      } catch {
-        // Lock vanished between attempt and stat, retry
-        continue;
-      }
-      throw new Error("another warm-up is already running");
-    }
-  }
-
-  if (!acquired) {
-    throw new Error("another warm-up is already running");
-  }
-
-  try {
-    return await fn();
-  } finally {
-    try {
-      const raw = fs.readFileSync(lockPath, "utf8");
-      const parsed = JSON.parse(raw) as { token?: string };
-      if (parsed.token === token) {
-        fs.rmSync(lockPath, { force: true });
-      }
-    } catch {
-      // Ignored
-    }
-  }
 }
 
 export async function runWarmUp(
@@ -144,8 +87,7 @@ export async function runWarmUp(
       setTimeout(resolve, ms);
       return promise;
     });
-
-  return await withWarmUpLock(deps.agentDir, async () => {
+  const perform = async () => {
     const accounts = await adapter.loadAccounts();
     if (accounts.length === 0) {
       throw new Error(`no accounts found for ${request.provider}`);
@@ -169,7 +111,7 @@ export async function runWarmUp(
           skipped.push({ account: account.email, status, reason: "non-ok" });
           continue;
         }
-        const lastAt = lastWarmupAt[account.email] ?? 0;
+        const lastAt = lastWarmupAt[account.email.toLowerCase()] ?? 0;
         if (getTime() - lastAt < WARMUP_COOLDOWN_MS) {
           skipped.push({ account: account.email, status, reason: "cooldown" });
           continue;
@@ -190,7 +132,7 @@ export async function runWarmUp(
         if (warmUpEligibility(request.provider, status) !== "warm") {
           skipped.push({ account: targetAccount.email, status, reason: "non-ok" });
         } else {
-          const lastAt = lastWarmupAt[targetAccount.email] ?? 0;
+          const lastAt = lastWarmupAt[targetAccount.email.toLowerCase()] ?? 0;
           if (getTime() - lastAt < WARMUP_COOLDOWN_MS) {
             skipped.push({ account: targetAccount.email, status, reason: "cooldown" });
           } else {
@@ -219,11 +161,11 @@ export async function runWarmUp(
       }
 
       const source = request.action === "warm" ? "warmup" : "check";
-      deps.recordHealth([probeResult], { merge: true, source });
+      await deps.recordHealth([probeResult], { merge: true, source });
       results.push(probeResult);
 
       if (request.action === "warm") {
-        lastWarmupAt[target.email] = getTime();
+        lastWarmupAt[target.email.toLowerCase()] = getTime();
         writeWarmUpCooldowns(deps.agentDir, { lastWarmupAt });
       }
 
@@ -251,5 +193,18 @@ export async function runWarmUp(
       },
       results,
     };
-  });
+  };
+
+  try {
+    return await withLock("gemini-warmup", perform, {
+      lockPath: path.join(deps.agentDir, "gemini-warmup.lock"),
+      timeoutMs: 0,
+      staleMs: WARMUP_LOCK_STALE_MS,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("lock_timeout")) {
+      throw new Error("another warm-up is already running");
+    }
+    throw error;
+  }
 }
