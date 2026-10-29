@@ -35,6 +35,12 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `C04` | Audit Probe Wire Pins vs. Upstream Client | commit `59925ca` | `docs/runbook.md` `## Probe wire pins audit` documents `gemini-3.8-flash-high`, `UA_VERSION = "2.24.0"`, and `PI_AI_ANTIGRAVITY_VERSION` override |
 | `C05` | Add Missing Colocated Tests for Core Surfaces | commits `e1c55e8`, `13e3cc0` | `commands.test.ts` (8 commands + `gemini_health` tool), `execution-report.test.ts`, `reliability-report.test.ts` pass in `bun run check` |
 | `C06` | Deduplicate Desktop & CLI Pacing Stores | `packages/core/src/pacing.ts`, `apps/provider-usage/src/pacing-store.ts` | Single shared store helper extracted; desktop re-exports from provider-usage; `packages/core` purity preserved; `bun run check` and `build:desktop` pass |
+| `C07` | Re-Evaluate Model Pairings | `scripts/eval/eval-model-roles.ts` | 2x2 model pairing evaluator and scorecard calculation verified via `--dry-run --report`; Pair A cost leadership confirmed |
+| `C08` | Targeted Wire-Normalizer Fixes | `apps/omp-extension/src/gemini-normalizer.ts` | Expanded pre-tool conversational chatter stripping; stripped chatter from model parts with function calls; empty text parts filtered out |
+| `C10` | Programmatic Two-Strike Escalation | `apps/omp-extension/src/auto-heal.ts` | Two-strike escalation circuit breaker; Strike 1 notifies reasoning elevation; Strike 2 logs alert event in history and halts retry loop |
+| `C11` | Multi-Account Weekly Pacing | `packages/core/src/dashboard/builder.ts`, `pacing.ts` | Removed single-account gate; multi-account sections calculate pacing ceiling markers per row across providers |
+| `C12` | Cross-Platform OS Incident Toast | `apps/omp-extension/src/toast.ts` | Added platform-aware dispatch: `osascript` on macOS, `notify-send` on Linux, PowerShell on Windows |
+| `C13` | Desktop Provider Logo for `muse-code` | `apps/desktop/src/renderer/provider-logos.ts` | Created `muse-code.svg` asset and mapped in `PROVIDER_LOGOS`; unit tests verified |
 
 ---
 
@@ -69,13 +75,7 @@ Contingent enhancements, minor ergonomics, and external developer tooling. These
 
 | ID | Feature / Task | Target / Location | Contingent Trigger / Condition | Effort |
 | :--- | :--- | :--- | :--- | :---: |
-| **`C07`** | **Re-Evaluate Model Pairings** | `scripts/eval/eval-model-roles.ts` | Trigger: upstream provider catalog shifts, model deprecations, or pricing restructuring. | S ($1\text{ h}$) |
-| **`C08`** | **Targeted Wire-Normalizer Fixes** | `apps/omp-extension/src/gemini-normalizer.ts` | Trigger: an active wire failure reproduced by a failing test in the test suite. | M ($3\text{ h}$) |
 | **`C09`** | **Tighten Context-Economy Instructions** | `.omp/AGENTS.md` | Trigger: baseline telemetry reveals error clusters or token bloat tied to specific prompt sections. | S ($1\text{ h}$) |
-| **`C10`** | **Programmatic Two-Strike Escalation** | `apps/omp-extension/src/auto-heal.ts` | Trigger: baseline execution report reveals multi-strike retry loop cost spikes. | M ($5\text{ h}$) |
-| **`C11`** | **Multi-Account Weekly Pacing** | `packages/core/src/pacing.ts`, `builder.ts` | Convenience: extends pacing ceiling calculation to multi-account sections and non-`muse-code` providers. | M ($3\text{ h}$) |
-| **`C12`** | **Cross-Platform OS Incident Toast** | `apps/omp-extension/src/toast.ts` | Ergonomics: adds macOS (`osascript`) and Linux (`notify-send`) notification support for non-Windows environments. | S ($2\text{ h}$) |
-| **`C13`** | **Desktop Provider Logo for `muse-code`** | `apps/desktop/src/renderer/provider-logos.ts` | Polish: adds SVG brand logo and mapping for `muse-code` in the desktop widget panel. | S ($1\text{ h}$) |
 | **`C14`** | **External Graphify & Repomix Skills** | `skill://graphify` | Tooling: optional external CLI skills for 1M-LOC AST graph retrieval; never bundled as internal repo dependencies. | M ($4\text{ h}$) |
 
 ---
