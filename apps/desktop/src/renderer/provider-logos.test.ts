@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { providerLogo } from "./provider-logos";
 
-describe("providerLogo mapping", () => {
-  test("returns logo files for supported providers", () => {
-    expect(providerLogo("google-antigravity")).toEqual({
-      light: "google-gemini.svg",
-    });
+describe("provider-logos mapping", () => {
+  test("returns logo mapping for muse-code", () => {
+    const logo = providerLogo("muse-code");
+    expect(logo).toEqual({ light: "muse-code.svg" });
+  });
+
+  test("returns logo mapping for all active providers", () => {
+    expect(providerLogo("google-antigravity")).toEqual({ light: "google-gemini.svg" });
     expect(providerLogo("openai-codex")).toEqual({
       light: "openai-light.svg",
       dark: "openai-dark.svg",
@@ -13,8 +16,7 @@ describe("providerLogo mapping", () => {
     expect(providerLogo("deepseek")).toEqual({ light: "deepseek.svg" });
   });
 
-  test("returns null for providers without a brand logo (e.g. muse-code)", () => {
-    expect(providerLogo("muse-code")).toBeNull();
+  test("returns null for unknown provider", () => {
     expect(providerLogo("unknown-provider")).toBeNull();
   });
 });

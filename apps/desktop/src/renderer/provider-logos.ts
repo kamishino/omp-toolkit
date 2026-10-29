@@ -7,6 +7,7 @@ const PROVIDER_LOGOS: Record<string, ProviderLogo> = {
   "google-antigravity": { light: "google-gemini.svg" },
   "openai-codex": { light: "openai-light.svg", dark: "openai-dark.svg" },
   deepseek: { light: "deepseek.svg" },
+  "muse-code": { light: "muse-code.svg" },
 };
 
 export function providerLogo(providerId: string): ProviderLogo | null {
