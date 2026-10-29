@@ -73,4 +73,38 @@ describe("dispatchToast helper", () => {
     });
     expect(result).toBe(false);
   });
+  test("dispatches via osascript on macOS and notify-send on Linux", () => {
+    clearToastCooldownsForTest();
+    const commandsRun: string[] = [];
+    const argsRun: (readonly string[] | null | undefined)[] = [];
+    const fakeExec = ((
+      cmd: string,
+      args: readonly string[] | null | undefined,
+      _opts: unknown,
+      cb?: ((error: Error | null) => void) | null,
+    ) => {
+      commandsRun.push(cmd);
+      argsRun.push(args);
+      cb?.(null);
+      return {} as unknown;
+    }) as unknown as typeof execFile;
+
+    // macOS
+    const macRes = dispatchToast("mac-kind", "Mac error", {
+      platform: "darwin",
+      execFileFn: fakeExec,
+    });
+    expect(macRes).toBe(true);
+    expect(commandsRun[0]).toBe("osascript");
+    expect(argsRun[0]?.[1]).toContain("Mac error");
+
+    // Linux
+    const linuxRes = dispatchToast("linux-kind", "Linux error", {
+      platform: "linux",
+      execFileFn: fakeExec,
+    });
+    expect(linuxRes).toBe(true);
+    expect(commandsRun[1]).toBe("notify-send");
+    expect(argsRun[1]?.[1]).toBe("Linux error");
+  });
 });

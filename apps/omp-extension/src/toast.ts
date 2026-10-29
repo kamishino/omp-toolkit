@@ -10,6 +10,7 @@ export interface ToastOptions {
   now?: number;
   execFileFn?: typeof execFile;
   cooldownMs?: number;
+  platform?: NodeJS.Platform;
 }
 
 const lastToastByKind = new Map<string, number>();
@@ -31,6 +32,26 @@ export function dispatchToast(kind: string, message: string, options: ToastOptio
       return false;
     }
 
+    const platform = options.platform ?? process.platform;
+    const exec = options.execFileFn ?? execFile;
+
+    if (platform === "darwin") {
+      lastToastByKind.set(kind, now);
+      exec(
+        "osascript",
+        ["-e", `display notification ${JSON.stringify(message)} with title "OMP Toolkit"`],
+        { timeout: 5000 },
+        () => {},
+      );
+      return true;
+    }
+
+    if (platform === "linux") {
+      lastToastByKind.set(kind, now);
+      exec("notify-send", ["OMP Toolkit", message], { timeout: 5000 }, () => {});
+      return true;
+    }
+
     const script =
       options.scriptPath ?? path.join(resolveAgentDir(), "scripts", "windows-toast.ps1");
     if (!fs.existsSync(script)) {
@@ -39,7 +60,6 @@ export function dispatchToast(kind: string, message: string, options: ToastOptio
 
     lastToastByKind.set(kind, now);
 
-    const exec = options.execFileFn ?? execFile;
     exec(
       "powershell.exe",
       [
