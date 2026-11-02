@@ -203,15 +203,20 @@ specific language governing permissions and limitations under the License.
 
 
 **Modifications:**
-- `apps/desktop/src/renderer/assets/providers/openai-dark.svg` is a derived work
-  from Dashboard-Icons `openai.svg`, modified by setting path fill to `#fff` to
-  support dark-theme contrast.
+- Provider logos under `apps/desktop/src/renderer/assets/providers/` are now
+  vendored from Lobe Icons (`@lobehub/icons-static-svg@1.102.0`, MIT,
+  https://github.com/lobehub/lobe-icons); see that folder's `SOURCES.md` for the
+  per-file manifest. Mono glyphs ship as derived `#000`/`#fff` light/dark pairs
+  (path fill changed from `currentColor`) for theme contrast. Dashboard-Icons
+  was the previous source for the Gemini/OpenAI/DeepSeek marks and is retained
+  above for history.
 
 **Trademark Disclaimer:**
-Provider logos (Google Gemini, OpenAI, DeepSeek) are trademarks of their
-respective owners and are used solely for visual service identification in the
-monitor interface. This project is an unofficial toolkit and is not affiliated
-with, sponsored by, or endorsed by Google, OpenAI, DeepSeek, or Muse.
+Provider logos (Google Gemini, OpenAI, DeepSeek, Anthropic/Claude, Mistral,
+xAI/Grok, Meta, Cohere, Perplexity, Groq, Qwen, Ollama, OpenRouter, Muse) are
+trademarks of their respective owners and are used solely for visual service
+identification in the monitor interface. This project is an unofficial toolkit
+and is not affiliated with, sponsored by, or endorsed by any of them.
 
 ---
 
