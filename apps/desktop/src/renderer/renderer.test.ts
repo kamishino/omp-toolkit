@@ -130,6 +130,30 @@ describe("renderer panel", () => {
     expect(findByClass(stale, "incident-banner")).toBeUndefined();
   });
 
+  test("footer offers a visible Settings action from first paint", async () => {
+    mockDoc();
+    const { buildPanel } = await import("./renderer");
+    const panel = buildPanel({
+      status: "ready",
+      data: dashboardWith({}),
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+    } as never) as unknown as MockNode;
+    const action = findByClass(panel, "footer-settings");
+    expect(action).toBeDefined();
+    expect(action?.textContent).toBe("Settings");
+  });
+
+  test("settings shortcut is Ctrl/Cmd+comma only", async () => {
+    mockDoc();
+    const { isSettingsShortcut } = await import("./renderer");
+    expect(isSettingsShortcut({ key: ",", ctrlKey: true })).toBe(true);
+    expect(isSettingsShortcut({ key: ",", metaKey: true })).toBe(true);
+    expect(isSettingsShortcut({ key: "," })).toBe(false);
+    expect(isSettingsShortcut({ key: ".", ctrlKey: true })).toBe(false);
+  });
+
   test("zero providers shows guidance instead of a blank panel", async () => {
     mockDoc();
     const { buildPanel } = await import("./renderer");

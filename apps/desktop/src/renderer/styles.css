@@ -493,11 +493,35 @@ progress::-webkit-progress-value {
 }
 
 .footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
   padding-top: var(--space-sm);
   border-top: var(--size-border) solid var(--color-border);
   font-size: var(--font-size-xs);
   line-height: 1.5;
   color: var(--color-muted);
+}
+
+.footer-settings {
+  flex: none;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.footer-settings:hover {
+  text-decoration: underline;
+}
+
+.footer-settings:focus-visible {
+  outline: var(--size-focus) solid var(--color-accent);
+  outline-offset: var(--space-xs);
 }
 
 .empty {

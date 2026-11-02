@@ -33,6 +33,14 @@ function formatTime(timestamp: number): string {
   });
 }
 
+export function isSettingsShortcut(event: {
+  key: string;
+  ctrlKey?: boolean;
+  metaKey?: boolean;
+}): boolean {
+  return Boolean(event.ctrlKey || event.metaKey) && event.key === ",";
+}
+
 export function buildIncidentBanner(state: PanelState, now = Date.now()): HTMLElement | null {
   const incident = state.data?.health?.incident;
   if (!incident || now - incident.at >= 86_400_000) return null;
@@ -231,7 +239,21 @@ export function buildPanel(state: PanelState): HTMLElement {
       healthPart = ` · health ${ageStr}${h.stale ? " (stale)" : ""}`;
     }
 
-    footer.textContent = `Source: omp usage${healthPart} · refresh ${state.intervalSeconds}s`;
+    const footerText = document.createElement("span");
+    footerText.textContent = `Source: omp usage${healthPart} · refresh ${state.intervalSeconds}s`;
+    footer.appendChild(footerText);
+
+    const footerSettings = document.createElement("button");
+    footerSettings.type = "button";
+    footerSettings.className = "footer-settings";
+    footerSettings.textContent = "Settings";
+    footerSettings.title = "Settings (Ctrl+,)";
+    footerSettings.setAttribute("aria-label", "Open settings");
+    footerSettings.addEventListener("click", () => {
+      activeTab = "settings";
+      render();
+    });
+    footer.appendChild(footerSettings);
     panel.appendChild(footer);
   }
 
@@ -327,5 +349,15 @@ if (typeof window !== "undefined" && window.omp?.onOpenSettings) {
   window.omp.onOpenSettings(() => {
     activeTab = "settings";
     render();
+  });
+}
+
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  window.addEventListener("keydown", (event) => {
+    if (isSettingsShortcut(event)) {
+      event.preventDefault();
+      activeTab = activeTab === "settings" ? "dashboard" : "settings";
+      render();
+    }
   });
 }
