@@ -42,7 +42,7 @@ The codebase enforces strict unidirectional layering with zero I/O leakage into 
 | **Domain**                  | `packages/core`       | Pure usage grouping, column selection, route ordering, streak transitions, and dashboard models (0 filesystem, network, or OMP imports) |
 | **Presentation (terminal)** | `packages/tui`        | ANSI design tokens, semantic thresholds, progress bars, percentages, and provider usage views                                           |
 | **Presentation (desktop)**  | `apps/desktop`        | Electron host, system tray, OS login item, and context-isolated webview panel styled via OKLCH tokens                                   |
-| **Adapters (OMP)**          | `apps/omp-extension`  | OMP hooks, auto-heal coordinator, CLI commands, tool definitions, account probing client, and state persistence                         |
+| **Adapters (OMP)**          | [apps/omp-extension](apps/omp-extension/README.md) | OMP hooks, auto-heal coordinator, CLI commands, tool definitions, account probing client, and state persistence                         |
 | **Adapters (CLI)**          | `apps/provider-usage` | CLI flags, `omp usage` reader, snapshot cache reader, watch loop, and schema-2 JSON payload emitter                                     |
 | **Design**                  | `design/tokens.json`  | Design-token single source of truth for TUI ANSI and desktop OKLCH palettes                                                             |
 
@@ -178,11 +178,14 @@ Interact with the circuit breaker directly from inside OMP:
 /gemini-heal [--dry-run]                     # Reserve failing accounts (reservePct: 100)
 /gemini-restore                              # Remove exclusions managed by auto-heal
 /gemini-enable <account> [--force]           # Re-enable an excluded account
+/gemini-auto-restore [<account>|off <account>] # Opt manual exclusions in or out of streak auto-restore
 /gemini-health-widget [on|off]               # Toggle TUI status widget visibility
 /gemini-warmup <account>|--all               # Send minimal warm-up request to OK accounts
 /gemini-check <account>                      # Probe specific account to verify route recovery
 /template save|apply|list|show|delete <name>  # Bundle global AGENTS.md + RULES.md into templates/<name>/ (see templates/README.md)
 ```
+
+For complete extension architecture, automatic behavior, CLI usage, wire normalizer details, and state schema, see the [OMP Extension Guide](apps/omp-extension/README.md).
 
 ### Desktop Widget
 
@@ -262,6 +265,7 @@ bun run build:desktop   # Compile desktop bundles only
 
 ## Documentation
 
+- [OMP Extension Guide](apps/omp-extension/README.md)
 - [Architecture Blueprint](docs/architecture.md)
 - [Folder Structure Blueprint](Project_Folders_Structure_Blueprint.md)
 - [Design Tokens & UI System](docs/design.md)
