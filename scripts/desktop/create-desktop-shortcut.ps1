@@ -7,6 +7,10 @@ $launcher = Join-Path $repoRoot "omp-widget.cmd"
 if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
   throw "Launcher not found: $launcher"
 }
+$hiddenLauncher = Join-Path $repoRoot "scripts\desktop\omp-widget-hidden.vbs"
+if (-not (Test-Path -LiteralPath $hiddenLauncher -PathType Leaf)) {
+  throw "Hidden launcher not found: $hiddenLauncher"
+}
 
 $desktop = [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)
 if (-not $desktop) {
@@ -19,7 +23,8 @@ if (Test-Path -LiteralPath $shortcutPath) {
 }
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = $launcher
+$shortcut.TargetPath = Join-Path $env:SystemRoot "System32\wscript.exe"
+$shortcut.Arguments = "`"$hiddenLauncher`""
 $shortcut.WorkingDirectory = $repoRoot
 $shortcut.Description = "Open the OMP provider usage panel"
 $shortcut.WindowStyle = 1

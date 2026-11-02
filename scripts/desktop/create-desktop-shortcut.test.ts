@@ -70,6 +70,15 @@ describe("cross-platform desktop shortcut generator", () => {
     expect(linuxRes.path.endsWith("omp-provider-usage.desktop")).toBe(true);
   });
 
+  test("Windows shortcut targets the hidden launcher, not a console", () => {
+    const ps1 = fs.readFileSync(path.join(import.meta.dir, "create-desktop-shortcut.ps1"), "utf8");
+    expect(ps1).toContain("wscript.exe");
+    expect(ps1).toContain("omp-widget-hidden.vbs");
+    const vbs = fs.readFileSync(path.join(import.meta.dir, "omp-widget-hidden.vbs"), "utf8");
+    expect(vbs).toContain("omp-widget.cmd");
+    expect(vbs).toContain(", 0, False");
+  });
+
   test("creates Linux desktop file with executable permissions in target directory", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-shortcut-test-"));
     const fakeDesktop = path.join(tempDir, "Desktop");
