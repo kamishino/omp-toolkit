@@ -157,10 +157,6 @@ export function loadDesktopSettings(options: {
   if (Number.isFinite(envUsd) && envUsd >= 0) {
     settings.balanceAlert.usd = envUsd;
   }
-  if (loginItemEnabled !== undefined) {
-    settings.openAtLogin = loginItemEnabled;
-  }
-
   // 3. Apply settings.json if present and valid
   try {
     if (fs.existsSync(file)) {
@@ -206,7 +202,13 @@ export function loadDesktopSettings(options: {
     // If settings.json is corrupt, proceed with env/defaults
   }
 
-  // 4. CLI flags have highest precedence
+  // 4. OS login-item state is the single truth for openAtLogin (the tray
+  // reads it live); settings.json is only a mirror written on save.
+  if (loginItemEnabled !== undefined) {
+    settings.openAtLogin = loginItemEnabled;
+  }
+
+  // 5. CLI flags have highest precedence
   const intervalArg = argv.find((arg) => arg.startsWith("--interval="));
   if (intervalArg) {
     const parsedInterval = parseInterval(intervalArg.slice("--interval=".length), env);

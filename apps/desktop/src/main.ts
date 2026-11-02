@@ -164,6 +164,11 @@ void app.whenReady().then(async () => {
     desktopTray = new DesktopTray({
       assetsDir,
       loginItem,
+      onToggleAutostart: (checked) => {
+        if (runtime) {
+          runtime.updateSettings({ ...runtime.getSettings(), openAtLogin: checked });
+        }
+      },
       isPanelVisible: () => Boolean(panel?.isVisible()),
       onTogglePanel: togglePanel,
       onRefreshNow: async () => {

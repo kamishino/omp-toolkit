@@ -13,6 +13,24 @@ import {
 } from "./settings";
 
 describe("desktop settings module", () => {
+  test("OS login-item state wins over stale settings.json for openAtLogin", () => {
+    const dir = fs.mkdtempSync(path.join(import.meta.dir, ".tmp-settings-login-"));
+    try {
+      fs.writeFileSync(
+        path.join(dir, "settings.json"),
+        JSON.stringify({ ...DEFAULT_DESKTOP_SETTINGS, openAtLogin: false }),
+        "utf8",
+      );
+      const loaded = loadDesktopSettings({ userDataDir: dir, loginItemEnabled: true });
+      expect(loaded.openAtLogin).toBe(true);
+
+      const loadedOff = loadDesktopSettings({ userDataDir: dir, loginItemEnabled: false });
+      expect(loadedOff.openAtLogin).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("validateDesktopSettings verifies valid settings", () => {
     const valid: DesktopSettings = {
       intervalSeconds: 120,

@@ -43,6 +43,7 @@ export function trayImage(
 export interface DesktopTrayOptions {
   assetsDir: string;
   loginItem?: LoginItem | null;
+  onToggleAutostart?: (checked: boolean) => void;
   isPanelVisible?: () => boolean;
   onTogglePanel: () => void;
   onRefreshNow: () => Promise<void>;
@@ -149,10 +150,15 @@ export class DesktopTray {
       onOpenTerminal: this.options.onOpenTerminal,
       onOpenOrca: this.options.onOpenOrca,
       onToggleAutostart: (checked: boolean) => {
-        try {
-          this.options.loginItem?.setEnabled(checked);
-        } catch (error) {
-          this.options.onError?.(error);
+        if (this.options.onToggleAutostart) {
+          // Single-truth path: runtime persists settings.json and OS together.
+          this.options.onToggleAutostart(checked);
+        } else {
+          try {
+            this.options.loginItem?.setEnabled(checked);
+          } catch (error) {
+            this.options.onError?.(error);
+          }
         }
         this.rebuildMenu();
       },
