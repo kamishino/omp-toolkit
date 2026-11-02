@@ -1,7 +1,35 @@
 import { execFile } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
-import { generateClientRecipe } from "@omp-toolkit/core";
+import { generateClientRecipe, resolveAgentDir } from "@omp-toolkit/core";
 
+/**
+ * Resolves the path to omp-gateway.ps1 with priority:
+ * 1. Installed copy under ~/.omp/agent/scripts/omp-gateway.ps1
+ * 2. Checkout path via OMP_TOOLKIT_HOME
+ * 3. Relative development path from __dirname
+ */
+export function resolveGatewayScriptPath(
+  env: Record<string, string | undefined> = process.env,
+  agentDir?: string,
+  fileExists: (p: string) => boolean = fs.existsSync,
+): string {
+  const dir = agentDir ?? resolveAgentDir(env);
+  const installedScript = path.join(dir, "scripts", "omp-gateway.ps1");
+  if (fileExists(installedScript)) {
+    return installedScript;
+  }
+
+  const toolkitHome = env.OMP_TOOLKIT_HOME?.trim();
+  if (toolkitHome) {
+    const fromHome = path.join(toolkitHome, "scripts", "gateway", "omp-gateway.ps1");
+    if (fileExists(fromHome)) {
+      return fromHome;
+    }
+  }
+
+  return path.resolve(__dirname, "../../../scripts/gateway/omp-gateway.ps1");
+}
 export interface GatewayCommandDependencies {
   runScript?: (
     action: string,
@@ -20,7 +48,7 @@ function defaultRunScript(
   }>();
 
   // Resolve root scripts/gateway/omp-gateway.ps1 relative to current file
-  const scriptPath = path.resolve(__dirname, "../../../scripts/gateway/omp-gateway.ps1");
+  const scriptPath = resolveGatewayScriptPath();
   const psArgs = ["-ExecutionPolicy", "Bypass", "-File", scriptPath, action, ...args];
 
   execFile(

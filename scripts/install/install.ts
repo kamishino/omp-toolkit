@@ -50,6 +50,10 @@ install(
   path.join(scriptsDir, "omp-provider-usage.js"),
 );
 install(path.join(root, "scripts/windows-toast.ps1"), path.join(scriptsDir, "windows-toast.ps1"));
+install(
+  path.join(root, "scripts/gateway/omp-gateway.ps1"),
+  path.join(scriptsDir, "omp-gateway.ps1"),
+);
 removeLegacy(path.join(extensionsDir, "gemini-health.ts"));
 removeLegacy(path.join(scriptsDir, "omp-provider-usage.ts"));
 removeLegacy(path.join(scriptsDir, "gemini-usage.ts"));
