@@ -41,6 +41,7 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `C11` | Multi-Account Weekly Pacing | `packages/core/src/dashboard/builder.ts`, `pacing.ts` | Removed single-account gate; multi-account sections calculate pacing ceiling markers per row across providers |
 | `C12` | Cross-Platform OS Incident Toast | `apps/omp-extension/src/toast.ts` | Added platform-aware dispatch: `osascript` on macOS, `notify-send` on Linux, PowerShell on Windows |
 | `C13` | Desktop Provider Logo for `muse-code` | `apps/desktop/src/renderer/provider-logos.ts` | Created `muse-code.svg` asset and mapped in `PROVIDER_LOGOS`; unit tests verified |
+| `D03` | Detached-Launch Error Visibility | commit `8826202` | Launcher records failures to `desktop-widget-error.log` + one-shot marker; Electron surfaces it on next start; `launch-failure.test.ts` (record/consume/corrupt) passes |
 
 ---
 
@@ -69,10 +70,9 @@ Desktop launch hardening (from [`docs/research/desktop-moscow-roadmap.md`](resea
 
 | ID | Item | Target / Location | Done signal | Effort |
 | :--- | :--- | :--- | :--- | :---: |
-| **`D03`** | **Detached-Launch Error Visibility** — persist launcher and early-Electron failures to `desktop-widget-error.log`; surface the last failure on next start | `scripts/desktop/widget.ts`, `apps/desktop/src/logger.ts` | Kill Electron pre-ready (or rename `dist/main.cjs` in a scratch copy), launch via shortcut, confirm a timestamped log entry and a surfaced note on next good launch | S (1 h) |
 | **`D02`** | **Dist-Freshness Guard on Launch** — freshness stamp/guard consulted by Electron `main` so any entry point detects stale `dist/` instead of silently showing a stale panel | `apps/desktop/src/main.ts`, `scripts/build/build.ts` | Touch a file under `apps/desktop/src`, launch via the direct path (no Bun host), confirm stale `dist` is detected; `bun run build:desktop` clears it; `bun run check` passes | M (5 h) |
 
-Sequence: `D03` first (restores diagnosability for every future launch bug), then `D02`. Promote either to Must only on a reproduced launch or stale-panel failure in the field.
+`D03` completed 2026-11-02 (see Completed). `D02` is next. Promote it to Must only on a reproduced stale-panel failure in the field.
 
 ---
 
@@ -120,10 +120,9 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 
 ## Recommended Execution Sequence
 
-All Must development items are complete. Open Shoulds, strictly one at a time:
+All Must development items are complete. One open Should, next in sequence:
 
-1. **`D03` — Detached-Launch Error Visibility** (S). Done signal in the Should table above.
-2. **`D02` — Dist-Freshness Guard on Launch** (M). Starts only after `D03` holds.
+1. **`D02` — Dist-Freshness Guard on Launch** (M). Done signal in the Should table above. (`D03` completed 2026-11-02.)
 
 Work is pulled from `## Could Have` only when its named trigger fires, and after the open Shoulds complete.
 
