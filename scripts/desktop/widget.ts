@@ -65,6 +65,31 @@ export function findElectron(): string {
   return electronExecutable;
 }
 
+type SpawnFn = typeof spawn;
+
+/**
+ * Launch Electron detached so the launcher can exit immediately:
+ * no console host, no signal forwarding, tray survives terminal close.
+ * Resolves once the child has spawned; rejects if it fails to start.
+ */
+export async function launchDetached(
+  spawnFn: SpawnFn,
+  electronBin: string,
+  appDir: string,
+  argv: string[],
+): Promise<void> {
+  const child = spawnFn(electronBin, [appDir, ...argv], {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  await new Promise<void>((resolve, reject) => {
+    child.on("spawn", resolve);
+    child.on("error", reject);
+  });
+  child.unref();
+}
+
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   if (argv.includes("--once")) {
     const child = spawn(process.execPath, [path.join(appDir, "src", "once.ts"), ...argv], {
@@ -86,17 +111,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   await buildIfNeeded();
   const electronBin = findElectron();
 
-  const child = spawn(electronBin, [appDir, ...argv], { stdio: "inherit" });
-
-  for (const sig of ["SIGINT", "SIGTERM"] as const) {
-    process.on(sig, () => {
-      child.kill(sig);
-    });
-  }
-
-  child.on("exit", (code) => {
-    process.exit(code ?? 1);
-  });
+  await launchDetached(spawn, electronBin, appDir, argv);
 }
 
 if (import.meta.main) {
