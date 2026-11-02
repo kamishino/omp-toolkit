@@ -16,3 +16,4 @@
 - [Prompt engineering and extension boundaries](research/prompt-engineering-agent-skills.md)
 - [Gemini family prompt dynamics and wire protocols](research/gemini-family-prompt-and-wire.md)
 - [MoSCoW feature prioritization](research/moscow-feature-prioritization.md)
+- [Industry architecture comparison](research/architecture-industry-comparison.md)

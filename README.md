@@ -273,3 +273,4 @@ bun run build:desktop   # Compile desktop bundles only
 - [MoSCoW Product Roadmap](docs/roadmap.md)
 - [Architecture Decision Records (ADRs)](docs/adr/README.md)
 - [System Glossary](GLOSSARY.md)
+- [Industry Architecture Comparison](docs/research/architecture-industry-comparison.md)
