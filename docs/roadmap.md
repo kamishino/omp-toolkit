@@ -42,6 +42,7 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `C12` | Cross-Platform OS Incident Toast | `apps/omp-extension/src/toast.ts` | Added platform-aware dispatch: `osascript` on macOS, `notify-send` on Linux, PowerShell on Windows |
 | `C13` | Desktop Provider Logo for `muse-code` | `apps/desktop/src/renderer/provider-logos.ts` | Created `muse-code.svg` asset and mapped in `PROVIDER_LOGOS`; unit tests verified |
 | `D03` | Detached-Launch Error Visibility | commit `8826202` | Launcher records failures to `desktop-widget-error.log` + one-shot marker; Electron surfaces it on next start; `launch-failure.test.ts` (record/consume/corrupt) passes |
+| `D02` | Dist-Freshness Guard on Launch | commit `05cbe10` | Electron main refuses silent stale `dist` on any entry point; verified live: stale launch logs, `build:desktop` clears; `freshness.test.ts` passes |
 
 ---
 
@@ -66,13 +67,7 @@ No open development Musts. A new item is promoted to Must only when daily operat
 
 High-leverage execution quality and reliability improvements backed by measured empirical benchmarks or regression prevention.
 
-Desktop launch hardening (from [`docs/research/desktop-moscow-roadmap.md`](research/desktop-moscow-roadmap.md), 2026-11-02; `D`-IDs are local to that register):
-
-| ID | Item | Target / Location | Done signal | Effort |
-| :--- | :--- | :--- | :--- | :---: |
-| **`D02`** | **Dist-Freshness Guard on Launch** — freshness stamp/guard consulted by Electron `main` so any entry point detects stale `dist/` instead of silently showing a stale panel | `apps/desktop/src/main.ts`, `scripts/build/build.ts` | Touch a file under `apps/desktop/src`, launch via the direct path (no Bun host), confirm stale `dist` is detected; `bun run build:desktop` clears it; `bun run check` passes | M (5 h) |
-
-`D03` completed 2026-11-02 (see Completed). `D02` is next. Promote it to Must only on a reproduced stale-panel failure in the field.
+No open Shoulds. Desktop launch hardening (`D03`, `D02` from [`docs/research/desktop-moscow-roadmap.md`](research/desktop-moscow-roadmap.md)) completed 2026-11-02; see Completed.
 
 ---
 
@@ -120,11 +115,9 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 
 ## Recommended Execution Sequence
 
-All Must development items are complete. One open Should, next in sequence:
+All Must and Should development items are complete. Desktop launch hardening (`D03` → `D02`) landed 2026-11-02 in that order.
 
-1. **`D02` — Dist-Freshness Guard on Launch** (M). Done signal in the Should table above. (`D03` completed 2026-11-02.)
-
-Work is pulled from `## Could Have` only when its named trigger fires, and after the open Shoulds complete.
+Work is pulled from `## Could Have` only when its named trigger fires.
 
 ---
 
