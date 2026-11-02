@@ -4,7 +4,7 @@
 > **Horizon:** Continuous open backlog (MoSCoW prioritized; strictly one feature or intervention at a time)  
 > **Operator Capacity:** ~5 hours/week (~20 hours/month)  
 > **Evidence Foundation:** Backed by the empirical research register in [`docs/research/moscow-feature-prioritization.md`](research/moscow-feature-prioritization.md)  
-> **Last updated:** 2026-10-29  
+> **Last updated:** 2026-11-02  
 
 ---
 
@@ -65,7 +65,14 @@ No open development Musts. A new item is promoted to Must only when daily operat
 
 High-leverage execution quality and reliability improvements backed by measured empirical benchmarks or regression prevention.
 
-No open Shoulds. All prioritized high-leverage items are complete.
+Desktop launch hardening (from [`docs/research/desktop-moscow-roadmap.md`](research/desktop-moscow-roadmap.md), 2026-11-02; `D`-IDs are local to that register):
+
+| ID | Item | Target / Location | Done signal | Effort |
+| :--- | :--- | :--- | :--- | :---: |
+| **`D03`** | **Detached-Launch Error Visibility** — persist launcher and early-Electron failures to `desktop-widget-error.log`; surface the last failure on next start | `scripts/desktop/widget.ts`, `apps/desktop/src/logger.ts` | Kill Electron pre-ready (or rename `dist/main.cjs` in a scratch copy), launch via shortcut, confirm a timestamped log entry and a surfaced note on next good launch | S (1 h) |
+| **`D02`** | **Dist-Freshness Guard on Launch** — freshness stamp/guard consulted by Electron `main` so any entry point detects stale `dist/` instead of silently showing a stale panel | `apps/desktop/src/main.ts`, `scripts/build/build.ts` | Touch a file under `apps/desktop/src`, launch via the direct path (no Bun host), confirm stale `dist` is detected; `bun run build:desktop` clears it; `bun run check` passes | M (5 h) |
+
+Sequence: `D03` first (restores diagnosability for every future launch bug), then `D02`. Promote either to Must only on a reproduced launch or stale-panel failure in the field.
 
 ---
 
@@ -113,9 +120,12 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 
 ## Recommended Execution Sequence
 
-All Must and Should development items are complete.
+All Must development items are complete. Open Shoulds, strictly one at a time:
 
-Work is pulled from `## Could Have` only when its named trigger fires.
+1. **`D03` — Detached-Launch Error Visibility** (S). Done signal in the Should table above.
+2. **`D02` — Dist-Freshness Guard on Launch** (M). Starts only after `D03` holds.
+
+Work is pulled from `## Could Have` only when its named trigger fires, and after the open Shoulds complete.
 
 ---
 
