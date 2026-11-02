@@ -7,6 +7,114 @@ export interface SettingsViewController {
   destroy(): void;
 }
 
+function buildCurrencyField(
+  label: string,
+  id: string,
+  unit: string,
+  value: number,
+): { group: HTMLElement; input: HTMLInputElement } {
+  const group = document.createElement("div");
+  group.className = "form-group";
+  const labelEl = document.createElement("label");
+  labelEl.textContent = label;
+  labelEl.htmlFor = id;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "input-with-unit";
+  const input = document.createElement("input");
+  input.id = id;
+  input.type = "number";
+  input.min = "0";
+  input.step = "1";
+  input.value = String(value);
+  const unitEl = document.createElement("span");
+  unitEl.className = "unit-suffix";
+  unitEl.textContent = unit;
+  wrapper.appendChild(unitEl);
+  wrapper.appendChild(input);
+
+  group.appendChild(labelEl);
+  group.appendChild(wrapper);
+  return { group, input };
+}
+
+function buildBalanceSection(draft: DesktopSettings): {
+  section: HTMLElement;
+  cnyInput: HTMLInputElement;
+  usdInput: HTMLInputElement;
+} {
+  const section = document.createElement("fieldset");
+  section.className = "settings-section";
+
+  const legend = document.createElement("legend");
+  legend.textContent = "Low-Balance Alerts";
+  section.appendChild(legend);
+
+  const help = document.createElement("p");
+  help.className = "section-help";
+  help.textContent = "Show a red LOW indicator when provider balance falls to or below:";
+  section.appendChild(help);
+
+  const grid = document.createElement("div");
+  grid.className = "form-grid-2";
+  const cny = buildCurrencyField("Chinese Yuan (CNY)", "setting-cny", "¥", draft.balanceAlert.cny);
+  const usd = buildCurrencyField("US Dollar (USD)", "setting-usd", "$", draft.balanceAlert.usd);
+  grid.appendChild(cny.group);
+  grid.appendChild(usd.group);
+  section.appendChild(grid);
+
+  return { section, cnyInput: cny.input, usdInput: usd.input };
+}
+
+function buildSystemSection(draft: DesktopSettings): {
+  section: HTMLElement;
+  toggleInput: HTMLInputElement;
+} {
+  const section = document.createElement("fieldset");
+  section.className = "settings-section";
+
+  const legend = document.createElement("legend");
+  legend.textContent = "System";
+  section.appendChild(legend);
+
+  const toggleWrapper = document.createElement("label");
+  toggleWrapper.className = "toggle-row";
+  toggleWrapper.htmlFor = "setting-login";
+
+  const toggleText = document.createElement("div");
+  toggleText.className = "toggle-text";
+  const toggleTitle = document.createElement("span");
+  toggleTitle.className = "toggle-title";
+  toggleTitle.textContent = "Start at login";
+  const toggleDesc = document.createElement("span");
+  toggleDesc.className = "form-help";
+  toggleDesc.textContent = "Launch the widget automatically when signing in to OS";
+  toggleText.appendChild(toggleTitle);
+  toggleText.appendChild(toggleDesc);
+
+  const toggleInput = document.createElement("input");
+  toggleInput.id = "setting-login";
+  toggleInput.type = "checkbox";
+  toggleInput.className = "toggle-checkbox";
+  toggleInput.checked = draft.openAtLogin;
+  toggleInput.addEventListener("change", () => {
+    draft.openAtLogin = toggleInput.checked;
+  });
+
+  const toggleTrack = document.createElement("span");
+  toggleTrack.className = "toggle-track";
+  const toggleThumb = document.createElement("span");
+  toggleThumb.className = "toggle-thumb";
+  toggleTrack.appendChild(toggleThumb);
+
+  toggleWrapper.appendChild(toggleText);
+  toggleWrapper.appendChild(toggleInput);
+  toggleWrapper.appendChild(toggleTrack);
+  section.appendChild(toggleWrapper);
+
+  return { section, toggleInput };
+}
+
 export function renderSettingsView(
   initialSettings: DesktopSettings,
   onSave: (settings: DesktopSettings) => void,
@@ -132,118 +240,10 @@ export function renderSettingsView(
   timingSection.appendChild(themeGroup);
   form.appendChild(timingSection);
 
-  // ── Section 2: Balance Alerts ──────────────────────────────────────
-  const balanceSection = document.createElement("fieldset");
-  balanceSection.className = "settings-section";
-
-  const balanceLegend = document.createElement("legend");
-  balanceLegend.textContent = "Low-Balance Alerts";
-  balanceSection.appendChild(balanceLegend);
-
-  const balanceHelp = document.createElement("p");
-  balanceHelp.className = "section-help";
-  balanceHelp.textContent = "Show a red LOW indicator when provider balance falls to or below:";
-  balanceSection.appendChild(balanceHelp);
-
-  const balanceGrid = document.createElement("div");
-  balanceGrid.className = "form-grid-2";
-
-  // CNY
-  const cnyGroup = document.createElement("div");
-  cnyGroup.className = "form-group";
-  const cnyLabel = document.createElement("label");
-  cnyLabel.textContent = "Chinese Yuan (CNY)";
-  cnyLabel.htmlFor = "setting-cny";
-
-  const cnyWrapper = document.createElement("div");
-  cnyWrapper.className = "input-with-unit";
-  const cnyInput = document.createElement("input");
-  cnyInput.id = "setting-cny";
-  cnyInput.type = "number";
-  cnyInput.min = "0";
-  cnyInput.step = "1";
-  cnyInput.value = String(draft.balanceAlert.cny);
-  const cnyUnit = document.createElement("span");
-  cnyUnit.className = "unit-suffix";
-  cnyUnit.textContent = "¥";
-  cnyWrapper.appendChild(cnyUnit);
-  cnyWrapper.appendChild(cnyInput);
-
-  cnyGroup.appendChild(cnyLabel);
-  cnyGroup.appendChild(cnyWrapper);
-  balanceGrid.appendChild(cnyGroup);
-
-  // USD
-  const usdGroup = document.createElement("div");
-  usdGroup.className = "form-group";
-  const usdLabel = document.createElement("label");
-  usdLabel.textContent = "US Dollar (USD)";
-  usdLabel.htmlFor = "setting-usd";
-
-  const usdWrapper = document.createElement("div");
-  usdWrapper.className = "input-with-unit";
-  const usdInput = document.createElement("input");
-  usdInput.id = "setting-usd";
-  usdInput.type = "number";
-  usdInput.min = "0";
-  usdInput.step = "1";
-  usdInput.value = String(draft.balanceAlert.usd);
-  const usdUnit = document.createElement("span");
-  usdUnit.className = "unit-suffix";
-  usdUnit.textContent = "$";
-  usdWrapper.appendChild(usdUnit);
-  usdWrapper.appendChild(usdInput);
-
-  usdGroup.appendChild(usdLabel);
-  usdGroup.appendChild(usdWrapper);
-  balanceGrid.appendChild(usdGroup);
-
-  balanceSection.appendChild(balanceGrid);
+  const { section: balanceSection, cnyInput, usdInput } = buildBalanceSection(draft);
   form.appendChild(balanceSection);
 
-  // ── Section 3: System Integration ──────────────────────────────────
-  const systemSection = document.createElement("fieldset");
-  systemSection.className = "settings-section";
-
-  const systemLegend = document.createElement("legend");
-  systemLegend.textContent = "System";
-  systemSection.appendChild(systemLegend);
-
-  const toggleWrapper = document.createElement("label");
-  toggleWrapper.className = "toggle-row";
-  toggleWrapper.htmlFor = "setting-login";
-
-  const toggleText = document.createElement("div");
-  toggleText.className = "toggle-text";
-  const toggleTitle = document.createElement("span");
-  toggleTitle.className = "toggle-title";
-  toggleTitle.textContent = "Start at login";
-  const toggleDesc = document.createElement("span");
-  toggleDesc.className = "form-help";
-  toggleDesc.textContent = "Launch the widget automatically when signing in to OS";
-  toggleText.appendChild(toggleTitle);
-  toggleText.appendChild(toggleDesc);
-
-  const toggleInput = document.createElement("input");
-  toggleInput.id = "setting-login";
-  toggleInput.type = "checkbox";
-  toggleInput.className = "toggle-checkbox";
-  toggleInput.checked = draft.openAtLogin;
-  toggleInput.addEventListener("change", () => {
-    draft.openAtLogin = toggleInput.checked;
-  });
-
-  const toggleTrack = document.createElement("span");
-  toggleTrack.className = "toggle-track";
-  const toggleThumb = document.createElement("span");
-  toggleThumb.className = "toggle-thumb";
-  toggleTrack.appendChild(toggleThumb);
-
-  toggleWrapper.appendChild(toggleText);
-  toggleWrapper.appendChild(toggleInput);
-  toggleWrapper.appendChild(toggleTrack);
-  systemSection.appendChild(toggleWrapper);
-
+  const { section: systemSection, toggleInput } = buildSystemSection(draft);
   form.appendChild(systemSection);
 
   // ── Validation Errors ──────────────────────────────────────────────
