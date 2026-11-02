@@ -143,6 +143,12 @@ export function renderProviderUsageFromDashboard(
 
   const output: string[] = [top, line(paint(summary, ANSI.muted))];
 
+  if (dashboard.providers.length === 0) {
+    output.push(
+      line(paint("No providers yet — run `omp usage`, sign in, then re-run.", ANSI.muted)),
+    );
+  }
+
   if (options.showHealth && dashboard.health?.incident) {
     const inc = dashboard.health.incident;
     if (now - inc.at < 86_400_000) {
@@ -192,18 +198,11 @@ export function renderProviderUsageFromDashboard(
   const healthNote = options.showHealth
     ? ` · health ${dashboard.health?.checkedAt ? formatAge(dashboard.health.checkedAt, now, options.watch) : "no snapshot"}${dashboard.health?.stale ? " (stale)" : ""}`
     : "";
-  output.push(
-    line(
-      paint(
-        `Source: omp usage${healthNote} · ${
-          options.watch
-            ? `refresh ${options.interval}s · [q] quit  [r] refresh  [Tab] schedule`
-            : "one-shot"
-        }`,
-        ANSI.muted,
-      ),
-    ),
-  );
+  const modeText = options.watch
+    ? `refresh ${options.interval}s · [q] quit  [r] refresh  [Tab] schedule`
+    : "one-shot · add --watch for live updates";
+  const footerText = `Source: omp usage${healthNote} · ${modeText}`;
+  output.push(line(paint(fit(footerText, contentWidth), ANSI.muted)));
   output.push(border(`╰${"─".repeat(inner)}╯`));
   return output.join("\n");
 }

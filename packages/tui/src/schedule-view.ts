@@ -63,6 +63,8 @@ export function renderScheduleView(
     }
   }
 
+  lines.push(border(`├${"─".repeat(inner)}┤`));
+  lines.push(line(paint("[Tab] usage · [r] refresh · [q] quit", ANSI.muted)));
   lines.push(border(`╰${"─".repeat(inner)}╯`));
   return lines.join("\n");
 }

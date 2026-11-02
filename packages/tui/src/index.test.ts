@@ -22,6 +22,7 @@ import {
   padVisible,
   percent,
   renderProviderUsage,
+  renderScheduleView,
   stripAnsi,
   terminalDraw,
   testBackendToString,
@@ -521,5 +522,39 @@ describe("provider usage view", () => {
       }
     }
     expect(rawEscapeCount).toBe(0);
+  });
+
+  test("one-shot view hints at --watch and stays inside 86 columns even when stale", () => {
+    const view = renderProviderUsage(sectionsFor(reports, new Map()), {
+      interval: 300,
+      watch: false,
+      showHealth: true,
+      checkedAt: Date.now() - 20 * 60_000,
+    });
+    const stripped = stripAnsi(view);
+    expect(stripped).toContain("--watch");
+    for (const line of stripped.split("\n")) {
+      expect(line.length).toBeLessThanOrEqual(86);
+    }
+  });
+
+  test("empty view tells the user how to get providers instead of a blank frame", () => {
+    const view = renderProviderUsage([], { interval: 300, watch: false, showHealth: false });
+    const stripped = stripAnsi(view);
+    expect(stripped).toContain("No providers");
+    expect(stripped).toContain("omp usage");
+    for (const line of stripped.split("\n")) {
+      expect(line.length).toBeLessThanOrEqual(86);
+    }
+  });
+
+  test("schedule view shows how to get back to usage and quit, inside 86 columns", () => {
+    const view = renderScheduleView([DEEPSEEK_POLICY], { now: 1_700_000_000_000 });
+    const stripped = stripAnsi(view);
+    expect(stripped).toContain("[Tab] usage");
+    expect(stripped).toContain("[q] quit");
+    for (const line of stripped.split("\n")) {
+      expect(line.length).toBeLessThanOrEqual(86);
+    }
   });
 });
