@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { generateTrayManifest } from "../../apps/desktop/src/tray-path";
 import { DESKTOP_DIST_ARTIFACTS } from "../../packages/core/src/desktop-build";
 import { buildTrayIcons } from "./build-tray-icons";
 
@@ -122,13 +123,8 @@ export async function buildDesktop(): Promise<void> {
     path.join(fontsDir, "jetbrains-mono-latin-wght-normal.woff2"),
   ];
 
-  const modes = ["light", "dark"] as const;
-  const levels = ["ok", "warn", "hot", "critical", "unknown"] as const;
-  for (const mode of modes) {
-    for (const level of levels) {
-      requiredFiles.push(path.join(assetsDir, "tray", `tray-${mode}-${level}.png`));
-      requiredFiles.push(path.join(assetsDir, "tray", `tray-${mode}-${level}@2x.png`));
-    }
+  for (const item of generateTrayManifest()) {
+    requiredFiles.push(path.join(assetsDir, "tray", item.fileName));
   }
 
   for (const file of requiredFiles) {
