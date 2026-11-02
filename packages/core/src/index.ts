@@ -3,6 +3,7 @@ export * from "./data-source";
 export * from "./deepseek";
 export * from "./environment";
 export * from "./format";
+export * from "./gateway";
 export * from "./health";
 export * from "./history";
 export * from "./pacing";

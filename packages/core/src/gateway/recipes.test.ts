@@ -1,0 +1,73 @@
+import { describe, expect, test } from "bun:test";
+import { generateClientRecipe } from "./recipes";
+
+describe("generateClientRecipe", () => {
+  const optionsWithCf = {
+    domain: "gateway.example.com",
+    gatewayToken: "test-gateway-token",
+    cfClientId: "test-client-id.access",
+    cfClientSecret: "test-client-secret",
+    model: "google-antigravity/gemini-3.8-flash",
+  };
+
+  const optionsWithoutCf = {
+    domain: "gateway.example.com",
+    gatewayToken: "test-gateway-token",
+    model: "google-antigravity/gemini-3.8-flash",
+  };
+
+  test("generates cURL recipe with Cloudflare Access headers", () => {
+    const recipe = generateClientRecipe("curl", optionsWithCf);
+    expect(recipe.platform).toBe("curl");
+    expect(recipe.snippet).toContain("https://gateway.example.com/v1/chat/completions");
+    expect(recipe.snippet).toContain("CF-Access-Client-Id: test-client-id.access");
+    expect(recipe.snippet).toContain("CF-Access-Client-Secret: test-client-secret");
+    expect(recipe.snippet).toContain("Authorization: Bearer test-gateway-token");
+  });
+
+  test("generates cURL recipe without Cloudflare Access headers", () => {
+    const recipe = generateClientRecipe("curl", optionsWithoutCf);
+    expect(recipe.snippet).not.toContain("CF-Access-Client-Id");
+    expect(recipe.snippet).not.toContain("CF-Access-Client-Secret");
+    expect(recipe.snippet).toContain("Authorization: Bearer test-gateway-token");
+  });
+
+  test("generates Python OpenAI SDK recipe with default_headers", () => {
+    const recipe = generateClientRecipe("python-openai", optionsWithCf);
+    expect(recipe.platform).toBe("python-openai");
+    expect(recipe.snippet).toContain('base_url="https://gateway.example.com/v1"');
+    expect(recipe.snippet).toContain('api_key="test-gateway-token"');
+    expect(recipe.snippet).toContain('"CF-Access-Client-Id": "test-client-id.access"');
+    expect(recipe.snippet).toContain('"CF-Access-Client-Secret": "test-client-secret"');
+  });
+
+  test("generates Python OpenAI SDK recipe without default_headers when CF omitted", () => {
+    const recipe = generateClientRecipe("python-openai", optionsWithoutCf);
+    expect(recipe.snippet).not.toContain("default_headers");
+  });
+
+  test("generates Python Anthropic SDK recipe", () => {
+    const recipe = generateClientRecipe("python-anthropic", optionsWithCf);
+    expect(recipe.platform).toBe("python-anthropic");
+    expect(recipe.snippet).toContain('base_url="https://gateway.example.com"');
+    expect(recipe.snippet).toContain('api_key="test-gateway-token"');
+    expect(recipe.snippet).toContain('"CF-Access-Client-Id": "test-client-id.access"');
+  });
+
+  test("generates VS Code Continue / Cline config JSON", () => {
+    const recipe = generateClientRecipe("vscode-continue", optionsWithCf);
+    expect(recipe.platform).toBe("vscode-continue");
+    expect(recipe.snippet).toContain('"apiBase": "https://gateway.example.com/v1"');
+    expect(recipe.snippet).toContain('"apiKey": "test-gateway-token"');
+    expect(recipe.snippet).toContain('"CF-Access-Client-Id": "test-client-id.access"');
+  });
+
+  test("uses fallback defaults when token or domain is empty", () => {
+    const recipe = generateClientRecipe("curl", {
+      domain: "",
+      gatewayToken: "",
+    });
+    expect(recipe.snippet).toContain("https://gateway.example.com/v1/chat/completions");
+    expect(recipe.snippet).toContain("<YOUR_OMP_GATEWAY_TOKEN>");
+  });
+});
