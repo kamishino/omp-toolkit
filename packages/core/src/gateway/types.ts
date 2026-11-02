@@ -41,3 +41,26 @@ export interface RecipeOptions {
   cfClientSecret?: string;
   model?: string;
 }
+
+export interface GatewayClientEntry {
+  tokenSha256: string;
+  models?: string[];
+  accounts?: Record<string, unknown>;
+}
+
+export type GatewayClientsFile = Record<string, GatewayClientEntry>;
+
+export interface ClientPackOptions extends RecipeOptions {
+  clientName: string;
+  allowedModels?: string[];
+}
+
+export interface ClientPack {
+  clientName: string;
+  bearerToken: string;
+  envScriptBash: string;
+  envScriptPs1: string;
+  continueConfigJson: string;
+  ompProviderConfigJson: string;
+  curlSnippet: string;
+}
