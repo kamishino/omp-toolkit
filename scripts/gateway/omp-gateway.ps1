@@ -16,7 +16,7 @@
 [CmdletBinding()]
 param (
     [Parameter(Position = 0)]
-    [ValidateSet('start', 'stop', 'restart', 'status', 'test', 'token', 'client-config', 'logs')]
+    [ValidateSet('start', 'stop', 'restart', 'status', 'test', 'token', 'client-config', 'client-add', 'client-list', 'client-revoke', 'client-pack', 'logs')]
     [string]$Action = 'status',
 
     [Parameter()]
@@ -32,7 +32,12 @@ param (
     [string]$CfClientId = '',
 
     [Parameter()]
-    [string]$CfClientSecret = ''
+    [string]$CfClientSecret = '',
+    [Parameter(Position = 1)]
+    [string]$ClientName = '',
+
+    [Parameter()]
+    [string]$Models = 'google-antigravity/*,deepseek/*'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,6 +58,7 @@ $GatewayErrFile  = Join-Path $LogDir "auth-gateway.err.log"
 $BrokerTokenFile  = Join-Path $OmpDir "auth-broker.token"
 $GatewayTokenFile = Join-Path $OmpDir "auth-gateway.token"
 $CfAccessFile     = Join-Path $OmpDir "cf-access.json"
+$ClientsFile     = Join-Path $OmpDir "gateway-clients.json"
 
 # --- Binaries ---
 $OmpBin = Join-Path $HomeDir "AppData\Local\omp\omp.exe"
@@ -195,8 +201,12 @@ switch ($Action) {
                 $env:OMP_AUTH_BROKER_URL   = "http://127.0.0.1:$BrokerPort"
                 $env:OMP_AUTH_BROKER_TOKEN = $brokerToken
 
+                if (-not (Test-Path $ClientsFile)) {
+                    "{}" | Set-Content -Path $ClientsFile -Force
+                }
+                $gwArgs = "auth-gateway serve --bind=127.0.0.1:$GatewayPort --trust-proxy-headers --clients=`"$ClientsFile`""
                 $gwProc = Start-Process -FilePath $OmpBin `
-                    -ArgumentList "auth-gateway serve --bind=127.0.0.1:$GatewayPort --trust-proxy-headers" `
+                    -ArgumentList $gwArgs `
                     -RedirectStandardOutput $GatewayLogFile `
                     -RedirectStandardError $GatewayErrFile `
                     -WindowStyle Hidden -PassThru
@@ -508,6 +518,165 @@ print(message.content[0].text)
     }
   ]
 }
+"@
+        Write-Host "`n======================================================" -ForegroundColor Cyan
+    }
+
+    'client-add' {
+        if (-not $ClientName -and $args.Count -gt 0) { $ClientName = $args[0] }
+        if (-not $ClientName) {
+            Write-Error "Client name is required. Usage: .\omp-gateway.ps1 client-add <client-name> [-Models <models>]"
+            exit 1
+        }
+
+        $bytes = New-Object byte[] 24
+        [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        $hex = [System.BitConverter]::ToString($bytes).Replace("-", "").ToLower()
+        $clientToken = "omp_gw_$hex"
+
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        $hashBytes = $hasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($clientToken))
+        $hashHex = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLower()
+
+        $clients = @{}
+        if (Test-Path $ClientsFile) {
+            try {
+                $raw = Get-Content $ClientsFile -Raw | ConvertFrom-Json
+                foreach ($prop in $raw.PSObject.Properties) {
+                    $clients[$prop.Name] = $prop.Value
+                }
+            } catch { }
+        }
+
+        $modelList = $Models.Split(",") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        $clients[$ClientName] = @{
+            tokenSha256 = $hashHex
+            models      = @($modelList)
+        }
+
+        $clients | ConvertTo-Json -Depth 5 | Set-Content -Path $ClientsFile -Force
+        Write-Host " [OK] Client '$ClientName' added to $ClientsFile" -ForegroundColor Green
+        Write-Host "      Token SHA-256 : $hashHex" -ForegroundColor DarkGray
+        Write-Host "      Client Token  : $clientToken" -ForegroundColor Yellow
+        Write-Host "      (Token will not be displayed again. Transmit securely to client PC.)" -ForegroundColor DarkGray
+
+        & $PSCommandPath client-pack -ClientName $ClientName
+    }
+
+    'client-list' {
+        Write-Host "======================================================" -ForegroundColor Cyan
+        Write-Host " [OMP Gateway] Registered Client Tokens                " -ForegroundColor Cyan
+        Write-Host "======================================================" -ForegroundColor Cyan
+        if (-not (Test-Path $ClientsFile)) {
+            Write-Host " No scoped clients configured ($ClientsFile not found)." -ForegroundColor DarkGray
+        } else {
+            try {
+                $raw = Get-Content $ClientsFile -Raw | ConvertFrom-Json
+                $count = 0
+                foreach ($prop in $raw.PSObject.Properties) {
+                    $count++
+                    $cName = $prop.Name
+                    $cSha = $prop.Value.tokenSha256
+                    $cModels = if ($prop.Value.models) { ($prop.Value.models -join ", ") } else { "all" }
+                    Write-Host " [$count] Client: $cName" -ForegroundColor Yellow
+                    Write-Host "     SHA-256: $cSha" -ForegroundColor DarkGray
+                    Write-Host "     Models : $cModels" -ForegroundColor White
+                }
+                if ($count -eq 0) {
+                    Write-Host " No clients registered." -ForegroundColor DarkGray
+                }
+            } catch {
+                Write-Host " Error reading ${ClientsFile}: $($_.Exception.Message)" -ForegroundColor Red
+            }
+        }
+        Write-Host "======================================================" -ForegroundColor Cyan
+    }
+
+    'client-revoke' {
+        if (-not $ClientName -and $args.Count -gt 0) { $ClientName = $args[0] }
+        if (-not $ClientName) {
+            Write-Error "Client name is required. Usage: .\omp-gateway.ps1 client-revoke <client-name>"
+            exit 1
+        }
+        if (-not (Test-Path $ClientsFile)) {
+            Write-Host " Clients file not found at $ClientsFile." -ForegroundColor Yellow
+            return
+        }
+        try {
+            $raw = Get-Content $ClientsFile -Raw | ConvertFrom-Json
+            $clients = @{}
+            $found = $false
+            foreach ($prop in $raw.PSObject.Properties) {
+                if ($prop.Name -eq $ClientName) {
+                    $found = $true
+                } else {
+                    $clients[$prop.Name] = $prop.Value
+                }
+            }
+            if ($found) {
+                $clients | ConvertTo-Json -Depth 5 | Set-Content -Path $ClientsFile -Force
+                Write-Host " [OK] Client '$ClientName' revoked from $ClientsFile." -ForegroundColor Green
+            } else {
+                Write-Host " [WARN] Client '$ClientName' was not found in $ClientsFile." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Host " Error modifying ${ClientsFile}: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+
+    'client-pack' {
+        if (-not $ClientName -and $args.Count -gt 0) { $ClientName = $args[0] }
+        $cName = if ($ClientName) { $ClientName } else { "client-pc" }
+        $gwToken = if (Test-Path $GatewayTokenFile) { (Get-Content $GatewayTokenFile -Raw).Trim() } else { "<CLIENT_BEARER_TOKEN>" }
+        $cfCreds = Get-CfAccessCredentials
+        $cid = if ($cfCreds.ClientId) { $cfCreds.ClientId } else { "<CF_ACCESS_CLIENT_ID>" }
+        $sec = if ($cfCreds.ClientSecret) { $cfCreds.ClientSecret } else { "<CF_ACCESS_CLIENT_SECRET>" }
+
+        Write-Host "======================================================" -ForegroundColor Cyan
+        Write-Host " [OMP Gateway] Client Setup Pack: $cName              " -ForegroundColor Cyan
+        Write-Host "======================================================" -ForegroundColor Cyan
+        Write-Host "`n--- 1. Linux/macOS Environment Script (setup-omp-env.sh) ---" -ForegroundColor Yellow
+@"
+export OPENAI_BASE_URL="https://$Domain/v1"
+export OPENAI_API_KEY="$gwToken"
+export CF_ACCESS_CLIENT_ID="$cid"
+export CF_ACCESS_CLIENT_SECRET="$sec"
+"@
+        Write-Host "`n--- 2. Windows PowerShell Script (setup-omp-env.ps1) ---" -ForegroundColor Yellow
+@"
+`$env:OPENAI_BASE_URL = "https://$Domain/v1"
+`$env:OPENAI_API_KEY = "$gwToken"
+`$env:CF_ACCESS_CLIENT_ID = "$cid"
+`$env:CF_ACCESS_CLIENT_SECRET = "$sec"
+"@
+        Write-Host "`n--- 3. VS Code Continue (~/.continue/config.json) ---" -ForegroundColor Yellow
+@"
+{
+  "models": [
+    {
+      "title": "Google Gemini 3.8 Flash (OMP Gateway)",
+      "provider": "openai",
+      "model": "google-antigravity/gemini-3.8-flash",
+      "apiBase": "https://$Domain/v1",
+      "apiKey": "$gwToken",
+      "requestOptions": {
+        "headers": {
+          "CF-Access-Client-Id": "$cid",
+          "CF-Access-Client-Secret": "$sec"
+        }
+      }
+    }
+  ]
+}
+"@
+        Write-Host "`n--- 4. cURL Test Command ---" -ForegroundColor Yellow
+@"
+curl -X POST https://$Domain/v1/chat/completions \
+  -H "CF-Access-Client-Id: $cid" \
+  -H "CF-Access-Client-Secret: $sec" \
+  -H "Authorization: Bearer $gwToken" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "google-antigravity/gemini-3.8-flash", "messages": [{"role": "user", "content": "Ping"}], "stream": false}'
 "@
         Write-Host "`n======================================================" -ForegroundColor Cyan
     }
