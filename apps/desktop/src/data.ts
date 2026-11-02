@@ -1,17 +1,7 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import { promisify } from "node:util";
-import {
-  DASHBOARD_SCHEMA_VERSION,
-  type Dashboard,
-  DashboardEngine,
-  type HealthSnapshot,
-  isDashboard,
-  UsageDataSource,
-  type UsageDataSourceAdapter,
-  type UsageReport,
-} from "@omp-toolkit/core";
-import { recordAndLoadPacingSamples } from "./pacing-store";
+import { DASHBOARD_SCHEMA_VERSION, type Dashboard, isDashboard } from "@omp-toolkit/core";
 
 const execFileAsync = promisify(execFile);
 
@@ -22,31 +12,28 @@ export interface DataSource {
   agentDir?: string;
 }
 
-const desktopAdapter: UsageDataSourceAdapter = {
-  execFile: async (file, args, options) => {
-    return execFileAsync(file, args, {
-      encoding: "utf8",
-      timeout: options?.timeout,
-      windowsHide: options?.windowsHide,
-      maxBuffer: options?.maxBuffer,
-      signal: options?.signal,
-    });
+export type MonitorExecFn = (
+  file: string,
+  args: string[],
+  options?: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    env?: Record<string, string>;
   },
-  readFile: (path) => fs.readFileSync(path, "utf8"),
+) => Promise<{ stdout: string }>;
+
+const defaultExec: MonitorExecFn = async (file, args, options) => {
+  const { stdout } = await execFileAsync(file, args, {
+    encoding: "utf8",
+    timeout: options?.timeoutMs ?? 25_000,
+    windowsHide: true,
+    maxBuffer: 2 * 1024 * 1024,
+    signal: options?.signal,
+    env: options?.env ? { ...process.env, ...options.env } : process.env,
+  });
+  return { stdout: String(stdout) };
 };
 
-export function readHealthSnapshot(agentDir?: string): HealthSnapshot | null {
-  const source = new UsageDataSource(desktopAdapter, { agentDir });
-  return source.readSnapshot();
-}
-
-export async function fetchRawUsage(
-  ompBin = process.env.OMP_BIN || "omp",
-  options?: { timeoutMs?: number; signal?: AbortSignal },
-): Promise<UsageReport[]> {
-  const source = new UsageDataSource(desktopAdapter, { ompBin });
-  return source.fetchReports(options);
-}
 export function parseMonitorPayload(text: string): Dashboard {
   let parsed: unknown;
   try {
@@ -73,15 +60,12 @@ export function parseMonitorPayload(text: string): Dashboard {
   return payload.dashboard;
 }
 
-export interface FetchDashboardDeps {
-  fetchReports?: (
-    source?: DataSource,
-    options?: { timeoutMs?: number; signal?: AbortSignal },
-  ) => Promise<UsageReport[]>;
-  readSnapshot?: (agentDir?: string) => HealthSnapshot | null;
-  recordPacing?: (reports: UsageReport[], source?: DataSource) => void;
-}
-
+/**
+ * Single data seam (ADR-0005): the installed monitor CLI owns dashboard
+ * production — usage fetch, pacing, compile — and this module only runs it
+ * (`--json --health`, schema-2) and validates the payload. Balance-alert
+ * thresholds cross the seam as env, where the CLI config reads them.
+ */
 export async function fetchDashboard(
   source?: DataSource,
   options?: {
@@ -89,32 +73,23 @@ export async function fetchDashboard(
     signal?: AbortSignal;
     balanceAlert?: { cny: number; usd: number };
   },
-  deps: FetchDashboardDeps = {},
+  deps: { execFn?: MonitorExecFn } = {},
 ): Promise<Dashboard> {
-  try {
-    const reports = await (deps.fetchReports
-      ? deps.fetchReports(source, options)
-      : fetchRawUsage(source?.ompBin, options));
-    const snapshot = deps.readSnapshot
-      ? deps.readSnapshot(source?.agentDir)
-      : readHealthSnapshot(source?.agentDir);
-    if (deps.recordPacing) {
-      deps.recordPacing(reports, source);
-    } else {
-      recordAndLoadPacingSamples(reports, { agentDir: source?.agentDir });
-    }
-    return DashboardEngine.compile(reports, snapshot, { balanceAlert: options?.balanceAlert });
-  } catch (directError) {
-    if (source?.bun && source?.script && fs.existsSync(source.script)) {
-      const { stdout } = await execFileAsync(source.bun, [source.script, "--json", "--health"], {
-        encoding: "utf8",
-        timeout: options?.timeoutMs ?? 25_000,
-        windowsHide: true,
-        maxBuffer: 2 * 1024 * 1024,
-        signal: options?.signal,
-      });
-      return parseMonitorPayload(String(stdout));
-    }
-    throw directError;
+  if (!source?.bun || !source?.script || !fs.existsSync(source.script)) {
+    throw new Error('Monitor script not found. Run "bun run install:omp".');
   }
+
+  const env: Record<string, string> = {};
+  if (options?.balanceAlert) {
+    env.DEEPSEEK_BALANCE_ALERT_CNY = String(options.balanceAlert.cny);
+    env.DEEPSEEK_BALANCE_ALERT_USD = String(options.balanceAlert.usd);
+  }
+
+  const exec = deps.execFn ?? defaultExec;
+  const { stdout } = await exec(source.bun, [source.script, "--json", "--health"], {
+    timeoutMs: options?.timeoutMs,
+    signal: options?.signal,
+    env: Object.keys(env).length > 0 ? env : undefined,
+  });
+  return parseMonitorPayload(stdout);
 }

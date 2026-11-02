@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Dashboard, UsageReport } from "@omp-toolkit/core";
+import type { Dashboard } from "@omp-toolkit/core";
 import { fetchDashboard, parseMonitorPayload } from "./data";
 
 describe("parseMonitorPayload", () => {
@@ -44,27 +44,40 @@ describe("parseMonitorPayload", () => {
     expect(() => parseMonitorPayload(raw)).toThrow("unsupported monitor schema: 1 (expected 2)");
   });
 
-  test("balance-alert thresholds reach the dashboard compile point", async () => {
-    const reports: UsageReport[] = [
-      {
-        provider: "deepseek",
-        metadata: { email: "user@example.com" },
-        limits: [
-          { id: "deepseek:balance", label: "Balance", amount: { remaining: 50, unit: "cny" } },
-        ],
-      } as UsageReport,
-    ];
-    const deps = {
-      fetchReports: async () => reports,
-      readSnapshot: () => null,
-      recordPacing: () => {},
+  test("single data seam: runs the monitor script and forwards thresholds as env", async () => {
+    const payload = JSON.stringify({
+      schemaVersion: 2,
+      fetchedAt: 1000,
+      dashboard: validDashboard,
+    });
+    const calls: Array<{ file: string; args: string[]; env?: Record<string, string> }> = [];
+    const execFn = async (
+      file: string,
+      args: string[],
+      opts?: { env?: Record<string, string> },
+    ) => {
+      calls.push({ file, args, env: opts?.env });
+      return { stdout: payload };
     };
 
-    const low = await fetchDashboard(undefined, { balanceAlert: { cny: 100, usd: 10 } }, deps);
-    expect(low.balance?.low).toBe(true);
+    const dashboard = await fetchDashboard(
+      { bun: "bun", script: import.meta.path },
+      { balanceAlert: { cny: 42, usd: 7 } },
+      { execFn },
+    );
 
-    const fine = await fetchDashboard(undefined, { balanceAlert: { cny: 10, usd: 10 } }, deps);
-    expect(fine.balance?.low).toBe(false);
+    expect(dashboard).toEqual(validDashboard);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].args).toEqual([import.meta.path, "--json", "--health"]);
+    expect(calls[0].env?.DEEPSEEK_BALANCE_ALERT_CNY).toBe("42");
+    expect(calls[0].env?.DEEPSEEK_BALANCE_ALERT_USD).toBe("7");
+  });
+
+  test("single data seam: refuses without bun and monitor script", async () => {
+    await expect(fetchDashboard(undefined)).rejects.toThrow("Monitor script not found");
+    await expect(fetchDashboard({ bun: "bun", script: "/nonexistent/script.js" })).rejects.toThrow(
+      "Monitor script not found",
+    );
   });
 
   test("throws on missing or invalid dashboard object", () => {
