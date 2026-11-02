@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
+import { desktopSourcePaths, findStaleDist } from "./freshness";
 import { IPC, type RendererToMainEvents } from "./ipc";
 import { consumeLaunchFailure } from "./launch-failure";
 import { logError } from "./logger";
@@ -60,6 +61,21 @@ void app.whenReady().then(async () => {
 
   const checkoutRoot = path.resolve(app.getAppPath(), "../..");
   const { distDir, preload: preloadPath, html: htmlPath } = panelPaths(app.getAppPath());
+
+  const staleSource = findStaleDist(
+    path.join(distDir, "main.cjs"),
+    desktopSourcePaths(app.getAppPath(), checkoutRoot),
+  );
+  if (staleSource) {
+    const staleMessage = `Desktop build is stale: ${staleSource} is newer than the built widget. Run "bun run build:desktop" and relaunch.`;
+    logError(new Error(staleMessage));
+    if (!process.argv.includes("--selftest")) {
+      dialog.showErrorBox("OMP Provider Usage", staleMessage);
+      app.quit();
+      return;
+    }
+  }
+
   const assetsDir = path.join(distDir, "assets");
   const iconPath = path.join(assetsDir, "app-icon.png");
 
