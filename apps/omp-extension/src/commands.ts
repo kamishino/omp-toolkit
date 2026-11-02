@@ -3,6 +3,7 @@ import type { WarmUpRequest } from "@omp-toolkit/core";
 import type { AutoHealCoordinator } from "./auto-heal";
 import { PROVIDER, RESTORE_STREAK } from "./config";
 import { short } from "./fs-util";
+import { handleGatewayCommand } from "./gateway-command";
 import { healthManager } from "./health-manager";
 import { runWarmUp, type WarmUpDependencies } from "./warmup";
 import { publish, setWidgetEnabled, table, widgetEnabled } from "./widget";
@@ -477,6 +478,28 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         }
       } catch (error) {
         ctx.ui.notify(`Gemini auto-restore failed: ${short(error)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand("gateway", {
+    description:
+      "Manage OMP Auth Gateway, Cloudflare Tunnel, and client PC tokens: /gateway [status|start|stop|restart|client-add|recipe]",
+    handler: async (args, ctx) => {
+      try {
+        const rawArgs = args.trim().split(/\s+/).filter(Boolean);
+        const output = await handleGatewayCommand(rawArgs);
+        pi.sendMessage(
+          {
+            customType: "gateway-status",
+            content: output,
+            display: true,
+            attribution: "agent",
+          },
+          { triggerTurn: false },
+        );
+      } catch (error) {
+        ctx.ui.notify(`Gateway command failed: ${short(error)}`, "error");
       }
     },
   });
