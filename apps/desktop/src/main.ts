@@ -3,6 +3,7 @@ import path from "node:path";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { desktopSourcePaths, findStaleDist } from "./freshness";
+import { checkGatewayStatus } from "./gateway-status";
 import { IPC, type RendererToMainEvents } from "./ipc";
 import { consumeLaunchFailure } from "./launch-failure";
 import { logError } from "./logger";
@@ -210,31 +211,19 @@ void app.whenReady().then(async () => {
     return;
   }
 
-  async function checkGatewayStatus(): Promise<string> {
-    try {
-      const res = await fetch("http://127.0.0.1:4000/healthz", {
-        signal: AbortSignal.timeout(1000),
-      });
-      if (res.ok) {
-        return "Gateway: Active (:4000)";
-      }
-      return `Gateway: HTTP ${res.status}`;
-    } catch {
-      return "Gateway: Off";
-    }
-  }
+  const syncTray = (gatewayStatus?: string): void => {
+    desktopTray?.update(
+      runtime?.getDashboard() ?? null,
+      runtime?.isRefreshing() ?? false,
+      runtime?.getLastError() ?? null,
+      gatewayStatus,
+    );
+  };
 
   // Reactive subscription to deep runtime state changes
   runtime.subscribe((state) => {
     panel?.sendState(state);
-    void checkGatewayStatus().then((gwStatus) => {
-      desktopTray?.update(
-        runtime?.getDashboard() ?? null,
-        runtime?.isRefreshing() ?? false,
-        runtime?.getLastError() ?? null,
-        gwStatus,
-      );
-    });
+    void checkGatewayStatus().then(syncTray);
   });
 
   // Wire type-safe IPC handlers to runtime
@@ -298,11 +287,7 @@ void app.whenReady().then(async () => {
   }
 
   nativeTheme.on("updated", () => {
-    desktopTray?.update(
-      runtime?.getDashboard() ?? null,
-      runtime?.isRefreshing() ?? false,
-      runtime?.getLastError() ?? null,
-    );
+    syncTray();
   });
 
   app.on("second-instance", showPanel);
