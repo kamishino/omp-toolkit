@@ -5,6 +5,15 @@ import { icon } from "./icon";
 import { renderLimitCell } from "./limit-cell";
 import { providerLogo } from "./provider-logos";
 
+const ROUTE_TITLES: Record<string, string> = {
+  OK: "Route healthy",
+  HANG: "Route stalled — no response from this route; use Check to probe it",
+  AUTH: "Route blocked — sign-in or credentials need attention",
+  MODEL: "Route blocked — model unavailable for this account",
+  ERR: "Route error — the last probe failed; use Check to probe it",
+  "—": "No route health data yet",
+};
+
 export function renderProviderCard(
   provider: DashboardProvider,
   hasAnyRoute: boolean,
@@ -38,6 +47,12 @@ export function renderProviderCard(
     }
     lightImg.onerror = () => lightImg.remove();
     logoSlot.appendChild(lightImg);
+  } else {
+    const fallback = document.createElement("span");
+    fallback.className = "provider-logo-fallback";
+    fallback.setAttribute("aria-hidden", "true");
+    fallback.textContent = (provider.name.trim().charAt(0) || "?").toUpperCase();
+    logoSlot.appendChild(fallback);
   }
   headerDiv.appendChild(logoSlot);
 
@@ -127,6 +142,9 @@ export function renderProviderCard(
     thAcc.scope = "row";
     thAcc.className = `account col-account level-${row.level}`;
     thAcc.textContent = row.displayAccount;
+    if (row.account !== row.displayAccount) {
+      thAcc.title = row.account;
+    }
     tr.appendChild(thAcc);
 
     if (hasAnyRoute) {
@@ -135,6 +153,8 @@ export function renderProviderCard(
       const routeSpan = document.createElement("span");
       routeSpan.className = `route level-${row.route.level}`;
       routeSpan.textContent = row.route.text;
+      routeSpan.title = ROUTE_TITLES[row.route.text] ?? row.route.text;
+      routeSpan.setAttribute("aria-label", ROUTE_TITLES[row.route.text] ?? row.route.text);
       tdRoute.appendChild(routeSpan);
       tr.appendChild(tdRoute);
     }

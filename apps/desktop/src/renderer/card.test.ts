@@ -104,6 +104,105 @@ describe("renderer card module", () => {
     }
   });
 
+  test("account cell reveals the full account and route badge explains itself", () => {
+    mockDoc();
+    try {
+      const card = renderProviderCard(
+        {
+          id: "google-antigravity",
+          name: "GOOGLE ANTIGRAVITY",
+          suffix: " · Gemini",
+          accounts: 1,
+          columns: [{ key: "c1", label: "Weekly" }],
+          rows: [
+            {
+              account: "alpha@example.com",
+              displayAccount: "alpha",
+              health: "hang",
+              maxUsed: 0.2,
+              level: "ok",
+              route: { text: "HANG", level: "critical" },
+              limits: [{ label: "Weekly", low: false, level: "ok", usedFraction: 0.2 }],
+            },
+          ],
+        },
+        true,
+        0,
+        {
+          status: "loading",
+          data: null,
+          intervalSeconds: 300,
+          warmup: { running: false, message: null },
+          settings: DEFAULT_DESKTOP_SETTINGS,
+        },
+      );
+
+      interface MockNode {
+        tagName: string;
+        className: string;
+        title?: string;
+        children: MockNode[];
+      }
+      const findByClass = (node: MockNode, cls: string): MockNode | undefined => {
+        if (node.className?.split(" ").includes(cls)) return node;
+        for (const child of node.children ?? []) {
+          const hit = findByClass(child, cls);
+          if (hit) return hit;
+        }
+        return undefined;
+      };
+      const cardObj = card as unknown as MockNode;
+      expect(findByClass(cardObj, "account")?.title).toBe("alpha@example.com");
+      expect(findByClass(cardObj, "route")?.title).toContain("stalled");
+    } finally {
+      restoreDoc();
+    }
+  });
+
+  test("unknown provider renders a letter badge instead of an empty slot", () => {
+    mockDoc();
+    try {
+      const card = renderProviderCard(
+        {
+          id: "unknown-provider",
+          name: "UNKNOWN PROVIDER",
+          suffix: "",
+          accounts: 1,
+          columns: [{ key: "c1", label: "Weekly" }],
+          rows: [],
+        },
+        false,
+        0,
+        {
+          status: "loading",
+          data: null,
+          intervalSeconds: 300,
+          warmup: { running: false, message: null },
+          settings: DEFAULT_DESKTOP_SETTINGS,
+        },
+      );
+      interface MockNode {
+        tagName: string;
+        className: string;
+        textContent?: string;
+        children: MockNode[];
+      }
+      const find = (node: MockNode, cls: string): MockNode | undefined => {
+        if (node.className?.split(" ").includes(cls)) return node;
+        for (const child of node.children ?? []) {
+          const hit = find(child, cls);
+          if (hit) return hit;
+        }
+        return undefined;
+      };
+      const badge = find(card as unknown as MockNode, "provider-logo-fallback");
+      expect(badge).toBeDefined();
+      expect(badge?.textContent).toBe("U");
+    } finally {
+      restoreDoc();
+    }
+  });
+
   test("renderProviderCard renders single row without sub-row when limit carries pacing", () => {
     mockDoc();
     try {

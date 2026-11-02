@@ -274,6 +274,20 @@ body {
   display: block;
 }
 
+.provider-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 100%;
+  border: var(--size-border) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
 .provider-logo .logo-dark {
   display: none;
 }
