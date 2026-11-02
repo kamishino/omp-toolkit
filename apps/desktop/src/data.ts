@@ -73,15 +73,37 @@ export function parseMonitorPayload(text: string): Dashboard {
   return payload.dashboard;
 }
 
+export interface FetchDashboardDeps {
+  fetchReports?: (
+    source?: DataSource,
+    options?: { timeoutMs?: number; signal?: AbortSignal },
+  ) => Promise<UsageReport[]>;
+  readSnapshot?: (agentDir?: string) => HealthSnapshot | null;
+  recordPacing?: (reports: UsageReport[], source?: DataSource) => void;
+}
+
 export async function fetchDashboard(
   source?: DataSource,
-  options?: { timeoutMs?: number; signal?: AbortSignal },
+  options?: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    balanceAlert?: { cny: number; usd: number };
+  },
+  deps: FetchDashboardDeps = {},
 ): Promise<Dashboard> {
   try {
-    const reports = await fetchRawUsage(source?.ompBin, options);
-    const snapshot = readHealthSnapshot(source?.agentDir);
-    recordAndLoadPacingSamples(reports, { agentDir: source?.agentDir });
-    return DashboardEngine.compile(reports, snapshot);
+    const reports = await (deps.fetchReports
+      ? deps.fetchReports(source, options)
+      : fetchRawUsage(source?.ompBin, options));
+    const snapshot = deps.readSnapshot
+      ? deps.readSnapshot(source?.agentDir)
+      : readHealthSnapshot(source?.agentDir);
+    if (deps.recordPacing) {
+      deps.recordPacing(reports, source);
+    } else {
+      recordAndLoadPacingSamples(reports, { agentDir: source?.agentDir });
+    }
+    return DashboardEngine.compile(reports, snapshot, { balanceAlert: options?.balanceAlert });
   } catch (directError) {
     if (source?.bun && source?.script && fs.existsSync(source.script)) {
       const { stdout } = await execFileAsync(source.bun, [source.script, "--json", "--health"], {

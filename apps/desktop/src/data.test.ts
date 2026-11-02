@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Dashboard } from "@omp-toolkit/core";
-import { parseMonitorPayload } from "./data";
+import type { Dashboard, UsageReport } from "@omp-toolkit/core";
+import { fetchDashboard, parseMonitorPayload } from "./data";
 
 describe("parseMonitorPayload", () => {
   const validDashboard: Dashboard = {
@@ -42,6 +42,29 @@ describe("parseMonitorPayload", () => {
       dashboard: validDashboard,
     });
     expect(() => parseMonitorPayload(raw)).toThrow("unsupported monitor schema: 1 (expected 2)");
+  });
+
+  test("balance-alert thresholds reach the dashboard compile point", async () => {
+    const reports: UsageReport[] = [
+      {
+        provider: "deepseek",
+        metadata: { email: "user@example.com" },
+        limits: [
+          { id: "deepseek:balance", label: "Balance", amount: { remaining: 50, unit: "cny" } },
+        ],
+      } as UsageReport,
+    ];
+    const deps = {
+      fetchReports: async () => reports,
+      readSnapshot: () => null,
+      recordPacing: () => {},
+    };
+
+    const low = await fetchDashboard(undefined, { balanceAlert: { cny: 100, usd: 10 } }, deps);
+    expect(low.balance?.low).toBe(true);
+
+    const fine = await fetchDashboard(undefined, { balanceAlert: { cny: 10, usd: 10 } }, deps);
+    expect(fine.balance?.low).toBe(false);
   });
 
   test("throws on missing or invalid dashboard object", () => {

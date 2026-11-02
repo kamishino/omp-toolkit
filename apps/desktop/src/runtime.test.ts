@@ -76,6 +76,25 @@ describe("DesktopRuntime deep coordinator", () => {
     }
   });
 
+  test("refresh passes current balance-alert thresholds to the fetch seam", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      let received: { balanceAlert?: { cny: number; usd: number } } | undefined;
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        fetchDashboardFn: async (source) => {
+          received = source;
+          return dummyDashboard();
+        },
+      });
+      await runtime.refresh();
+      expect(received?.balanceAlert).toEqual(runtime.getSettings().balanceAlert);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   test("refresh catches error and updates state to error", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
     try {

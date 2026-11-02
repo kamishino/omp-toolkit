@@ -1,4 +1,4 @@
-import type { Dashboard, WarmUpRequest } from "@omp-toolkit/core";
+import type { BalanceAlertThresholds, Dashboard, WarmUpRequest } from "@omp-toolkit/core";
 import { supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
 import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { fetchDashboard } from "./data";
@@ -54,7 +54,11 @@ export interface DesktopRuntimeOptions {
   userDataDir: string;
   checkoutRoot: string;
   loginItem?: LoginItem | null;
-  fetchDashboardFn?: (source?: { bun?: string; script?: string }) => Promise<Dashboard>;
+  fetchDashboardFn?: (source?: {
+    bun?: string;
+    script?: string;
+    balanceAlert?: BalanceAlertThresholds;
+  }) => Promise<Dashboard>;
   executeWarmUpFn?: (
     source: { bun: string; script: string },
     request: WarmUpRequest,
@@ -162,7 +166,9 @@ export class DesktopRuntime {
     try {
       let dashboard: Dashboard;
       if (this.options.fetchDashboardFn) {
-        dashboard = await this.options.fetchDashboardFn();
+        dashboard = await this.options.fetchDashboardFn({
+          balanceAlert: this.settings.balanceAlert,
+        });
       } else {
         const bun = findBun();
         const script = resolveMonitorScript(
@@ -177,7 +183,10 @@ export class DesktopRuntime {
           throw new Error('Monitor script not found. Run "bun run install:omp".');
         }
 
-        dashboard = await fetchDashboard({ bun, script });
+        dashboard = await fetchDashboard(
+          { bun, script },
+          { balanceAlert: this.settings.balanceAlert },
+        );
       }
       this.lastDashboard = dashboard;
       this.lastError = null;
