@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import type {
+  ClientBundle,
   ClientPack,
   ClientPackOptions,
   ClientRecipe,
@@ -227,4 +228,55 @@ export function generateClientPack(options: ClientPackOptions): ClientPack {
     ompProviderConfigJson: JSON.stringify(ompProviderConfig, null, 2),
     curlSnippet: curlRecipe.snippet,
   };
+}
+
+/**
+ * Generates 1-click self-installing onboarding scripts for secondary PCs.
+ */
+export function exportClientBundle(options: ClientPackOptions): ClientBundle {
+  const pack = generateClientPack(options);
+  const domain = options.domain || "gateway.example.com";
+  const token = pack.bearerToken;
+  const cid = options.cfClientId ?? "";
+  const sec = options.cfClientSecret ?? "";
+  const hasCf = Boolean(cid && sec);
+
+  const scriptPs1 = [
+    `# OMP Gateway 1-Click Client Onboarding Script (Windows)`,
+    `# Target Client: ${options.clientName}`,
+    `Write-Host "Configuring OMP Gateway client for ${options.clientName}..." -ForegroundColor Cyan`,
+    `[Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", "https://${domain}/v1", "User")`,
+    `[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "${token}", "User")`,
+    hasCf ? `[Environment]::SetEnvironmentVariable("CF_ACCESS_CLIENT_ID", "${cid}", "User")` : null,
+    hasCf
+      ? `[Environment]::SetEnvironmentVariable("CF_ACCESS_CLIENT_SECRET", "${sec}", "User")`
+      : null,
+    `$env:OPENAI_BASE_URL = "https://${domain}/v1"`,
+    `$env:OPENAI_API_KEY = "${token}"`,
+    hasCf ? `$env:CF_ACCESS_CLIENT_ID = "${cid}"` : null,
+    hasCf ? `$env:CF_ACCESS_CLIENT_SECRET = "${sec}"` : null,
+    `Write-Host "Environment variables configured persistently for current user." -ForegroundColor Green`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const scriptSh = [
+    `#!/usr/bin/env bash`,
+    `# OMP Gateway 1-Click Client Onboarding Script (macOS / Linux)`,
+    `# Target Client: ${options.clientName}`,
+    `echo "Configuring OMP Gateway client for ${options.clientName}..."`,
+    `ENV_FILE="$HOME/.bashrc"`,
+    `[ -f "$HOME/.zshrc" ] && ENV_FILE="$HOME/.zshrc"`,
+    `cat << 'EOF' >> "$ENV_FILE"`,
+    `export OPENAI_BASE_URL="https://${domain}/v1"`,
+    `export OPENAI_API_KEY="${token}"`,
+    hasCf ? `export CF_ACCESS_CLIENT_ID="${cid}"` : null,
+    hasCf ? `export CF_ACCESS_CLIENT_SECRET="${sec}"` : null,
+    `EOF`,
+    `echo "Environment variables appended to $ENV_FILE"`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return { scriptPs1, scriptSh };
 }

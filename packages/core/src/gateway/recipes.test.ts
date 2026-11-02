@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  exportClientBundle,
   generateClientPack,
   generateClientRecipe,
   generateClientToken,
@@ -146,5 +147,43 @@ describe("Multi-PC Zero-Leak Client Pack Generator (Slice 2)", () => {
     expect(combined).not.toContain("AIzaSy");
     expect(combined).not.toContain("refresh_token");
     expect(combined).not.toContain("agent.db");
+  });
+});
+
+describe("One-Click Client Onboarding Script Exporter (Slice 4)", () => {
+  const packOptions = {
+    clientName: "remote-node-1",
+    domain: "gateway.example.com",
+    gatewayToken: "omp_gw_token_node1",
+    cfClientId: "node1.access",
+    cfClientSecret: "node1-secret",
+    model: "google-antigravity/gemini-3.8-flash",
+  };
+
+  test("exportClientBundle generates self-installing PowerShell and Bash scripts", () => {
+    const bundle = exportClientBundle(packOptions);
+
+    // PowerShell self-installer
+    expect(bundle.scriptPs1).toContain('[Environment]::SetEnvironmentVariable("OPENAI_BASE_URL"');
+    expect(bundle.scriptPs1).toContain('[Environment]::SetEnvironmentVariable("OPENAI_API_KEY"');
+    expect(bundle.scriptPs1).toContain(
+      '[Environment]::SetEnvironmentVariable("CF_ACCESS_CLIENT_ID"',
+    );
+    expect(bundle.scriptPs1).toContain("https://gateway.example.com/v1");
+    expect(bundle.scriptPs1).toContain("omp_gw_token_node1");
+
+    // Bash self-installer
+    expect(bundle.scriptSh).toContain('export OPENAI_BASE_URL="https://gateway.example.com/v1"');
+    expect(bundle.scriptSh).toContain('export OPENAI_API_KEY="omp_gw_token_node1"');
+    expect(bundle.scriptSh).toContain('export CF_ACCESS_CLIENT_ID="node1.access"');
+    expect(bundle.scriptSh).toContain(".bashrc");
+  });
+
+  test("exported scripts contain zero raw provider secrets", () => {
+    const bundle = exportClientBundle(packOptions);
+    const text = bundle.scriptPs1 + bundle.scriptSh;
+    expect(text).not.toContain("agent.db");
+    expect(text).not.toContain("sk-proj");
+    expect(text).not.toContain("refresh_token");
   });
 });

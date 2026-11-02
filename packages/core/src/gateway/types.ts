@@ -64,3 +64,8 @@ export interface ClientPack {
   ompProviderConfigJson: string;
   curlSnippet: string;
 }
+
+export interface ClientBundle {
+  scriptPs1: string;
+  scriptSh: string;
+}
