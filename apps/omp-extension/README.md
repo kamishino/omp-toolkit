@@ -165,6 +165,7 @@ On Windows, replace `~` with `$HOME` or run through PowerShell. For complete wor
 | `/gemini-auto-restore` | List manual exclusion opt-ins | Without arguments, lists accounts opted into automatic streak restoration alongside currently excluded manual accounts. |
 | `/gemini-auto-restore <email-or-local-part>` | Opt in manual exclusion | Enables streak-based auto-restore for a manually excluded account. Account must resolve to a live Antigravity account. |
 | `/gemini-auto-restore off <email-or-local-part>` | Opt out manual exclusion | Disables auto-restore for an account. If an account was deleted upstream, matches by email or local-part in the sidecar to allow cleanup. |
+| `/gateway [status\|start\|stop\|restart\|client-add\|recipe]` | Manage Auth Gateway & client PC tokens | `/gateway status` checks daemon and tunnel health, `/gateway start`/`stop` manages daemons, `/gateway client-add <name>` issues a scoped bearer token for a secondary PC, `/gateway recipe` prints client setup snippets. |
 
 ```text
 /gemini-health --confirm

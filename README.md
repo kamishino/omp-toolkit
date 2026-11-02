@@ -183,6 +183,7 @@ Interact with the circuit breaker directly from inside OMP:
 /gemini-warmup <account>|--all               # Send minimal warm-up request to OK accounts
 /gemini-check <account>                      # Probe specific account to verify route recovery
 /template save|apply|list|show|delete <name>  # Bundle global AGENTS.md + RULES.md into templates/<name>/ (see templates/README.md)
+/gateway [status|start|stop|restart|client-add|recipe] # Manage Auth Gateway, tunnel, and secondary PC tokens
 ```
 
 For complete extension architecture, automatic behavior, CLI usage, wire normalizer details, and state schema, see the [OMP Extension Guide](apps/omp-extension/README.md).

@@ -279,3 +279,89 @@ print(message.content[0].text)
 | **HTTP 401 Unauthorized** | Request blocked by Gate 2 (OMP Gateway) | Verify `Authorization: Bearer <token>` header matches `~/.omp/auth-gateway.token`. |
 | **Stream Latency / Bursting** | Chunk buffering enabled on proxy | Ensure `noChunkedEncoding: false` is set in `~/.cloudflared/config.yaml`. |
 | **Broker Connection Refused** | Auth Broker daemon not started | Run `powershell -File scripts/gateway/omp-gateway.ps1 start` to start broker on port 8765. |
+
+---
+
+## 8. Multi-PC Zero-Leak Deployment & Defender Guide
+
+### Why This Architecture Protects Your Credentials
+Exporting and importing OMP state or raw API keys (`agent.db`, Google OAuth tokens, DeepSeek keys) across multiple workstations (e.g. secondary laptops, remote VMs, travel PCs) creates critical attack surfaces:
+1. **Key Leakage Risk:** Credentials stored on portable laptops can be exposed via git commits, unencrypted disks, or compromised local environments.
+2. **OAuth Invalidation:** Many OAuth providers (such as Google Antigravity) enforce rotating refresh tokens. When multiple machines refresh using the same credentials, one machine inevitably invalidates the session for all others.
+
+With the **Two-Tier Defender Architecture**, the primary workstation acts as the single air-gapped vault. Secondary PCs only receive scoped bearer tokens and Cloudflare Access service credentials:
+
+```mermaid
+flowchart TD
+    subgraph PrimaryPC ["🖥️ Primary PC (Vault Host & Defender)"]
+        Vault[(agent.db Vault<br/>All API Keys & OAuth)]
+        Broker["omp auth-broker (:8765)"]
+        Gateway["omp auth-gateway (:4000)<br/>--clients=gateway-clients.json"]
+        Tunnel["cloudflared.exe<br/>Outbound Argo Tunnel"]
+        Vault --> Broker --> Gateway --> Tunnel
+    end
+
+    subgraph Edge ["🛡️ Cloudflare Zero Trust Edge (Gate 1)"]
+        CF["Strict Service Auth Check<br/>Rejects Unknown Public Traffic with 403"]
+    end
+
+    subgraph ClientPCs ["💻 Secondary Workstations (Zero Raw Keys)"]
+        Laptop["Laptop / Remote Node<br/>• Scoped Bearer Token (omp_gw_...)<br/>• CF Access Service Credentials<br/>• ZERO raw API keys / NO OAuth tokens"]
+        IDEs["IDEs & Agents<br/>• OMP Remote Provider<br/>• VS Code Continue / Cline<br/>• Claude Code / Cursor / Python"]
+        Laptop --> IDEs
+    end
+
+    Tunnel <--> CF
+    CF <--> Laptop
+```
+
+### Step-by-Step Operator Workflow
+
+#### 1. On the Primary PC (Vault Host)
+Start the gateway daemons (if not already running):
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1 start
+```
+Or from inside an active OMP terminal session:
+```
+/gateway start
+```
+
+#### 2. Issue a Scoped Token for a Secondary PC
+To onboard a new machine (e.g. `laptop-air`), run:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1 client-add laptop-air -Models "google-antigravity/*,deepseek/*"
+```
+Or inside OMP:
+```
+/gateway client-add laptop-air
+```
+This generates a unique bearer token (`omp_gw_...`), writes its SHA-256 hash to `~/.omp/gateway-clients.json` (auto-reloaded without server restart), and displays the **Client Setup Pack**.
+
+#### 3. On the Secondary PC (Client)
+Configure the client environment using the generated setup script:
+
+**macOS / Linux:**
+```bash
+export OPENAI_BASE_URL="https://gateway.example.com/v1"
+export OPENAI_API_KEY="omp_gw_<token>"
+export CF_ACCESS_CLIENT_ID="<client-id>.access"
+export CF_ACCESS_CLIENT_SECRET="<client-secret>"
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:OPENAI_BASE_URL = "https://gateway.example.com/v1"
+$env:OPENAI_API_KEY = "omp_gw_<token>"
+$env:CF_ACCESS_CLIENT_ID = "<client-id>.access"
+$env:CF_ACCESS_CLIENT_SECRET = "<client-secret>"
+```
+
+Now run any coding agent, IDE extension, or Python script on the secondary PC. All inference routes through your primary workstation's accounts while your raw credentials remain 100% isolated.
+
+#### 4. Emergency Revocation
+If a secondary PC is lost, decommissioned, or compromised, immediately revoke its access from the primary PC without restarting services or affecting other machines:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1 client-revoke laptop-air
+```
+The gateway re-reads `gateway-clients.json` instantaneously, and all subsequent requests from that token are rejected with `HTTP 401 Unauthorized`.
