@@ -16,7 +16,7 @@
 [CmdletBinding()]
 param (
     [Parameter(Position = 0)]
-    [ValidateSet('start', 'stop', 'restart', 'status', 'test', 'token', 'client-config', 'client-add', 'client-list', 'client-revoke', 'client-pack', 'logs')]
+    [ValidateSet('start', 'stop', 'restart', 'status', 'test', 'token', 'client-config', 'client-add', 'client-list', 'client-revoke', 'client-pack', 'client-export', 'logs')]
     [string]$Action = 'status',
 
     [Parameter()]
@@ -37,7 +37,12 @@ param (
     [string]$ClientName = '',
 
     [Parameter()]
-    [string]$Models = 'google-antigravity/*,deepseek/*'
+    [string]$ClientToken = '',
+
+    [Parameter()]
+    [string]$Models = 'google-antigravity/*,deepseek/*',
+    [Parameter()]
+    [string]$OutDir = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,6 +64,10 @@ $BrokerTokenFile  = Join-Path $OmpDir "auth-broker.token"
 $GatewayTokenFile = Join-Path $OmpDir "auth-gateway.token"
 $CfAccessFile     = Join-Path $OmpDir "cf-access.json"
 $ClientsFile     = Join-Path $OmpDir "gateway-clients.json"
+$CloudflaredPidFile = Join-Path $RunDir "cloudflared.pid"
+$CloudflaredLogFile = Join-Path $LogDir "cloudflared.log"
+$CloudflaredErrFile = Join-Path $LogDir "cloudflared.err.log"
+$CloudflaredConfigFile = Join-Path (Join-Path $HomeDir ".cloudflared") "config.yaml"
 
 # --- Binaries ---
 $OmpBin = Join-Path $HomeDir "AppData\Local\omp\omp.exe"
@@ -228,6 +237,33 @@ switch ($Action) {
         if (-not $gwToken) {
             $gwToken = (& $OmpBin auth-gateway token).Trim()
         }
+        # 5. Check Cloudflare Tunnel
+        if ($CloudflaredBin -and (Test-Path $CloudflaredBin)) {
+            $cfPid = Get-RunningPid $CloudflaredPidFile
+            if ($cfPid) {
+                Write-Host " [OK] Cloudflare Tunnel is already running (PID: $cfPid)" -ForegroundColor Green
+            } else {
+                $runningProcs = Get-Process -Name cloudflared -ErrorAction SilentlyContinue
+                if ($runningProcs) {
+                    $extPid = $runningProcs[0].Id
+                    Write-Host " [OK] Cloudflare Tunnel active on host (PID: $extPid)" -ForegroundColor Green
+                    Set-Content -Path $CloudflaredPidFile -Value $extPid -Force
+                } elseif (Test-Path $CloudflaredConfigFile) {
+                    Write-Host " [*] Launching Cloudflare Tunnel in background..." -ForegroundColor Cyan
+                    $cfProc = Start-Process -FilePath $CloudflaredBin `
+                        -ArgumentList "tunnel --config `"$CloudflaredConfigFile`" run" `
+                        -RedirectStandardOutput $CloudflaredLogFile `
+                        -RedirectStandardError $CloudflaredErrFile `
+                        -WindowStyle Hidden -PassThru
+                    Set-Content -Path $CloudflaredPidFile -Value $cfProc.Id -Force
+                    Write-Host " [OK] Cloudflare Tunnel started with PID $($cfProc.Id)." -ForegroundColor Green
+                } else {
+                    Write-Host " [WARN] Cloudflare config not found at $CloudflaredConfigFile. Tunnel not started." -ForegroundColor Yellow
+                }
+            }
+        } else {
+            Write-Host " [INFO] cloudflared.exe not found. Public tunnel not started (local gateway only)." -ForegroundColor DarkGray
+        }
 
         Write-Host ""
         Write-Host "======================================================" -ForegroundColor Green
@@ -258,6 +294,13 @@ switch ($Action) {
         }
 
         Write-Host " [OK] All OMP Gateway services stopped." -ForegroundColor Green
+
+        $cfPid = Get-RunningPid $CloudflaredPidFile
+        if ($cfPid) {
+            Write-Host " [*] Terminating Cloudflare Tunnel (PID: $cfPid)..." -ForegroundColor DarkGray
+            Stop-Process -Id $cfPid -Force -ErrorAction SilentlyContinue
+            Remove-Item $CloudflaredPidFile -Force -ErrorAction SilentlyContinue
+        }
     }
 
     'restart' {
@@ -560,7 +603,7 @@ print(message.content[0].text)
         Write-Host "      Client Token  : $clientToken" -ForegroundColor Yellow
         Write-Host "      (Token will not be displayed again. Transmit securely to client PC.)" -ForegroundColor DarkGray
 
-        & $PSCommandPath client-pack -ClientName $ClientName
+        & $PSCommandPath client-pack -ClientName $ClientName -ClientToken $clientToken
     }
 
     'client-list' {
@@ -627,7 +670,17 @@ print(message.content[0].text)
     'client-pack' {
         if (-not $ClientName -and $args.Count -gt 0) { $ClientName = $args[0] }
         $cName = if ($ClientName) { $ClientName } else { "client-pc" }
-        $gwToken = if (Test-Path $GatewayTokenFile) { (Get-Content $GatewayTokenFile -Raw).Trim() } else { "<CLIENT_BEARER_TOKEN>" }
+        $gwToken = if ($ClientToken) {
+            $ClientToken
+        } elseif ($ClientName) {
+            Write-Host " [NOTE] Raw bearer token is not stored on server (only SHA-256 hash is saved)." -ForegroundColor DarkGray
+            Write-Host "        Pass -ClientToken <token> to inject, or generate a fresh token with client-add." -ForegroundColor DarkGray
+            "<YOUR_SCOPED_CLIENT_TOKEN>"
+        } elseif (Test-Path $GatewayTokenFile) {
+            (Get-Content $GatewayTokenFile -Raw).Trim()
+        } else {
+            "<CLIENT_BEARER_TOKEN>"
+        }
         $cfCreds = Get-CfAccessCredentials
         $cid = if ($cfCreds.ClientId) { $cfCreds.ClientId } else { "<CF_ACCESS_CLIENT_ID>" }
         $sec = if ($cfCreds.ClientSecret) { $cfCreds.ClientSecret } else { "<CF_ACCESS_CLIENT_SECRET>" }
@@ -679,6 +732,95 @@ curl -X POST https://$Domain/v1/chat/completions \
   -d '{"model": "google-antigravity/gemini-3.8-flash", "messages": [{"role": "user", "content": "Ping"}], "stream": false}'
 "@
         Write-Host "`n======================================================" -ForegroundColor Cyan
+    }
+
+    'client-export' {
+        if (-not $ClientName -and $args.Count -gt 0) { $ClientName = $args[0] }
+        if (-not $ClientName) {
+            Write-Error "Client name is required. Usage: .\omp-gateway.ps1 client-export <client-name> [-OutDir <dir>] [-ClientToken <token>]"
+            exit 1
+        }
+        $targetDir = if ($OutDir) { $OutDir } else { Join-Path (Join-Path $OmpDir "clients") $ClientName }
+        if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+
+        $gwToken = if ($ClientToken) {
+            $ClientToken
+        } elseif ($ClientName) {
+            Write-Host " [NOTE] Raw bearer token is not stored on server (only SHA-256 hash is saved)." -ForegroundColor DarkGray
+            Write-Host "        Pass -ClientToken <token> to inject, or generate a fresh token with client-add." -ForegroundColor DarkGray
+            "<YOUR_SCOPED_CLIENT_TOKEN>"
+        } elseif (Test-Path $GatewayTokenFile) {
+            (Get-Content $GatewayTokenFile -Raw).Trim()
+        } else {
+            "<CLIENT_BEARER_TOKEN>"
+        }
+
+        $cfCreds = Get-CfAccessCredentials
+        $cid = if ($cfCreds.ClientId) { $cfCreds.ClientId } else { "<CF_ACCESS_CLIENT_ID>" }
+        $sec = if ($cfCreds.ClientSecret) { $cfCreds.ClientSecret } else { "<CF_ACCESS_CLIENT_SECRET>" }
+
+        $ps1Path = Join-Path $targetDir "join-gateway.ps1"
+        $shPath  = Join-Path $targetDir "join-gateway.sh"
+
+        $ps1Content = @"
+# OMP Gateway 1-Click Client Onboarding Script (Windows)
+# Target Client: $ClientName
+Write-Host "Configuring OMP Gateway client for $ClientName..." -ForegroundColor Cyan
+[Environment]::SetEnvironmentVariable("OPENAI_BASE_URL", "https://$Domain/v1", "User")
+[Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "$gwToken", "User")
+[Environment]::SetEnvironmentVariable("CF_ACCESS_CLIENT_ID", "$cid", "User")
+[Environment]::SetEnvironmentVariable("CF_ACCESS_CLIENT_SECRET", "$sec", "User")
+`$env:OPENAI_BASE_URL = "https://$Domain/v1"
+`$env:OPENAI_API_KEY = "$gwToken"
+`$env:CF_ACCESS_CLIENT_ID = "$cid"
+`$env:CF_ACCESS_CLIENT_SECRET = "$sec"
+Write-Host " [OK] Environment variables configured persistently for current user." -ForegroundColor Green
+Write-Host "      Testing connection to https://$Domain..." -ForegroundColor DarkGray
+try {
+    `$headers = @{
+        "CF-Access-Client-Id"     = "$cid"
+        "CF-Access-Client-Secret" = "$sec"
+        "Authorization"           = "Bearer $gwToken"
+    }
+    `$res = Invoke-RestMethod -Uri "https://$Domain/v1/models" -Headers `$headers -TimeoutSec 10 -ErrorAction Stop
+    Write-Host " [PASS] Gateway connected! `$((`$res.data).Count) models available." -ForegroundColor Green
+} catch {
+    Write-Host " [WARN] Could not reach gateway: `$(`$_.Exception.Message)" -ForegroundColor Yellow
+}
+"@
+
+        $shContent = @"
+#!/usr/bin/env bash
+# OMP Gateway 1-Click Client Onboarding Script (macOS / Linux)
+# Target Client: $ClientName
+echo "Configuring OMP Gateway client for $ClientName..."
+ENV_FILE="`$HOME/.bashrc"
+[ -f "`$HOME/.zshrc" ] && ENV_FILE="`$HOME/.zshrc"
+cat << 'EOF' >> "`$ENV_FILE"
+export OPENAI_BASE_URL="https://$Domain/v1"
+export OPENAI_API_KEY="$gwToken"
+export CF_ACCESS_CLIENT_ID="$cid"
+export CF_ACCESS_CLIENT_SECRET="$sec"
+EOF
+echo " [OK] Environment variables appended to `$ENV_FILE"
+"@
+
+        Set-Content -Path $ps1Path -Value $ps1Content -Force
+        Set-Content -Path $shPath -Value $shContent -Force
+
+        Write-Host "======================================================" -ForegroundColor Cyan
+        Write-Host " [OMP Gateway] Client Scripts Exported Successfully!  " -ForegroundColor Green
+        Write-Host "======================================================" -ForegroundColor Cyan
+        Write-Host " Client Name : $ClientName" -ForegroundColor Yellow
+        Write-Host " Output Dir  : $targetDir" -ForegroundColor DarkGray
+        Write-Host " Windows     : $ps1Path" -ForegroundColor White
+        Write-Host " Linux/macOS : $shPath" -ForegroundColor White
+        Write-Host "`nTo onboard the remote PC, copy the script and run it:" -ForegroundColor Cyan
+        Write-Host "  Windows: powershell -ExecutionPolicy Bypass -File join-gateway.ps1" -ForegroundColor DarkGray
+        Write-Host "  macOS  : bash join-gateway.sh" -ForegroundColor DarkGray
+        Write-Host "======================================================" -ForegroundColor Cyan
     }
 
     'logs' {
