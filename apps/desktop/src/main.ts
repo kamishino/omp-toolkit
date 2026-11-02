@@ -3,7 +3,7 @@ import path from "node:path";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { desktopSourcePaths, findStaleDist } from "./freshness";
-import { checkGatewayStatus } from "./gateway-status";
+import { GatewayStatusProbe } from "./gateway-status";
 import { IPC, type RendererToMainEvents } from "./ipc";
 import { consumeLaunchFailure } from "./launch-failure";
 import { logError } from "./logger";
@@ -216,6 +216,7 @@ void app.whenReady().then(async () => {
     return;
   }
 
+  const gatewayProbe = new GatewayStatusProbe();
   const syncTray = (gatewayStatus?: string): void => {
     desktopTray?.update(
       runtime?.getDashboard() ?? null,
@@ -224,11 +225,14 @@ void app.whenReady().then(async () => {
       gatewayStatus,
     );
   };
+  const syncTrayWithGateway = (): void => {
+    void gatewayProbe.get().then(syncTray);
+  };
 
   // Reactive subscription to deep runtime state changes
   runtime.subscribe((state) => {
     panel?.sendState(state);
-    void checkGatewayStatus().then(syncTray);
+    syncTrayWithGateway();
   });
 
   // Wire type-safe IPC handlers to runtime
@@ -292,7 +296,7 @@ void app.whenReady().then(async () => {
   }
 
   nativeTheme.on("updated", () => {
-    syncTray();
+    syncTrayWithGateway();
   });
 
   app.on("second-instance", showPanel);
