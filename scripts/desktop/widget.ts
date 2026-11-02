@@ -2,6 +2,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { recordLaunchFailure } from "../../apps/desktop/src/launch-failure";
+import { resolveAgentDir } from "../../packages/core/src/environment";
 import { buildDesktop } from "../build/build";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -102,9 +104,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
   }
 
   if (process.platform === "linux" && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
-    console.error(
-      "The desktop widget needs a graphical session; use bun run monitor in a terminal.",
-    );
+    const message =
+      "The desktop widget needs a graphical session; use bun run monitor in a terminal.";
+    recordLaunchFailure(resolveAgentDir(), new Error(message));
+    console.error(message);
     process.exit(1);
   }
 
@@ -116,6 +119,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
 
 if (import.meta.main) {
   main().catch((err) => {
+    recordLaunchFailure(resolveAgentDir(), err);
     console.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   });

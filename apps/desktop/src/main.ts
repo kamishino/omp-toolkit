@@ -3,10 +3,11 @@ import path from "node:path";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { IPC, type RendererToMainEvents } from "./ipc";
+import { consumeLaunchFailure } from "./launch-failure";
 import { logError } from "./logger";
 import { createLoginItem, type LoginItem } from "./login-item";
 import { DesktopPanel } from "./panel";
-import { panelPaths } from "./paths";
+import { agentDir, panelPaths } from "./paths";
 import { DesktopRuntime } from "./runtime";
 import { DesktopTray } from "./tray";
 
@@ -77,6 +78,21 @@ void app.whenReady().then(async () => {
     argv: process.argv,
     env: process.env,
   });
+
+  const priorLaunchFailure = consumeLaunchFailure(agentDir());
+  if (priorLaunchFailure) {
+    logError(
+      new Error(
+        `Previous launch failed at ${new Date(priorLaunchFailure.at).toISOString()}: ${priorLaunchFailure.message}`,
+      ),
+    );
+    if (!process.argv.includes("--selftest")) {
+      dialog.showErrorBox(
+        "OMP Provider Usage",
+        `Previous launch failed: ${priorLaunchFailure.message}`,
+      );
+    }
+  }
 
   const preview = process.argv.includes("--preview");
 
