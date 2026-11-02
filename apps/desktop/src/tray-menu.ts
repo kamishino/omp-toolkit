@@ -6,6 +6,7 @@ export interface TrayMenuTemplateOptions {
   isRefreshing: boolean;
   lastDashboard: Dashboard | null;
   lastError: string | null;
+  gatewayStatus?: string;
   onRefreshNow: () => void | Promise<void>;
   onTogglePanel: () => void;
   onOpenSettings?: () => void;
@@ -36,6 +37,14 @@ export function buildTrayMenuTemplate(options: TrayMenuTemplateOptions): TrayMen
       label: statusLabel,
       enabled: false,
     },
+    ...(options.gatewayStatus
+      ? [
+          {
+            label: options.gatewayStatus,
+            enabled: false,
+          },
+        ]
+      : []),
     { type: "separator" },
     {
       label: options.isRefreshing ? "Refreshing..." : "Refresh now",

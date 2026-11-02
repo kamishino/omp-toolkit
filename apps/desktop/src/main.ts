@@ -178,14 +178,31 @@ void app.whenReady().then(async () => {
     return;
   }
 
+  async function checkGatewayStatus(): Promise<string> {
+    try {
+      const res = await fetch("http://127.0.0.1:4000/healthz", {
+        signal: AbortSignal.timeout(1000),
+      });
+      if (res.ok) {
+        return "Gateway: Active (:4000)";
+      }
+      return `Gateway: HTTP ${res.status}`;
+    } catch {
+      return "Gateway: Off";
+    }
+  }
+
   // Reactive subscription to deep runtime state changes
   runtime.subscribe((state) => {
     panel?.sendState(state);
-    desktopTray?.update(
-      runtime?.getDashboard() ?? null,
-      runtime?.isRefreshing() ?? false,
-      runtime?.getLastError() ?? null,
-    );
+    void checkGatewayStatus().then((gwStatus) => {
+      desktopTray?.update(
+        runtime?.getDashboard() ?? null,
+        runtime?.isRefreshing() ?? false,
+        runtime?.getLastError() ?? null,
+        gwStatus,
+      );
+    });
   });
 
   // Wire type-safe IPC handlers to runtime

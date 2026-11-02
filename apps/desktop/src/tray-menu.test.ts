@@ -147,4 +147,24 @@ describe("buildTrayMenuTemplate", () => {
     expect(visible.some((i) => i.label === "Minimize to tray")).toBe(true);
     expect(visible.some((i) => i.label === "Show panel")).toBe(false);
   });
+
+  test("renders gateway status menu item when gatewayStatus is provided", () => {
+    const withGateway = buildTrayMenuTemplate({
+      isPanelVisible: false,
+      isAutostart: false,
+      isRefreshing: false,
+      lastDashboard: null,
+      lastError: null,
+      gatewayStatus: "Gateway: Active (:4000)",
+      onRefreshNow: () => {},
+      onTogglePanel: () => {},
+      onOpenTerminal: () => {},
+      onOpenOrca: () => {},
+      onToggleAutostart: () => {},
+      onQuit: () => {},
+    });
+    const item = withGateway.find((i) => i.label?.includes("Gateway: Active (:4000)"));
+    expect(item).toBeDefined();
+    expect(item?.enabled).toBe(false);
+  });
 });

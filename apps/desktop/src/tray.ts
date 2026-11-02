@@ -64,6 +64,7 @@ export class DesktopTray {
   private lastError: string | null = null;
   private isRefreshing = false;
   private readonly themeListener: () => void;
+  private gatewayStatus?: string;
 
   constructor(options: DesktopTrayOptions) {
     this.options = options;
@@ -99,10 +100,18 @@ export class DesktopTray {
     return this.tray.getBounds();
   }
 
-  update(dashboard: Dashboard | null, isRefreshing: boolean, error: string | null): void {
+  update(
+    dashboard: Dashboard | null,
+    isRefreshing: boolean,
+    error: string | null,
+    gatewayStatus?: string,
+  ): void {
     this.lastDashboard = dashboard;
     this.isRefreshing = isRefreshing;
     this.lastError = error;
+    if (gatewayStatus !== undefined) {
+      this.gatewayStatus = gatewayStatus;
+    }
     this.updateIconAndTooltip();
     this.rebuildMenu();
   }
@@ -133,6 +142,7 @@ export class DesktopTray {
       isRefreshing: this.isRefreshing,
       lastDashboard: this.lastDashboard,
       lastError: this.lastError,
+      gatewayStatus: this.gatewayStatus,
       onRefreshNow: this.options.onRefreshNow,
       onTogglePanel: this.options.onTogglePanel,
       onOpenSettings: this.options.onOpenSettings,
