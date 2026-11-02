@@ -1,0 +1,17 @@
+# Cloudflare Tunnel Configuration for OMP Auth Gateway
+# Copy this file to ~/.cloudflared/config.yaml (or %USERPROFILE%\.cloudflared\config.yaml)
+# Replace <YOUR_TUNNEL_UUID> and gateway.example.com with your values.
+
+tunnel: <YOUR_TUNNEL_UUID>
+credentials-file: ~/.cloudflared/<YOUR_TUNNEL_UUID>.json
+
+ingress:
+  - hostname: gateway.example.com
+    service: http://127.0.0.1:4000
+    originRequest:
+      # CRITICAL FOR LLM STREAMING: Disables proxy chunk buffering so
+      # token-by-token Server-Sent Events (SSE) stream without delay.
+      noChunkedEncoding: false
+      http2Origin: false
+      connectTimeout: 30s
+  - service: http_status:404

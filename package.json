@@ -49,7 +49,10 @@
     "monitor:orca": "bun scripts/monitor/orca-monitor.ts",
     "reliability:report": "bun scripts/reliability/reliability-report.ts",
     "execution:report": "bun scripts/reliability/execution-report.ts",
-    "doctor": "bun scripts/doctor.ts"
+    "doctor": "bun scripts/doctor.ts",
+    "gateway": "powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1",
+    "gateway:status": "bun scripts/gateway/doctor-gateway.ts",
+    "gateway:test": "powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1 test"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",
