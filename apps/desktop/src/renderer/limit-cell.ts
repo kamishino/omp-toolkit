@@ -17,6 +17,7 @@ export function renderLimitCell(limit: DashboardLimit): HTMLElement {
       const lowSpan = document.createElement("span");
       lowSpan.className = "low";
       lowSpan.textContent = "LOW";
+      lowSpan.title = "Balance at or below the low-balance alert threshold";
       container.appendChild(lowSpan);
     }
   } else if (limit.usedFraction !== undefined) {
@@ -66,10 +67,12 @@ export function renderLimitCell(limit: DashboardLimit): HTMLElement {
       const pctSpan = document.createElement("span");
       pctSpan.className = `percent level-${limit.level}`;
       pctSpan.textContent = `${whole(used)}/${whole(ceiling)}%`;
+      pctSpan.title = `${whole(used)}% used · ${whole(ceiling)}% pacing ceiling for today (day ${limit.pacing.dayIndex + 1} of 7)`;
       container.appendChild(pctSpan);
 
       const resetSpan = document.createElement("span");
       resetSpan.className = "reset";
+      resetSpan.title = "Time until this limit resets";
       resetSpan.textContent = formatResetCompact(limit.resetsAt, Date.now());
       container.appendChild(resetSpan);
     } else {
@@ -77,7 +80,12 @@ export function renderLimitCell(limit: DashboardLimit): HTMLElement {
       progress.max = 100;
       progress.value = Math.round(limit.usedFraction * 100);
       progress.className = `level-${limit.level}`;
-      progress.setAttribute("aria-label", `${limit.label} ${formatPercent(limit.usedFraction)}`);
+      progress.setAttribute(
+        "aria-label",
+        limit.resetsAt !== undefined
+          ? `${limit.label} ${formatPercent(limit.usedFraction)}, resets in ${formatResetCompact(limit.resetsAt, Date.now())}`
+          : `${limit.label} ${formatPercent(limit.usedFraction)}`,
+      );
       container.appendChild(progress);
 
       const pctSpan = document.createElement("span");
@@ -87,6 +95,7 @@ export function renderLimitCell(limit: DashboardLimit): HTMLElement {
 
       const resetSpan = document.createElement("span");
       resetSpan.className = "reset";
+      resetSpan.title = "Time until this limit resets";
       resetSpan.textContent = formatResetCompact(limit.resetsAt, Date.now());
       container.appendChild(resetSpan);
     }

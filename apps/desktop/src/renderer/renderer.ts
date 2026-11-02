@@ -33,7 +33,7 @@ function formatTime(timestamp: number): string {
   });
 }
 
-function buildPanel(state: PanelState): HTMLElement {
+export function buildPanel(state: PanelState): HTMLElement {
   if (activeSettingsController) {
     activeSettingsController.destroy();
     activeSettingsController = null;
@@ -156,12 +156,30 @@ function buildPanel(state: PanelState): HTMLElement {
       panel.appendChild(warmupP);
     }
 
+    const incident = state.data?.health?.incident;
+    if (incident && Date.now() - incident.at < 86_400_000) {
+      const banner = document.createElement("div");
+      banner.className = "incident-banner";
+      banner.setAttribute("role", "alert");
+      banner.textContent = `Incident ${incident.kind} · ${formatAge(incident.at, Date.now())} · ${incident.detail}`;
+      panel.appendChild(banner);
+    }
+
     // Content
     const content = document.createElement("div");
     content.className = "content";
     content.setAttribute("aria-busy", state.status === "loading" ? "true" : "false");
 
-    if (!state.data) {
+    if (state.data && state.data.providers.length === 0) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "empty";
+      const msgP = document.createElement("p");
+      msgP.className = "empty-message";
+      msgP.textContent =
+        "No providers reported by omp usage yet — sign in to a provider, then Refresh.";
+      emptyDiv.appendChild(msgP);
+      content.appendChild(emptyDiv);
+    } else if (!state.data) {
       const emptyDiv = document.createElement("div");
       emptyDiv.className = state.status === "error" ? "empty status-error" : "empty";
 
@@ -236,12 +254,14 @@ function measureContentHeight(): number {
   const header = panel.querySelector(".header") as HTMLElement | null;
   const summary = panel.querySelector(".summary") as HTMLElement | null;
   const warmup = panel.querySelector(".warmup-message") as HTMLElement | null;
+  const banner = panel.querySelector(".incident-banner") as HTMLElement | null;
   const scrollArea = panel.querySelector(".content, .settings-view") as HTMLElement | null;
   const footer = panel.querySelector(".footer") as HTMLElement | null;
 
   const headerH = header ? header.offsetHeight : 0;
   const summaryH = summary ? summary.offsetHeight : 0;
   const warmupH = warmup ? warmup.offsetHeight : 0;
+  const bannerH = banner ? banner.offsetHeight : 0;
   const scrollH = scrollArea ? scrollArea.scrollHeight : 0;
   const footerH = footer ? footer.offsetHeight : 0;
 
@@ -250,11 +270,20 @@ function measureContentHeight(): number {
   const paddingBottom = Number.parseFloat(panelStyle.paddingBottom) || 20;
   const rowGap = Number.parseFloat(panelStyle.rowGap) || 16;
 
-  const activeChildren = [header, summary, warmup, scrollArea, footer].filter(Boolean);
+  const activeChildren = [header, summary, warmup, banner, scrollArea, footer].filter(Boolean);
   const gapTotal = Math.max(0, activeChildren.length - 1) * rowGap;
 
   return Math.ceil(
-    headerH + summaryH + warmupH + scrollH + footerH + paddingTop + paddingBottom + gapTotal + 2,
+    headerH +
+      summaryH +
+      warmupH +
+      bannerH +
+      scrollH +
+      footerH +
+      paddingTop +
+      paddingBottom +
+      gapTotal +
+      2,
   );
 }
 

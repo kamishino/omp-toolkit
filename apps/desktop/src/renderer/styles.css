@@ -134,6 +134,18 @@ body {
   color: var(--color-accent);
 }
 
+.incident-banner {
+  margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--size-border) solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-raised);
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .content {
   display: grid;
   gap: var(--space-md);

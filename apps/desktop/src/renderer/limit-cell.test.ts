@@ -170,6 +170,54 @@ describe("renderer limit-cell module", () => {
     }
   });
 
+  test("limit cell explains its reset countdown, pacing ceiling, and LOW flag", () => {
+    mockDoc();
+    try {
+      // Plain limit: progress announces the reset; the countdown explains itself.
+      const plain = renderLimitCell({
+        label: "Weekly",
+        usedFraction: 0.5,
+        resetsAt: Date.now() + 3_600_000,
+        low: false,
+        level: "ok",
+      }) as unknown as MockNode;
+      const plainContainer = plain.children[0];
+      const progress = plainContainer.children.find((c) => c.tagName === "progress");
+      expect(progress?.attributes["aria-label"]).toContain("resets in");
+      const plainReset = plainContainer.children.find((c) => c.className === "reset");
+      expect(plainReset?.title).toBe("Time until this limit resets");
+
+      // Pacing limit: the used/ceiling percent explains the ceiling on hover.
+      const pacing = renderLimitCell({
+        label: "Weekly",
+        usedFraction: 0.3,
+        resetsAt: Date.now() + 10_000,
+        low: false,
+        level: "ok",
+        pacing: {
+          dayIndex: 2,
+          todayCeilingFraction: 3 / 7,
+          headroomFraction: 3 / 7 - 0.3,
+        } as unknown as WeeklyPacing,
+      }) as unknown as MockNode;
+      const pacingPct = pacing.children[0].children.find((c) => c.className.includes("percent"));
+      expect(pacingPct?.title).toContain("ceiling");
+
+      // Low balance: LOW explains why it is flagged.
+      const moneyCell = renderLimitCell({
+        label: "Balance",
+        unit: "cny",
+        remaining: 5,
+        low: true,
+        level: "critical",
+      }) as unknown as MockNode;
+      const lowSpan = moneyCell.children[0].children.find((c) => c.className === "low");
+      expect(lowSpan?.title).toContain("alert threshold");
+    } finally {
+      restoreDoc();
+    }
+  });
+
   test("renderLimitCell omits tick on Day 7 when ceiling is 100%", () => {
     mockDoc();
     try {

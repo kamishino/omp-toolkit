@@ -58,6 +58,11 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
   account has route health; accounts without health show `—`.
 - DeepSeek `Balance` cells at or below the configured threshold render red
   with `LOW` (or a red `!` prefix in very narrow columns).
+- The schedule view ends with a `[Tab] usage · [r] refresh · [q] quit` hint;
+  the one-shot usage footer hints `add --watch for live updates` (the footer
+  is ellipsized to the frame width when the health note is long).
+- With zero providers, the frame shows how to get data (`omp usage`, sign in)
+  instead of an empty body.
 
 ## Desktop panel
 
@@ -75,6 +80,8 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
   - Table: `ACCOUNT` (26%), `ROUTE` (12%), and provider limit columns. Account cell colored by row severity.
   - Route cell: text badge (`OK`, `HANG`, `AUTH`, `MODEL`, `ERR`, `—`) with semantic color.
   - Limits: progress bar (`<progress>` with `currentColor` value) + numeric percentage + reset countdown; DeepSeek displays currency amount with red `LOW` label.
+  - Incident: when the health snapshot carries an incident fresher than 24h, a red `role="alert"` banner (kind, age, detail) appears above the cards — the same rule as the TUI frame. With zero providers, the content area shows sign-in guidance instead of blank space.
+  - Account cells reveal the full account on hover (`title`); route badges, reset countdowns, pacing percents, and `LOW` flags explain themselves via `title`, and progress bars announce `resets in …` to assistive tech.
   - Footer: data source line with health age (`(stale)` when > 15 minutes) and refresh interval.
   - Tray icon: 16×16 (@2x 32×32) rounded-square app mark with a status badge dot matching the worst route/usage severity rank, anti-aliased with a 1px ring in the theme's surface color.
 ## Accessibility
