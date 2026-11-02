@@ -33,6 +33,16 @@ function formatTime(timestamp: number): string {
   });
 }
 
+export function buildIncidentBanner(state: PanelState, now = Date.now()): HTMLElement | null {
+  const incident = state.data?.health?.incident;
+  if (!incident || now - incident.at >= 86_400_000) return null;
+  const banner = document.createElement("div");
+  banner.className = "incident-banner";
+  banner.setAttribute("role", "alert");
+  banner.textContent = `Incident ${incident.kind} · ${formatAge(incident.at, now)} · ${incident.detail}`;
+  return banner;
+}
+
 export function buildPanel(state: PanelState): HTMLElement {
   if (activeSettingsController) {
     activeSettingsController.destroy();
@@ -156,13 +166,9 @@ export function buildPanel(state: PanelState): HTMLElement {
       panel.appendChild(warmupP);
     }
 
-    const incident = state.data?.health?.incident;
-    if (incident && Date.now() - incident.at < 86_400_000) {
-      const banner = document.createElement("div");
-      banner.className = "incident-banner";
-      banner.setAttribute("role", "alert");
-      banner.textContent = `Incident ${incident.kind} · ${formatAge(incident.at, Date.now())} · ${incident.detail}`;
-      panel.appendChild(banner);
+    const incidentBanner = buildIncidentBanner(state);
+    if (incidentBanner) {
+      panel.appendChild(incidentBanner);
     }
 
     // Content
