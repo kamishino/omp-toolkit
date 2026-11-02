@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { desktopWatchPaths } from "@omp-toolkit/core";
 
 function newestMtime(entry: string): { mtimeMs: number; file: string } {
   if (!fs.existsSync(entry)) return { mtimeMs: 0, file: entry };
@@ -37,11 +38,7 @@ export function findStaleDist(distMainPath: string, sourcePaths: string[]): stri
   return newest.mtimeMs > distMtime ? newest.file : null;
 }
 
-/** Source paths the desktop dist is built from, relative to the checkout. */
-export function desktopSourcePaths(appPath: string, checkoutRoot: string): string[] {
-  return [
-    path.join(appPath, "src"),
-    path.join(checkoutRoot, "packages", "core", "src"),
-    path.join(checkoutRoot, "design", "tokens.json"),
-  ];
+/** Source paths the desktop dist is built from (single owner in core). */
+export function desktopSourcePaths(_appPath: string, checkoutRoot: string): string[] {
+  return desktopWatchPaths(checkoutRoot);
 }

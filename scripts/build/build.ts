@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { DESKTOP_DIST_ARTIFACTS } from "../../packages/core/src/desktop-build";
 import { buildTrayIcons } from "./build-tray-icons";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -111,11 +112,7 @@ export async function buildDesktop(): Promise<void> {
 
   // Verification assertions
   const requiredFiles = [
-    path.join(distDir, "main.cjs"),
-    path.join(distDir, "preload.cjs"),
-    path.join(distDir, "renderer.js"),
-    path.join(distDir, "index.html"),
-    path.join(distDir, "styles.css"),
+    ...DESKTOP_DIST_ARTIFACTS.map((file) => path.join(distDir, file)),
     path.join(assetsDir, "app-icon.png"),
     path.join(assetsDir, "providers", "google-gemini.svg"),
     path.join(assetsDir, "providers", "openai-light.svg"),

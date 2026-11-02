@@ -3,6 +3,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { recordLaunchFailure } from "../../apps/desktop/src/launch-failure";
+import { DESKTOP_DIST_ARTIFACTS, desktopWatchPaths } from "../../packages/core/src/desktop-build";
 import { resolveAgentDir } from "../../packages/core/src/environment";
 import { buildDesktop } from "../build/build";
 
@@ -10,11 +11,7 @@ const root = path.resolve(import.meta.dir, "../..");
 const appDir = path.join(root, "apps", "desktop");
 const distDir = path.join(appDir, "dist");
 const distMain = path.join(distDir, "main.cjs");
-const distHtml = path.join(distDir, "index.html");
-const distPreload = path.join(distDir, "preload.cjs");
-const distRenderer = path.join(distDir, "renderer.js");
-const distStyles = path.join(distDir, "styles.css");
-const requiredArtifacts = [distMain, distHtml, distPreload, distRenderer, distStyles];
+const requiredArtifacts = DESKTOP_DIST_ARTIFACTS.map((file) => path.join(distDir, file));
 
 function getNewestMtime(entry: string): number {
   if (!fs.existsSync(entry)) return 0;
@@ -29,15 +26,7 @@ function getNewestMtime(entry: string): number {
 }
 
 export async function buildIfNeeded(): Promise<void> {
-  const watchPaths = [
-    path.join(appDir, "src"),
-    path.join(root, "packages", "core", "src"),
-    path.join(root, "design", "tokens.json"),
-    path.join(root, "scripts", "build", "build.ts"),
-    path.join(root, "scripts", "build", "build-tray-icons.ts"),
-    path.join(root, "scripts", "tokens", "color.ts"),
-    path.join(root, "scripts", "build.ts"),
-  ];
+  const watchPaths = desktopWatchPaths(root);
 
   let newest = 0;
   for (const p of watchPaths) {
