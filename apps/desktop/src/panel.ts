@@ -1,6 +1,6 @@
 import { BrowserWindow, type Rectangle, screen } from "electron";
 import { IPC, type PanelState } from "./ipc";
-import { placePanel } from "./panel-position";
+import { placePanel, type Rect } from "./panel-position";
 
 export interface CreatePanelOptions {
   preloadPath: string;
@@ -81,29 +81,26 @@ export class DesktopPanel {
     void this.window.loadFile(options.htmlPath);
   }
 
+  private placementFor(width: number, height: number): Rect {
+    const tray = this.lastTrayBounds;
+    const cursor = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(
+      tray && tray.width > 0 ? { x: tray.x + tray.width / 2, y: tray.y + tray.height / 2 } : cursor,
+    );
+    return placePanel({
+      tray,
+      workArea: display.workArea,
+      panel: { width, height },
+      platform: process.platform,
+      margin: this.margin,
+    });
+  }
+
   show(trayBounds: Rectangle | null = null): void {
     if (this.window.isDestroyed()) return;
     this.lastTrayBounds = trayBounds;
 
-    const cursor = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(
-      trayBounds && trayBounds.width > 0
-        ? {
-            x: trayBounds.x + trayBounds.width / 2,
-            y: trayBounds.y + trayBounds.height / 2,
-          }
-        : cursor,
-    );
-
-    const pos = placePanel({
-      tray: trayBounds,
-      workArea: display.workArea,
-      panel: { width: this.width, height: this.currentHeight },
-      platform: process.platform,
-      margin: this.margin,
-    });
-
-    this.window.setBounds(pos);
+    this.window.setBounds(this.placementFor(this.width, this.currentHeight));
     this.window.show();
     this.window.focus();
   }
@@ -119,25 +116,7 @@ export class DesktopPanel {
     this.currentHeight = clamped;
 
     if (this.window.isVisible()) {
-      const cursor = screen.getCursorScreenPoint();
-      const display = screen.getDisplayNearestPoint(
-        this.lastTrayBounds && this.lastTrayBounds.width > 0
-          ? {
-              x: this.lastTrayBounds.x + this.lastTrayBounds.width / 2,
-              y: this.lastTrayBounds.y + this.lastTrayBounds.height / 2,
-            }
-          : cursor,
-      );
-
-      const pos = placePanel({
-        tray: this.lastTrayBounds,
-        workArea: display.workArea,
-        panel: { width: currW, height: clamped },
-        platform: process.platform,
-        margin: this.margin,
-      });
-
-      this.window.setBounds(pos);
+      this.window.setBounds(this.placementFor(currW, clamped));
     } else {
       this.window.setSize(currW, clamped);
     }
