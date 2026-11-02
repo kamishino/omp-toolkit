@@ -57,13 +57,26 @@ export async function runGatewayDoctor(
 
   const brokerPort = deps.brokerPort ?? 8765;
   const gatewayPort = deps.gatewayPort ?? 4000;
-  const domain = deps.domain ?? env.OMP_GATEWAY_DOMAIN ?? "gateway.example.com";
 
   const homeDir = env.USERPROFILE ?? os.homedir();
   const ompDir = path.join(homeDir, ".omp");
   const gatewayTokenPath = path.join(ompDir, "auth-gateway.token");
   const cfAccessPath = path.join(ompDir, "cf-access.json");
 
+  let cfCredentials: CloudflareAccessCredentials | null = null;
+  if (fileExists(cfAccessPath)) {
+    try {
+      cfCredentials = JSON.parse(readText(cfAccessPath)) as CloudflareAccessCredentials;
+    } catch {
+      // Ignored
+    }
+  }
+
+  const domain =
+    deps.domain ?? env.OMP_GATEWAY_DOMAIN ?? cfCredentials?.domain ?? "gateway.example.com";
+
+  let cfClientId = env.CF_ACCESS_CLIENT_ID ?? cfCredentials?.clientId;
+  let cfClientSecret = env.CF_ACCESS_CLIENT_SECRET ?? cfCredentials?.clientSecret;
   function pass(name: string, detail?: string): void {
     lines.push(`PASS ${name}${detail ? `: ${detail}` : ""}`);
   }
@@ -171,16 +184,10 @@ export async function runGatewayDoctor(
   }
 
   // 6. Public Cloudflare Access (Two-Tier Check)
-  let cfClientId = env.CF_ACCESS_CLIENT_ID;
-  let cfClientSecret = env.CF_ACCESS_CLIENT_SECRET;
-
-  if ((!cfClientId || !cfClientSecret) && fileExists(cfAccessPath)) {
-    try {
-      const raw = JSON.parse(readText(cfAccessPath)) as CloudflareAccessCredentials;
-      cfClientId = cfClientId ?? raw.clientId;
-      cfClientSecret = cfClientSecret ?? raw.clientSecret;
-    } catch {
-      // Ignored
+  if (!cfClientId || !cfClientSecret) {
+    if (cfCredentials?.clientId && cfCredentials?.clientSecret) {
+      cfClientId = cfCredentials.clientId;
+      cfClientSecret = cfCredentials.clientSecret;
     }
   }
 

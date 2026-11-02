@@ -99,15 +99,21 @@ function Get-CfAccessCredentials {
     if (-not $cid -and $env:CF_ACCESS_CLIENT_ID) { $cid = $env:CF_ACCESS_CLIENT_ID }
     if (-not $sec -and $env:CF_ACCESS_CLIENT_SECRET) { $sec = $env:CF_ACCESS_CLIENT_SECRET }
 
-    if ((-not $cid -or -not $sec) -and (Test-Path $CfAccessFile)) {
+    if (Test-Path $CfAccessFile) {
         try {
             $raw = Get-Content $CfAccessFile -Raw | ConvertFrom-Json
             if (-not $cid -and $raw.clientId) { $cid = $raw.clientId }
             if (-not $sec -and $raw.clientSecret) { $sec = $raw.clientSecret }
+            if (($script:Domain -eq 'gateway.example.com' -or -not $script:Domain) -and $raw.domain) {
+                $script:Domain = $raw.domain
+            }
         } catch { }
     }
-    return @{ ClientId = $cid; ClientSecret = $sec }
+    return @{ ClientId = $cid; ClientSecret = $sec; Domain = $script:Domain }
 }
+
+# Auto-resolve credentials on script load
+Get-CfAccessCredentials | Out-Null
 
 function Test-PortListening([int]$Port) {
     try {

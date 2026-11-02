@@ -113,4 +113,36 @@ describe("runGatewayDoctor", () => {
     expect(result.exitCode).toBe(1);
     expect(result.lines.some((l) => l.includes("FAIL Gateway Liveness"))).toBe(true);
   });
+
+  test("auto-resolves domain and credentials from cf-access.json when domain is omitted", async () => {
+    let queriedDomain = "";
+    const fakeFetch = async (input: RequestInfo | URL): Promise<Response> => {
+      const url = String(input);
+      if (url.includes("private-tunnel.mycorp.com")) {
+        queriedDomain = "private-tunnel.mycorp.com";
+        return new Response("Forbidden", { status: 403 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+
+    const result = await runGatewayDoctor({
+      fetchFn: fakeFetch as typeof fetch,
+      execFileFn: async () => ({ stdout: "cloudflared.exe" }),
+      fileExists: (p) => p.endsWith("cf-access.json"),
+      readTextFile: (p) => {
+        if (p.endsWith("cf-access.json")) {
+          return JSON.stringify({
+            clientId: "custom-id.access",
+            clientSecret: "custom-secret",
+            domain: "private-tunnel.mycorp.com",
+          });
+        }
+        return "";
+      },
+      env: {},
+    });
+
+    expect(queriedDomain).toBe("private-tunnel.mycorp.com");
+    expect(result.lines.some((l) => l.includes("Cloudflare Access Gate"))).toBe(true);
+  });
 });
