@@ -31,6 +31,13 @@
         "electron": "^34.3.0",
       },
     },
+    "apps/gateway": {
+      "name": "@omp-toolkit/gateway",
+      "version": "0.5.0",
+      "dependencies": {
+        "@omp-toolkit/core": "workspace:*",
+      },
+    },
     "apps/omp-extension": {
       "name": "@omp-toolkit/omp-extension",
       "version": "0.5.0",
@@ -89,6 +96,8 @@
     "@omp-toolkit/core": ["@omp-toolkit/core@workspace:packages/core"],
 
     "@omp-toolkit/desktop": ["@omp-toolkit/desktop@workspace:apps/desktop"],
+
+    "@omp-toolkit/gateway": ["@omp-toolkit/gateway@workspace:apps/gateway"],
 
     "@omp-toolkit/omp-extension": ["@omp-toolkit/omp-extension@workspace:apps/omp-extension"],
 

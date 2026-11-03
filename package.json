@@ -51,6 +51,7 @@
     "execution:report": "bun scripts/reliability/execution-report.ts",
     "doctor": "bun scripts/doctor.ts",
     "gateway": "powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1",
+    "gateway:ctl": "bun apps/gateway/src/index.ts",
     "gateway:status": "bun scripts/gateway/doctor-gateway.ts",
     "gateway:test": "powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1 test"
   },
