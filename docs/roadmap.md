@@ -4,7 +4,7 @@
 > **Horizon:** Continuous open backlog (MoSCoW prioritized; strictly one feature or intervention at a time)  
 > **Operator Capacity:** ~5 hours/week (~20 hours/month)  
 > **Evidence Foundation:** Completed-item evidence is recorded inline in this file and in the ADRs.  
-> **Last updated:** 2026-11-02  
+> **Last updated:** 2026-11-03  
 
 ---
 

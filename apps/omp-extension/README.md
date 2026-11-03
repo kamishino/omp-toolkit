@@ -445,7 +445,8 @@ Unit tests are colocated beside implementations as `src/*.test.ts`. Tests use te
 - [Architecture Blueprint](../../docs/architecture.md#health-data-flow) — Detailed health sequence diagrams, data transformations, and layering.
 - [Operational Runbook](../../docs/runbook.md) — Procedures for [Healing](../../docs/runbook.md#healing), [Auto-restore](../../docs/runbook.md#auto-restore), [Warm-up & Unhang](../../docs/runbook.md#manual-warm-up-and-unhang-check), and [Probe Wire Pins](../../docs/runbook.md#probe-wire-pins-audit).
 - [Global Prompt Templates Guide](../../templates/README.md) — Authoritative template rules, slug patterns, and public repository warnings.
-- [ADR 0001: Event-Driven Health](../../docs/adr/0001-event-driven-health.md) — Rationale for event-driven health checks consuming zero idle tokens.
+- [ADR 0001: Event-Driven Health](../../docs/adr/0001-event-driven-health.md) — Rationale for event-driven detection; its no-periodic-probe clause is superseded by ADR-0009.
+- [ADR 0009: Conditional Idle Recovery](../../docs/adr/0009-conditional-idle-recovery.md) — Why a bounded recovery sweep runs only while restorable exclusions exist and the agent is idle.
 - [ADR 0002: Opt-In Auto-Restore](../../docs/adr/0002-opt-in-auto-restore.md) — Rationale for protecting manual exclusions with sidecar opt-ins.
 - [ADR 0006: Manual Account Warm-Up](../../docs/adr/0006-manual-account-warmup.md) — Rationale for 60s cooldowns and unhang check separation.
 - [System Glossary](../../GLOSSARY.md) — Definitions for managed exclusions, circuit breaker, and health states.

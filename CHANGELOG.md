@@ -6,6 +6,7 @@
 - Remove unused exports and the unused `packages/core/src/history.ts` module.
 - Fix template backup retention: template backups now live in `backups/templates/` and installer backups under `~/.omp/agent/backups/` are never pruned.
 - Replace the personal account address in the desktop warm-up fixture with `alpha@example.com`.
+- Isolate extension tests from host-specific absolute paths and real OMP state so the CI matrix runs without an installed `omp` binary.
 - Delete the internal research corpus, folder blueprint, and refactor log; correct stale architecture, recovery, security, design, roadmap, and changelog claims.
 - Restrict `GLOSSARY.md` to domain vocabulary.
 - Add ADR-0009 for the conditional idle recovery sweep.

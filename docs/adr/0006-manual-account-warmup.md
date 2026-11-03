@@ -17,8 +17,9 @@ without operator consent would violate ADR-0001's zero-idle-token policy.
 
 ## Decision
 
-- Warm-up is strictly manual: no periodic background probing or autonomous loops
-  are introduced.
+- Warm-up is strictly manual: no scheduled warm-up loops or autonomous warm-up
+  retries are introduced. Exclusion recovery is governed separately by
+  ADR-0009.
 - Provider scope: Google Antigravity is implemented first via `WarmUpAdapter`.
   Other providers (OpenAI Codex, Muse Code, DeepSeek) lack per-account route
   probes and return unsupported. The adapter seam allows future providers to be

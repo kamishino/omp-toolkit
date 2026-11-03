@@ -35,7 +35,8 @@ bun scripts/install/install.ts --dry-run
 
 `bun run check` runs Biome, `tsc --noEmit` (including `apps/desktop`), the full unit
 suite, and token contrast validation. Tests must not require network access, real
-OMP credentials, a running Orca instance, or launching an Electron GUI.
+OMP credentials, a running Orca instance, launching an Electron GUI, or
+host-specific absolute paths.
 
 ## Pull requests
 

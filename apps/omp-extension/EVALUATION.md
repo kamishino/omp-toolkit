@@ -98,8 +98,12 @@ verdict. Shell/`git status` was unavailable during exploration (Windows
 sandbox ACL timeout), so working-tree state and test-run results are
 unverified.
 
-- Tests: 14 test files, ~120 cases, ~3k LOC, colocated `src/*.test.ts`
-  (`bun:test`, mocked exec/fetch, temp dirs).
+- Tests: 15 test files, 132 cases, 4,561 source LOC (3,532 test LOC), colocated
+  `src/*.test.ts` (`bun:test`, mocked exec/fetch, temp dirs). Re-verified
+  2026-11-03: the extension suite is hermetic — mocked policy store, forced
+  toast platform, and path-agnostic gateway resolution — so the Linux, macOS,
+  and Windows CI matrix runs without an installed `omp` binary or host-specific
+  absolute paths.
 - No tests for: `src/index.ts` (extension factory + DeepSeek provider
   registration), `src/cli.ts` (arg parsing / exit codes / `process.exit`),
   `src/config.ts`. No live/e2e test against a real OMP host, the `omp` CLI,
