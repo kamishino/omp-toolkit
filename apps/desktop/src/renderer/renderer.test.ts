@@ -154,6 +154,67 @@ describe("renderer panel", () => {
     expect(isSettingsShortcut({ key: ".", ctrlKey: true })).toBe(false);
   });
 
+  test("gateway strip shows active state with model, client, and pool figures", async () => {
+    mockDoc();
+    const { buildGatewayStrip } = await import("./renderer");
+    const strip = buildGatewayStrip({
+      status: "ready",
+      data: dashboardWith({
+        providers: [
+          {
+            id: "google-antigravity",
+            name: "GOOGLE ANTIGRAVITY",
+            suffix: "",
+            accounts: 2,
+            columns: [],
+            rows: [{}, {}],
+          },
+        ],
+      }),
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+      gateway: {
+        state: "active",
+        label: "Gateway: Active (:4000)",
+        endpoint: "127.0.0.1:4000",
+        modelCount: 25,
+        antigravityModelCount: 12,
+        clientCount: 2,
+        checkedAt: 1,
+      },
+    } as never) as unknown as MockNode;
+    expect(strip.attributes["data-state"]).toBe("active");
+    expect(findByClass(strip, "gw-state")?.textContent).toBe("Active");
+    expect(findByClass(strip, "gw-meta")?.textContent).toContain("25 models · 12 Antigravity");
+    expect(findByClass(strip, "gw-meta")?.textContent).toContain("2 clients");
+    expect(findByClass(strip, "gw-pool-num")?.textContent).toBe("2/2");
+  });
+
+  test("gateway strip off state tells the operator how to start it", async () => {
+    mockDoc();
+    const { buildGatewayStrip } = await import("./renderer");
+    const strip = buildGatewayStrip({
+      status: "ready",
+      data: dashboardWith({}),
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+      gateway: {
+        state: "off",
+        label: "Gateway: Off",
+        endpoint: "127.0.0.1:4000",
+        modelCount: null,
+        antigravityModelCount: null,
+        clientCount: null,
+        checkedAt: 1,
+      },
+    } as never) as unknown as MockNode;
+    expect(findByClass(strip, "gw-state")?.textContent).toBe("Off");
+    expect(findByClass(strip, "gw-meta")?.textContent).toContain("gateway:ctl start");
+    expect(findByClass(strip, "gw-pool")).toBeUndefined();
+  });
+
   test("zero providers shows guidance instead of a blank panel", async () => {
     mockDoc();
     const { buildPanel } = await import("./renderer");

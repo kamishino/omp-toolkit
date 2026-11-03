@@ -35,6 +35,29 @@ export interface WarmUpState {
   message: string | null;
 }
 
+export type GatewayPanelStateKind = "active" | "off" | "error" | "unknown";
+
+export interface GatewayPanelView {
+  state: GatewayPanelStateKind;
+  /** Tray-compatible one-liner, e.g. "Gateway: Active (:4000)". */
+  label: string;
+  endpoint: string;
+  modelCount: number | null;
+  antigravityModelCount: number | null;
+  clientCount: number | null;
+  checkedAt: number | null;
+}
+
+export const UNKNOWN_GATEWAY_PANEL_VIEW: GatewayPanelView = {
+  state: "unknown",
+  label: "Gateway: …",
+  endpoint: "127.0.0.1:4000",
+  modelCount: null,
+  antigravityModelCount: null,
+  clientCount: null,
+  checkedAt: null,
+};
+
 export type PanelState =
   | {
       status: "loading";
@@ -42,6 +65,7 @@ export type PanelState =
       intervalSeconds: number;
       warmup: WarmUpState;
       settings: DesktopSettings;
+      gateway?: GatewayPanelView;
     }
   | {
       status: "ready";
@@ -49,6 +73,7 @@ export type PanelState =
       intervalSeconds: number;
       warmup: WarmUpState;
       settings: DesktopSettings;
+      gateway?: GatewayPanelView;
     }
   | {
       status: "error";
@@ -57,6 +82,7 @@ export type PanelState =
       intervalSeconds: number;
       warmup: WarmUpState;
       settings: DesktopSettings;
+      gateway?: GatewayPanelView;
     };
 
 export interface OmpApi {

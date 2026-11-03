@@ -1,6 +1,7 @@
 import { mdiClose, mdiCog, mdiRefresh, mdiWindowMinimize } from "@mdi/js";
 import { formatAge, summaryText } from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
+import { UNKNOWN_GATEWAY_PANEL_VIEW } from "../ipc";
 import { DEFAULT_DESKTOP_SETTINGS, type DesktopSettings } from "../settings";
 import { renderProviderCard } from "./card";
 import { icon } from "./icon";
@@ -49,6 +50,87 @@ export function buildIncidentBanner(state: PanelState, now = Date.now()): HTMLEl
   banner.setAttribute("role", "alert");
   banner.textContent = `Incident ${incident.kind} · ${formatAge(incident.at, now)} · ${incident.detail}`;
   return banner;
+}
+
+function el(tag: string, className: string, text?: string): HTMLElement {
+  const node = document.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/**
+ * Gateway signal strip: infrastructure status above the usage summary.
+ * Pool figures derive from the dashboard's Antigravity section so the strip
+ * never needs its own credential-bearing fetch beyond the main probe.
+ */
+export function buildGatewayStrip(state: PanelState): HTMLElement {
+  const gateway = state.gateway ?? UNKNOWN_GATEWAY_PANEL_VIEW;
+  const strip = el("section", "gateway-strip");
+  strip.setAttribute("data-state", gateway.state);
+  strip.setAttribute("aria-label", gateway.label);
+
+  const dot = el("span", "gw-dot");
+  dot.setAttribute("aria-hidden", "true");
+  strip.appendChild(dot);
+
+  const main = el("div", "gw-main");
+  const titleRow = el("div", "gw-title-row");
+  titleRow.appendChild(el("span", "gw-name", "GATEWAY"));
+  const stateLabel =
+    gateway.state === "active"
+      ? "Active"
+      : gateway.state === "off"
+        ? "Off"
+        : gateway.state === "error"
+          ? gateway.label.replace("Gateway: ", "")
+          : "Checking…";
+  titleRow.appendChild(el("span", "gw-state", stateLabel));
+  main.appendChild(titleRow);
+
+  const meta = el("p", "gw-meta");
+  if (gateway.state === "active") {
+    const parts = [gateway.endpoint];
+    if (gateway.modelCount !== null) {
+      parts.push(
+        gateway.antigravityModelCount !== null
+          ? `${gateway.modelCount} models · ${gateway.antigravityModelCount} Antigravity`
+          : `${gateway.modelCount} models`,
+      );
+    }
+    if (gateway.clientCount !== null) {
+      parts.push(`${gateway.clientCount} client${gateway.clientCount === 1 ? "" : "s"}`);
+    }
+    meta.textContent = parts.join(" · ");
+  } else if (gateway.state === "off") {
+    meta.textContent = "start it with: bun run gateway:ctl start";
+  } else if (gateway.state === "error") {
+    meta.textContent = `${gateway.endpoint} · check: bun run gateway:ctl doctor`;
+  } else {
+    meta.textContent = `${gateway.endpoint} · probing…`;
+  }
+  main.appendChild(meta);
+  strip.appendChild(main);
+
+  const provider = state.data?.providers.find((p) => p.id === "google-antigravity");
+  if (provider && gateway.state === "active") {
+    const total = provider.rows.length;
+    const degraded = provider.rows.filter(
+      (r) => typeof r.health === "string" && r.health !== "ok",
+    ).length;
+    const pool = el("div", "gw-pool");
+    pool.appendChild(el("span", "gw-pool-num", `${total - degraded}/${total}`));
+    pool.appendChild(
+      el(
+        "span",
+        degraded > 0 ? "gw-pool-cap gw-pool-warn" : "gw-pool-cap",
+        degraded > 0 ? "accounts · degraded" : "accounts up",
+      ),
+    );
+    strip.appendChild(pool);
+  }
+
+  return strip;
 }
 
 export function buildPanel(state: PanelState): HTMLElement {
@@ -157,6 +239,8 @@ export function buildPanel(state: PanelState): HTMLElement {
     );
     panel.appendChild(activeSettingsController.element);
   } else {
+    panel.appendChild(buildGatewayStrip(state));
+
     // Summary
     const summaryP = document.createElement("p");
     summaryP.className = "summary";
@@ -280,6 +364,7 @@ function measureContentHeight(): number {
   if (!panel) return 220;
 
   const header = panel.querySelector(".header") as HTMLElement | null;
+  const gatewayStrip = panel.querySelector(".gateway-strip") as HTMLElement | null;
   const summary = panel.querySelector(".summary") as HTMLElement | null;
   const warmup = panel.querySelector(".warmup-message") as HTMLElement | null;
   const banner = panel.querySelector(".incident-banner") as HTMLElement | null;
@@ -287,6 +372,7 @@ function measureContentHeight(): number {
   const footer = panel.querySelector(".footer") as HTMLElement | null;
 
   const headerH = header ? header.offsetHeight : 0;
+  const gatewayH = gatewayStrip ? gatewayStrip.offsetHeight : 0;
   const summaryH = summary ? summary.offsetHeight : 0;
   const warmupH = warmup ? warmup.offsetHeight : 0;
   const bannerH = banner ? banner.offsetHeight : 0;
@@ -298,11 +384,14 @@ function measureContentHeight(): number {
   const paddingBottom = Number.parseFloat(panelStyle.paddingBottom) || 20;
   const rowGap = Number.parseFloat(panelStyle.rowGap) || 16;
 
-  const activeChildren = [header, summary, warmup, banner, scrollArea, footer].filter(Boolean);
+  const activeChildren = [header, gatewayStrip, summary, warmup, banner, scrollArea, footer].filter(
+    Boolean,
+  );
   const gapTotal = Math.max(0, activeChildren.length - 1) * rowGap;
 
   return Math.ceil(
     headerH +
+      gatewayH +
       summaryH +
       warmupH +
       bannerH +

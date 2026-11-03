@@ -41,7 +41,7 @@ body {
 
 .panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   gap: var(--space-md);
   width: 100%;
   height: 100%;
@@ -126,6 +126,121 @@ body {
   line-height: 1.5;
   padding-top: var(--space-xs);
   color: var(--color-muted);
+}
+
+/* Gateway signal strip: infrastructure liveness above the usage summary. */
+.gateway-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-surface-raised);
+  border: var(--size-border) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.gw-dot {
+  flex: none;
+  inline-size: var(--space-sm);
+  block-size: var(--space-sm);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-muted);
+}
+
+.gateway-strip[data-state="active"] .gw-dot {
+  background-color: var(--color-ok);
+  animation: gw-pulse 2.4s ease-in-out infinite;
+}
+
+.gateway-strip[data-state="error"] .gw-dot {
+  background-color: var(--color-danger);
+}
+
+.gateway-strip[data-state="unknown"] .gw-dot {
+  background-color: var(--color-warn);
+}
+
+@keyframes gw-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gateway-strip[data-state="active"] .gw-dot {
+    animation: none;
+  }
+}
+
+.gw-main {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.gw-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+
+.gw-name {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.gw-state {
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+  color: var(--color-text);
+}
+
+.gateway-strip[data-state="off"] .gw-state,
+.gateway-strip[data-state="unknown"] .gw-state {
+  color: var(--color-muted);
+}
+
+.gateway-strip[data-state="error"] .gw-state {
+  color: var(--color-danger);
+}
+
+.gw-meta {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gw-pool {
+  flex: none;
+  text-align: right;
+}
+
+.gw-pool-num {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-text);
+}
+
+.gw-pool-cap {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-muted);
+}
+
+.gw-pool-warn {
+  color: var(--color-warn);
 }
 .warmup-message {
   margin: 0;

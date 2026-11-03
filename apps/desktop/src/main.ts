@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
@@ -216,7 +217,29 @@ void app.whenReady().then(async () => {
     return;
   }
 
-  const gatewayProbe = new GatewayStatusProbe();
+  const ompHomeDir = path.dirname(agentDir());
+  const readTrimmedFile = (filePath: string): string | null => {
+    try {
+      const text = fs.readFileSync(filePath, "utf-8").trim();
+      return text.length > 0 ? text : null;
+    } catch {
+      return null;
+    }
+  };
+  const gatewayProbe = new GatewayStatusProbe(30_000, undefined, Date.now, {
+    readGatewayToken: () => readTrimmedFile(path.join(ompHomeDir, "auth-gateway.token")),
+    readClientCount: () => {
+      try {
+        const raw = fs.readFileSync(path.join(ompHomeDir, "gateway-clients.json"), "utf-8");
+        const parsed: unknown = JSON.parse(raw.replace(/^\uFEFF/, ""));
+        return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+          ? Object.keys(parsed).length
+          : null;
+      } catch {
+        return null;
+      }
+    },
+  });
   const syncTray = (gatewayStatus?: string): void => {
     desktopTray?.update(
       runtime?.getDashboard() ?? null,
@@ -226,8 +249,14 @@ void app.whenReady().then(async () => {
     );
   };
   const syncTrayWithGateway = (): void => {
-    void gatewayProbe.get().then(syncTray);
+    void gatewayProbe.getPanelView().then((view) => {
+      runtime?.setGatewayView(view);
+      syncTray(view.label);
+    });
   };
+  const gatewayTimer = setInterval(syncTrayWithGateway, 30_000);
+  gatewayTimer.unref?.();
+  syncTrayWithGateway();
 
   // Reactive subscription to deep runtime state changes
   runtime.subscribe((state) => {

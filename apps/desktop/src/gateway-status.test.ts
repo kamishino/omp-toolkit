@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { checkGatewayStatus, GatewayStatusProbe } from "./gateway-status";
+import { checkGatewayStatus, fetchGatewayPanelView, GatewayStatusProbe } from "./gateway-status";
 
 describe("gateway status probe", () => {
   test("active when health endpoint is ok", async () => {
@@ -35,6 +35,38 @@ describe("gateway status probe", () => {
     now += 30_001;
     expect(await probe.get()).toBe("Gateway: Active (:4000)");
     expect(fetches).toBe(2);
+  });
+
+  test("panel view enriches active state with model and client counts", async () => {
+    const view = await fetchGatewayPanelView(
+      async (url) =>
+        url.endsWith("/v1/models")
+          ? {
+              ok: true,
+              status: 200,
+              json: async () => ({
+                data: [{ id: "google-antigravity/gemini-3.8-flash" }, { id: "openai/gpt" }],
+              }),
+            }
+          : { ok: true, status: 200 },
+      { readGatewayToken: () => "tok", readClientCount: () => 2 },
+      () => 42,
+    );
+    expect(view.state).toBe("active");
+    expect(view.modelCount).toBe(2);
+    expect(view.antigravityModelCount).toBe(1);
+    expect(view.clientCount).toBe(2);
+    expect(view.checkedAt).toBe(42);
+  });
+
+  test("panel view is off without probing models when health fails", async () => {
+    const urls: string[] = [];
+    const view = await fetchGatewayPanelView(async (url) => {
+      urls.push(url);
+      throw new Error("ECONNREFUSED");
+    });
+    expect(view.state).toBe("off");
+    expect(urls).toHaveLength(1);
   });
 
   test("off when the probe throws", async () => {

@@ -2,7 +2,8 @@ import type { BalanceAlertThresholds, Dashboard, WarmUpRequest } from "@omp-tool
 import { supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
 import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { fetchDashboard } from "./data";
-import type { PanelState } from "./ipc";
+import type { GatewayPanelView, PanelState } from "./ipc";
+import { UNKNOWN_GATEWAY_PANEL_VIEW } from "./ipc";
 import { logError } from "./logger";
 import type { LoginItem } from "./login-item";
 import { openOrca, openTerminal } from "./open";
@@ -89,6 +90,7 @@ export class DesktopRuntime {
   private quitting = false;
   private warmupRunning = false;
   private warmupMessage: string | null = null;
+  private gatewayView: GatewayPanelView = UNKNOWN_GATEWAY_PANEL_VIEW;
   private refreshTimer: NodeJS.Timeout | null = null;
   private readonly dialogHost: DialogHost;
   private readonly listeners = new Set<RuntimeListener>();
@@ -111,7 +113,15 @@ export class DesktopRuntime {
       lastError: this.lastError,
       warmup: { running: this.warmupRunning, message: this.warmupMessage },
       settings: this.settings,
+      gateway: this.gatewayView,
     });
+  }
+
+  /** Accepts a fresh gateway probe result; notifies only on change. */
+  setGatewayView(view: GatewayPanelView): void {
+    if (JSON.stringify(view) === JSON.stringify(this.gatewayView)) return;
+    this.gatewayView = view;
+    this.notify();
   }
 
   getDashboard(): Dashboard | null {
