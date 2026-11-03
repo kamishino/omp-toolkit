@@ -144,7 +144,7 @@ bun ~/.omp/agent/extensions/gemini-health.js --json
 bun apps/omp-extension/src/index.ts --warmup
 ```
 
-On Windows, replace `~` with `$HOME` or run through PowerShell. For complete workstation installation, see the [Root Getting Started Guide](../../README.md#getting-started).
+On Windows, replace `~` with `$HOME` or run through PowerShell. For complete workstation installation, see the [Root Quick Start](../../README.md#quick-start).
 
 ---
 

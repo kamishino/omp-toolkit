@@ -2,155 +2,28 @@
 
 <h2>OMP Toolkit</h2>
 
-<p>One terminal and desktop view for OMP provider usage, Gemini route health, DeepSeek balance, and 30-day reliability history.</p>
+<p>See your OMP provider quotas, per-account route health, and DeepSeek balance in one terminal view or tray widget.</p>
 
 [![check](https://github.com/kamishino/omp-toolkit/actions/workflows/check.yml/badge.svg)](https://github.com/kamishino/omp-toolkit/actions/workflows/check.yml)
-![Bun](https://img.shields.io/badge/Bun-1.4.3-000000?style=for-the-badge&logo=bun&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
-![OMP](https://img.shields.io/badge/OMP-18.12.5-111111?style=for-the-badge)
-![Platforms](https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-4B5563?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
+![Platforms](https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-4B5563?style=for-the-badge)
 
 </div>
 
 > [!IMPORTANT]
-> **Unofficial.** Not affiliated with OMP, Orca, or Google. Gemini account rotation is experimental. Provider terms may restrict automated account rotation; use at your own risk.
+> **Unofficial.** Not affiliated with OMP, Orca, or Google. Automatic Gemini account rotation is experimental, and provider terms may restrict it. Use it at your own risk.
 
-## Overview
+## Why use it
 
-OMP Toolkit is an unofficial, Windows-first, cross-platform toolkit for OMP. It aggregates `omp usage --json` and cached route health snapshots into a single ANSI frame or desktop tray widget, revealing quota consumption, circuit-broken accounts, and reset countdowns across providers.
+OMP pins a session to one account. If that account's route hangs, the session stalls even when other accounts are healthy. OMP Toolkit shows what every provider is using and moves a hung Antigravity account out of the way.
 
-The monitor performs passive reads and never probes models directly, ensuring an active monitoring tab consumes zero model tokens. Route health checks run on OMP hook events and manual commands, plus a recovery sweep that runs at most every 300 s and only while restorable exclusions exist and the agent is idle. Exclusions are tracked in atomic state files and a 30-day SQLite history ledger, and managed exclusions auto-restore only after spaced healthy-check streaks.
+- One frame for Google Antigravity, OpenAI Codex, Muse Code, and DeepSeek quotas.
+- Per-account route health: `OK`, `HANG`, `ERR`, `AUTH`, or `MODEL`.
+- A hung account is temporarily excluded and restored after three healthy checks at least 60 s apart.
+- DeepSeek balance with a configurable `LOW` alert, plus 30 days of local route history (`bun run reliability:report`).
+- Terminal, tray widget, or Orca tab. Monitoring reads quota data and cached health only; it never sends a model request.
 
-## Features
-
-- **Provider usage monitor:** Unified frame for Google Antigravity, OpenAI Codex, Muse Code, and DeepSeek with quota progress bars, percentages, reset countdowns, and aligned route status columns.
-- **Gemini route health circuit breaker:** Detects per-account `OK`, `HANG`, `ERR`, `AUTH`, and `MODEL` states; applies automatic temporary exclusions on route stalls, and executes guarded auto-restore upon consecutive healthy checks.
-- **DeepSeek balance tracking:** Currency-aware balance reporting (CNY-preferred with USD fallback) with configurable low-balance warning alerts.
-- **Flexible presentation surfaces:** In-place ANSI redraw for Windows Terminal, PowerShell, Git Bash, tmux, and standard TTYs; optional alternate-screen suppression (`--no-alt-screen`).
-- **Desktop system tray widget (optional):** Cross-platform Electron tray and panel for Windows and macOS (best-effort on Linux). Features OS light/dark OKLCH theme adaptation, startup login registration, and account warm-up actions.
-- **Orca Floating Workspace (optional):** One-command live monitor tab launching in Orca with `Ctrl+Alt+A` (Windows) and `Cmd+Alt+A` (macOS) shortcuts.
-- **Local reliability history:** Local-first SQLite event ledger recording route checks, policy modifications, and heartbeat timestamps with 30-day reporting (`reliability:report`).
-
-## Architecture
-
-The codebase enforces strict unidirectional layering with zero I/O leakage into domain models:
-
-| Layer                       | Package / Path        | Responsibility                                                                                                                          |
-| --------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Domain**                  | `packages/core`       | Pure usage grouping, column selection, route ordering, streak transitions, and dashboard models (no network, OMP, or arbitrary I/O imports; deterministic path resolution only) |
-| **Presentation (terminal)** | `packages/tui`        | ANSI design tokens, semantic thresholds, progress bars, percentages, and provider usage views                                           |
-| **Presentation (desktop)**  | `apps/desktop`        | Electron host, system tray, OS login item, and context-isolated webview panel styled via OKLCH tokens                                   |
-| **Adapters (OMP)**          | [apps/omp-extension](apps/omp-extension/README.md) | OMP hooks, auto-heal coordinator, CLI commands, tool definitions, account probing client, and state persistence                         |
-| **Adapters (CLI)**          | `apps/provider-usage` | CLI flags, `omp usage` reader, snapshot cache reader, watch loop, and schema-2 JSON payload emitter                                     |
-| **Design**                  | `design/tokens.json`  | Design-token single source of truth for TUI ANSI and desktop OKLCH palettes                                                             |
-
-For complete architectural diagrams, data transformation pipelines, and circuit-breaker event sequence diagrams, see [docs/architecture.md](docs/architecture.md).
-
-## Tech Stack
-
-- **Bun 1.4.3** — Runtime, package workspace manager, unified bundler (`Bun.build`), and test runner.
-- **TypeScript** — Strongly-typed domain and adapter contracts checked via `tsc --noEmit`.
-- **Electron** — Desktop widget host with context isolation and Content Security Policy blocking external network access.
-- **Inter & JetBrains Mono** — Self-hosted variable font pairing via Fontsource (SIL OFL 1.1) for high-density tabular presentation.
-- **Biome** — Formatter and lint gate.
-- **SQLite** — Reliability history event ledger powered by `bun:sqlite`.
-- **OMP 18.12.5** — Extension host and `omp usage --json` data source.
-- **Orca 1.4.226** — Optional host for Floating Workspace integration.
-
-## Data Sources and Integrations
-
-- **OMP CLI** — Authoritative usage metrics (`omp usage --json`). Quota windows, limits, and account metadata are read directly from local OMP runtimes without scraping.
-- **DeepSeek Balance API** — Queried via `https://api.deepseek.com/user/balance` using `DEEPSEEK_API_KEY` by the registered extension provider.
-- **Desktop Widget** — Local-first; executes the installed CLI script and renders versioned JSON locally without outbound network access.
-- **Orca CLI** — Spawns or focuses the floating terminal workspace tab when Orca is running.
-
-## Getting Started
-
-### Prerequisites
-
-- **Bun** 1.4.3 or newer — [Installation Guide](https://bun.sh/docs/installation)
-- **Git**
-- **OMP** 18.12.5
-- **Orca** 1.4.226 — Optional; required only for `monitor:orca`
-
-### One-Command Quickstart
-
-**Windows (PowerShell):**
-
-```powershell
-irm https://raw.githubusercontent.com/kamishino/omp-toolkit/main/install.ps1 | iex
-```
-
-**macOS / Linux (Bash):**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kamishino/omp-toolkit/main/install.sh | bash
-```
-
-The installer verifies prerequisites, clones or updates `~/.omp/omp-toolkit`, runs `bun install --frozen-lockfile`, and executes `bun run install:omp`.
-
-### Manual Installation
-
-```bash
-git clone https://github.com/kamishino/omp-toolkit.git
-cd omp-toolkit
-bun install --frozen-lockfile
-bun run install:omp
-```
-
-To preview installation actions without modifying the filesystem:
-
-```bash
-bun scripts/install/install.ts --dry-run
-```
-
-`install:omp` creates atomic backups under `~/.omp/agent/backups/`, installs `gemini-health.js` into `~/.omp/agent/extensions`, and installs `omp-provider-usage.js` into `~/.omp/agent/scripts`.
-
-### Verification
-
-```bash
-bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --health
-bun run desktop:once
-```
-
-Expected output: a complete provider usage frame displaying quota columns (`ROUTE`, `WEEKLY`, `5 HOUR`), followed by a plain-text diagnostic summary from the desktop widget.
-
-## Platform Support
-
-| Component                         | Status               | Target Platforms                                                      |
-| --------------------------------- | -------------------- | --------------------------------------------------------------------- |
-| **Terminal Monitor (TUI)**        | Supported            | Windows, macOS, Linux (any ANSI TTY)                                  |
-| **Desktop Widget**                | Supported            | Windows 10/11, macOS; Linux best-effort (StatusNotifier/AppIndicator) |
-| **DeepSeek Balance & Alerts**     | Supported            | Windows, macOS, Linux                                                 |
-| **Reliability History & Reports** | Supported            | Windows, macOS, Linux                                                 |
-| **Orca Workspace Launcher**       | Supported (Optional) | Windows; macOS/Linux via `ORCA_BIN` or `orca-ide`                     |
-| **Gemini Route Circuit Breaker**  | Experimental         | Windows, macOS, Linux (OMP CLI)                                       |
-
-## Usage
-
-### Terminal Monitor
-
-Run directly from the repository checkout:
-
-```bash
-bun run monitor
-bun run monitor --interval=600
-bun run monitor --no-health
-bun run monitor --no-alt-screen
-```
-
-Or execute the installed standalone script without the repository checkout:
-
-```bash
-bun "$HOME/.omp/agent/scripts/omp-provider-usage.js"
-bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --health
-bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --json
-bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --watch --interval=300 --health
-```
-
-Sample output:
+Example output (sample data):
 
 ```text
 ╭─ OMP Provider Usage ───────────────────────────────────────────────── 08:53:04 PM ─╮
@@ -169,107 +42,136 @@ Sample output:
 ╰────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-### OMP Extension Commands
+Sample data. `bun run monitor` keeps this view live and refreshes every 300 s.
 
-Interact with the circuit breaker directly from inside OMP:
+## Quick start
 
-```text
-/gemini-health [--confirm]                   # Probe all accounts and refresh status
-/gemini-heal [--dry-run]                     # Reserve failing accounts (reservePct: 100)
-/gemini-restore                              # Remove exclusions managed by auto-heal
-/gemini-enable <account> [--force]           # Re-enable an excluded account
-/gemini-auto-restore [<account>|off <account>] # Opt manual exclusions in or out of streak auto-restore
-/gemini-health-widget [on|off]               # Toggle TUI status widget visibility
-/gemini-warmup <account>|--all               # Send minimal warm-up request to OK accounts
-/gemini-check <account>                      # Probe specific account to verify route recovery
-/template save|apply|list|show|delete <name>  # Bundle global AGENTS.md + RULES.md into templates/<name>/ (see templates/README.md)
-/gateway [status|start|stop|restart|client-add|recipe] # Manage Auth Gateway, tunnel, and secondary PC tokens
+You need **Bun 1.4.3+**, **Git**, and **OMP 18.12.5**. Orca is optional.
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/kamishino/omp-toolkit/main/install.ps1 | iex
 ```
 
-For complete extension architecture, automatic behavior, CLI usage, wire normalizer details, and state schema, see the [OMP Extension Guide](apps/omp-extension/README.md).
-
-### Desktop Widget
+**macOS / Linux**
 
 ```bash
-bun run desktop             # Launch tray widget in background
-bun run desktop:preview     # Launch widget with panel immediately visible
-bun run desktop:once        # Run headless diagnostic and output summary
-bun run desktop:shortcut    # Create desktop launcher (Windows, macOS, Linux)
+curl -fsSL https://raw.githubusercontent.com/kamishino/omp-toolkit/main/install.sh | bash
 ```
 
-Create a desktop shortcut to launch the widget with one click:
+The installer clones or updates `~/.omp/omp-toolkit`, runs `bun install --frozen-lockfile`, and installs the OMP extension, monitor CLI, and helper scripts into `~/.omp/agent`. Set `OMP_TOOLKIT_HOME` to use a different checkout.
+
+Check the install:
 
 ```bash
-bun run desktop:shortcut
+bun "$HOME/.omp/agent/scripts/omp-provider-usage.js" --health
+cd "$HOME/.omp/omp-toolkit"
+bun run desktop:once
 ```
 
-On Windows, `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/desktop/create-desktop-shortcut.ps1` can also be executed directly.
+The first command prints the usage frame with a `ROUTE` column. The second prints a short text summary and exits; `bun run desktop` starts the tray widget. For a manual checkout, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-The desktop panel includes a `Warm up all` header control and per-account `Warm up` and `Check` buttons. Warm-up sends minimal model prompts to eligible accounts (skipping non-OK rows) while enforcing a 60-second cooldown per account and cross-process single-flight locking.
+## Everyday commands
 
-### Orca Floating Workspace
+Run `monitor` and `desktop` commands from the checkout (`~/.omp/omp-toolkit` after the installer).
 
-```bash
-bun run monitor:orca
-```
+| Task | Command |
+| --- | --- |
+| Live quota view | `bun run monitor` |
+| Slower refresh | `bun run monitor --interval=600` |
+| Pricing schedule | `bun run monitor --schedule` |
+| Tray widget | `bun run desktop` |
+| Headless check | `bun run desktop:once` |
+| Desktop shortcut | `bun run desktop:shortcut` |
+| Orca floating tab | `bun run monitor:orca` (`Ctrl+Alt+A` / `Cmd+Alt+A`) |
 
-Shortcut: `Ctrl+Alt+A` on Windows, `Cmd+Alt+A` on macOS. Launches or focuses a dedicated floating monitor tab inside Orca.
+`--no-health` hides the route column; `--no-alt-screen` keeps output in the scrollback; in watch mode `Tab` switches between usage and schedule.
+
+Inside OMP:
+
+| Task | Command |
+| --- | --- |
+| Check every account now | `/gemini-health` |
+| Preview exclusions | `/gemini-heal --dry-run` |
+| Undo toolkit exclusions | `/gemini-restore` |
+| Warm one account (60 s cooldown) | `/gemini-warmup <account>` |
+| Re-check one account | `/gemini-check <account>` |
+| Full command list | [OMP Extension Guide](apps/omp-extension/README.md) |
 
 ## Configuration
 
-| Environment Variable                | Description                                          | Default              |
-| ----------------------------------- | ---------------------------------------------------- | -------------------- |
-| `DEEPSEEK_API_KEY`                  | API key for DeepSeek balance queries                 | —                    |
-| `DEEPSEEK_BALANCE_ALERT_CNY`        | Low-balance threshold in CNY                         | `10`                 |
-| `DEEPSEEK_BALANCE_ALERT_USD`        | Low-balance threshold in USD                         | `10`                 |
-| `OMP_BIN`                           | Path or name of OMP executable                       | `omp`                |
-| `OMP_TOOLKIT_HOME`                  | Repository checkout directory path                   | `~/.omp/omp-toolkit` |
-| `OMP_WIDGET_INTERVAL_SECONDS`       | Desktop widget polling interval in seconds           | `300` (min: `30`)    |
-| `BUN_BIN`                           | Bun executable override for desktop subprocesses     | System `bun`         |
-| `PI_CODING_AGENT_DIR`               | OMP agent state directory override                   | `~/.omp/agent`       |
-| `GEMINI_HEALTH_RESTORE_STREAK`      | Consecutive healthy checks required for auto-restore | `3`                  |
-| `GEMINI_HEALTH_RESTORE_GAP_SECONDS` | Minimum seconds required between streak checks       | `60`                 |
-| `PI_AI_ANTIGRAVITY_VERSION`         | Antigravity client version header override           | `2.24.0`             |
-| `ORCA_BIN`                          | Custom Orca CLI executable path override             | Auto-detected        |
-| `ORCA_CLI_COMMAND`                  | Custom Orca-managed CLI command override             | Auto-detected        |
+| Variable | What it does | Default |
+| --- | --- | --- |
+| `DEEPSEEK_API_KEY` | Enables DeepSeek balance lookup | — |
+| `DEEPSEEK_BALANCE_ALERT_CNY` | Low-balance threshold, CNY | `10` |
+| `DEEPSEEK_BALANCE_ALERT_USD` | Low-balance threshold, USD | `10` |
+| `OMP_BIN` | OMP executable name or path | `omp` |
+| `OMP_TOOLKIT_HOME` | Checkout used by installers and templates | `~/.omp/omp-toolkit` |
+| `PI_CODING_AGENT_DIR` | OMP state directory | `~/.omp/agent` |
+| `OMP_TOOLKIT_HISTORY_DB` | Override the SQLite history file | `<agentDir>/omp-toolkit-history.db` |
+| `OMP_WIDGET_INTERVAL_SECONDS` | Tray refresh interval (minimum 30) | `300` |
+| `BUN_BIN` | Bun executable for desktop subprocesses | system `bun` |
+| `GEMINI_HEALTH_RESTORE_STREAK` | Healthy checks needed to restore an account | `3` |
+| `GEMINI_HEALTH_RESTORE_GAP_SECONDS` | Minimum seconds between streak checks | `60` |
+| `GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS` | Recovery sweep interval (minimum 60) | `300` |
+| `PI_AI_ANTIGRAVITY_VERSION` | Antigravity client version header | `2.24.0` |
+| `ORCA_BIN` | Orca executable override | auto-detected |
+| `ORCA_CLI_COMMAND` | Orca-managed CLI command override | auto-detected |
+| `NO_COLOR` | Set to `1` to disable ANSI color | unset |
 
-## Project Structure
+## FAQ
 
-```text
-apps/
-  desktop/              Desktop widget host (Electron main, tray, panel, webview renderer)
-  omp-extension/        OMP plugin (lifecycle hooks, commands, tools, circuit-breaker)
-  provider-usage/       Terminal monitor CLI and schema-2 JSON payload emitter
-packages/
-  core/                 Pure domain logic: dashboard models, timetable schedule evaluator, types
-  tui/                  ANSI presentation tokens, formatting widgets, and terminal views
-design/tokens.json      Design-token single source of truth for ANSI and OKLCH
-docs/
-  adr/                  Architecture decision records (ADR 0001–0009)
-  architecture.md       Layering, build pipelines, and Mermaid interaction diagrams
-  design.md             Visual tokens, layout spacing, and threshold rules
-  roadmap.md            MoSCoW product roadmap and reliability backlog
-  runbook.md            Operational diagnostics and incident runbooks
-scripts/                Unified build orchestrator, installer, monitor launcher, reliability report
-```
+**What does `HANG` mean?** The account accepted the probe but sent no first stream event within 15 s, or failed with a retryable error.
 
-## Development
+**Why is an account excluded?** The toolkit set `reservePct: 100` so OMP stops routing to it. `/gemini-restore` removes toolkit-managed exclusions; `/gemini-enable <account>` re-enables one account. Manual exclusions stay until you run `/gemini-auto-restore <account>` to opt in.
+
+**The footer says the snapshot is stale.** The last check is older than 15 minutes. Run `/gemini-health` or `bun ~/.omp/agent/extensions/gemini-health.js`.
+
+**Does monitoring cost model tokens?** No. Health probes cost roughly 11 tokens per account and a warm-up about 8.
+
+**Does it send data anywhere?** No telemetry and no upload path. It reads local OMP state and calls `https://api.deepseek.com/user/balance` only when `DEEPSEEK_API_KEY` is set.
+
+**How do I uninstall?** Run `/gemini-restore` first so no account stays excluded, then delete `~/.omp/agent/extensions/gemini-health.js`, `~/.omp/agent/scripts/omp-provider-usage.js`, `~/.omp/agent/scripts/windows-toast.ps1`, and `~/.omp/agent/scripts/omp-gateway.ps1` if present. Delete the checkout; optionally delete `~/.omp/agent/gemini-health-*.json`, `gemini-warmup-state.json`, `omp-toolkit-history.db*`, and `omp-toolkit-machine.json`.
+
+## Platform support
+
+| Component | Status | Platforms |
+| --- | --- | --- |
+| Terminal monitor | Supported | Windows, macOS, Linux |
+| Desktop tray widget | Supported | Windows 10/11, macOS; Linux best-effort |
+| DeepSeek balance and alerts | Supported | Windows, macOS, Linux |
+| Reliability history and reports | Supported | Windows, macOS, Linux |
+| Orca workspace launcher | Optional | Windows; macOS/Linux best-effort |
+| Gemini route health | Experimental | Windows, macOS, Linux |
+
+Tested with Bun 1.4.3, OMP 18.12.5, and Orca 1.4.226. The primary target is Windows 10/11.
+
+## For developers
+
+`packages/core` is pure domain logic (no network, OMP, or arbitrary I/O; deterministic path resolution only). `packages/tui` renders the terminal frame. `apps/*` own OMP, CLI, Electron, and process boundaries. See [Architecture](docs/architecture.md) for the layer table and data flow.
 
 ```bash
-bun install             # Install dependencies
-bun test                # Run unit tests across all packages
-bun run typecheck       # Check TypeScript types (workspace and desktop)
-bun run check           # Run Biome linter, typecheck, tests, and token checks
-bun run build           # Compile all workspace bundles (extension, CLI, desktop)
-bun run build:desktop   # Compile desktop bundles only
+bun install             # dependencies
+bun test                # unit tests
+bun run typecheck       # TypeScript workspace and desktop
+bun run check           # Biome, typecheck, tests, token contrast
+bun run build           # extension, CLI, and desktop bundles
 ```
 
 ## Documentation
 
 - [OMP Extension Guide](apps/omp-extension/README.md)
-- [Architecture Blueprint](docs/architecture.md)
-- [Design Tokens & UI System](docs/design.md)
-- [Operational Runbook](docs/runbook.md)
-- [MoSCoW Product Roadmap](docs/roadmap.md)
-- [Architecture Decision Records (ADRs)](docs/adr/README.md)
-- [System Glossary](GLOSSARY.md)
+- [Architecture](docs/architecture.md)
+- [Design tokens](docs/design.md)
+- [Runbook](docs/runbook.md)
+- [Roadmap](docs/roadmap.md)
+- [ADRs](docs/adr/README.md)
+- [Glossary](GLOSSARY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security](SECURITY.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+## License
+
+MIT — see [LICENSE](LICENSE). Not affiliated with OMP, Orca, or Google.
