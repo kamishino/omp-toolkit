@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted.
+Accepted; the no-periodic-probing clause is superseded by ADR-0009.
 
 ## Context
 
