@@ -6,6 +6,7 @@ import {
   generateClientRecipe,
 } from "@omp-toolkit/core";
 import { createHistoryAudit } from "./audit";
+import { createAutostart } from "./autostart";
 import { createBrokerClient } from "./broker-client";
 import {
   bindToBaseUrl,
@@ -156,6 +157,20 @@ async function main(): Promise<void> {
         { recipes },
         recipes.flatMap((r) => [`--- ${r.title} ---`, r.snippet, ""]),
       );
+      return;
+    }
+    case "autostart-install":
+    case "autostart-remove":
+    case "autostart-status": {
+      const autostart = createAutostart();
+      const result =
+        config.command === "autostart-install"
+          ? await autostart.install()
+          : config.command === "autostart-remove"
+            ? await autostart.remove()
+            : await autostart.status();
+      print(config, result, result.lines);
+      process.exit(result.ok ? 0 : 1);
       return;
     }
     case "clients-add":

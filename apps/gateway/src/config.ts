@@ -20,6 +20,9 @@ export type GatewayCommand =
   | "unblock-all"
   | "policy"
   | "recipe"
+  | "autostart-install"
+  | "autostart-remove"
+  | "autostart-status"
   | "help";
 
 const COMMANDS: readonly string[] = [
@@ -41,6 +44,9 @@ const COMMANDS: readonly string[] = [
   "unblock-all",
   "policy",
   "recipe",
+  "autostart-install",
+  "autostart-remove",
+  "autostart-status",
   "help",
 ];
 
@@ -188,6 +194,8 @@ Read commands:
   pool      Pool summary: availability, earliest reset, pin distribution
   recipe [claude-code|opencode|curl|python-openai|python-anthropic|vscode-continue]
             Loopback client setup snippet (placeholder token; default: harnesses)
+  autostart-install|autostart-remove|autostart-status
+            Windows Startup-folder entry that runs start at sign-in
 
 Write commands (audited to History; blocks always expire):
   clients-add <name> [--models=p/*,...] [--account-id=<id> ...] [--force]

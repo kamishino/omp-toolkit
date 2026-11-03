@@ -134,7 +134,7 @@ Inside OMP:
 
 **Does it send data anywhere?** No telemetry and no upload path. It reads local OMP state and calls `https://api.deepseek.com/user/balance` only when `DEEPSEEK_API_KEY` is set.
 
-**How do I uninstall?** Run `/gemini-restore` first so no account stays excluded, then delete `~/.omp/agent/extensions/gemini-health.js`, `~/.omp/agent/scripts/omp-provider-usage.js`, `~/.omp/agent/scripts/windows-toast.ps1`, and `~/.omp/agent/scripts/omp-gateway.ps1` if present. Delete the checkout; optionally delete `~/.omp/agent/gemini-health-*.json`, `gemini-warmup-state.json`, `omp-toolkit-history.db*`, and `omp-toolkit-machine.json`.
+**How do I uninstall?** Run `/gemini-restore` first so no account stays excluded, run `bun run gateway:ctl autostart-remove` if installed, then delete `~/.omp/agent/extensions/gemini-health.js`, `~/.omp/agent/scripts/omp-provider-usage.js`, `~/.omp/agent/scripts/windows-toast.ps1`, `~/.omp/agent/scripts/omp-gateway.ps1`, and `~/.omp/agent/scripts/omp-gateway-ctl.js` if present. Delete the checkout; optionally delete `~/.omp/agent/gemini-health-*.json`, `gemini-warmup-state.json`, `omp-toolkit-history.db*`, and `omp-toolkit-machine.json`.
 
 ## Platform support
 

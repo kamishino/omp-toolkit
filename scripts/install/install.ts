@@ -54,6 +54,7 @@ install(
   path.join(root, "scripts/gateway/omp-gateway.ps1"),
   path.join(scriptsDir, "omp-gateway.ps1"),
 );
+install(path.join(root, "apps/gateway/dist/index.js"), path.join(scriptsDir, "omp-gateway-ctl.js"));
 removeLegacy(path.join(extensionsDir, "gemini-health.ts"));
 removeLegacy(path.join(scriptsDir, "omp-provider-usage.ts"));
 removeLegacy(path.join(scriptsDir, "gemini-usage.ts"));

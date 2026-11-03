@@ -50,6 +50,18 @@ exit 0 (spec A9). The same run on `gemini-2.5-flash` fails with the
 `http://127.0.0.1:4000`. For remote (Cloudflare) deployments, see
 [OMP Auth Gateway + Cloudflare](auth-gateway-cloudflare.md).
 
+## Daily-driver setup
+
+- Gateways are managed by the Bun control plane:
+  `bun run gateway:ctl doctor|start|stop|status|accounts|pool` (inside OMP,
+  `/gateway <action>` delegates to the same ctl).
+- Start at sign-in (Windows, no elevation):
+  `bun run gateway:ctl autostart-install` writes a hidden Startup-folder
+  launcher; `autostart-status` / `autostart-remove` inspect and undo it.
+  Re-run install after moving the checkout.
+- Local ready-made packs with live tokens belong outside the repo (for
+  example `~/.omp/client-packs/`). Never commit them.
+
 ## Scoped tokens
 
 Issue one token per harness or machine; it is also the account-pin unit:
