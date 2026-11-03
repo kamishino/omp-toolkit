@@ -51,6 +51,38 @@ host-specific absolute paths.
 - Do not add a new provider adapter without an issue that defines its fixture
   and failure behavior.
 
+## Releases
+
+Source-only releases: annotated Git tags and GitHub Releases, no npm packages or
+binaries (ADR-0003).
+
+1. Choose the semver: patch for fixes, minor for features or behavior changes.
+2. Set `version` in the root and all five workspace `package.json` files to the
+   same value.
+3. Rename `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z — <title> (YYYY-MM-DD)`
+   and fill it from the commits since the last tag.
+4. Run `bun run check` and `bun run build`.
+5. Commit as `chore(release): bump version to X.Y.Z`.
+6. Create an annotated tag with the noreply identity and a message that starts
+   `OMP Toolkit vX.Y.Z — <title>` followed by the changelog bullets:
+
+   ```bash
+   GIT_COMMITTER_NAME="Toan Huynh" \
+   GIT_COMMITTER_EMAIL="64374812+kamishino@users.noreply.github.com" \
+   git tag -a vX.Y.Z -F /tmp/tag-vX.Y.Z.txt
+   ```
+
+7. Push `main` and the tag: `git push origin main vX.Y.Z`.
+8. Create the GitHub Release from the matching changelog section:
+
+   ```bash
+   gh release create vX.Y.Z --title "vX.Y.Z — <title>" \
+     --notes-file /tmp/release-vX.Y.Z.md --latest
+   ```
+
+9. Verify `gh release list` shows the new release as Latest, and
+   `git cat-file -p vX.Y.Z` shows the noreply tagger.
+
 ## AI assistant artifacts
 
 Do not commit `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.cursor/`, `.claude/`,
