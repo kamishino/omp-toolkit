@@ -12,7 +12,7 @@ supported platforms. Orca integration is best-effort outside Windows.
 # Provider usage + cached route health (fast, no model tokens)
 bun ~/.omp/agent/scripts/omp-provider-usage.js --health
 
-# Refresh the health snapshot (probes six accounts; ~66 tokens)
+# Refresh the health snapshot (probes every discovered Antigravity account; ~11 tokens each)
 bun ~/.omp/agent/extensions/gemini-health.js
 
 # Inside an OMP TUI
@@ -118,7 +118,7 @@ GEMINI_HEALTH_RESTORE_GAP_SECONDS=60
 ```
 
 A managed exclusion restores after three healthy checks that are at least 60 s
-apart. Checks occur only on an event/manual probe; there is no idle polling.
+apart. Checks occur on an event or manual probe, plus a recovery sweep that runs at most every 300 s (GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS, minimum 60) and only while restorable exclusions exist and the agent is idle.
 
 ## Manual warm-up and unhang check
 
@@ -269,7 +269,7 @@ The custom **OMP Provider Usage** tab is unaffected.
 | Desktop widget (`bun run desktop`) |           0 (quota read) |
 | `omp usage --json`                 |           0 (quota read) |
 | Snapshot read                      |                        0 |
-| Health sweep                       |     ~66 per six accounts |
+| Health sweep                       |     ~11 per account |
 | Failed/hung probe                  | ~6 prompt tokens or none |
 
 ## Troubleshooting

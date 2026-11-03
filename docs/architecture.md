@@ -11,8 +11,7 @@
 | Adapter                 | `apps/provider-usage` | CLI flags, `omp usage` read, snapshot read, watch loop, schema-2 JSON payload                   |
 | Design                  | `design/tokens.json`  | Color and threshold SSOT for TUI ANSI and desktop OKLCH                                         |
 
-`core` has no filesystem, process, network, or OMP imports. `tui` imports only
-`core` and JSON tokens. The apps own I/O and runtime boundaries.
+`core` has no network, OMP, or arbitrary I/O imports; filesystem access is limited to deterministic path resolution (`environment.ts`) and template checkout lookup (`templates.ts`). `tui` imports `core`, `terminui`, and the JSON design tokens. The apps own I/O and runtime boundaries.
 
 ```mermaid
 flowchart TD
@@ -297,7 +296,7 @@ flowchart TD
 
 - No automatic model fallback; the account circuit breaker preserves
   `gemini-3.8-flash`.
-- No periodic health probing; the snapshot is refreshed by events/manual checks.
+- No periodic probing of healthy routes; the snapshot is refreshed by events/manual checks, and a recovery sweep runs only while restorable exclusions exist and the agent is idle (ADR-0009).
 - No custom Orca status-bar item; Orca's public plugin API exposes right-sidebar
   panels and commands, not status-bar contributions.
 - No packaged desktop binaries or auto-updater; the desktop widget runs from source via Bun.

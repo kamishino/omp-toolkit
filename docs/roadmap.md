@@ -3,7 +3,7 @@
 > **Beneficiary:** Solo operator (primary Windows workstation; four providers: Google Antigravity, OpenAI Codex, Muse Code, DeepSeek)  
 > **Horizon:** Continuous open backlog (MoSCoW prioritized; strictly one feature or intervention at a time)  
 > **Operator Capacity:** ~5 hours/week (~20 hours/month)  
-> **Evidence Foundation:** Backed by the empirical research register in [`docs/research/moscow-feature-prioritization.md`](research/moscow-feature-prioritization.md)  
+> **Evidence Foundation:** Completed-item evidence is recorded inline in this file and in the ADRs.  
 > **Last updated:** 2026-11-02  
 
 ---
@@ -20,10 +20,10 @@ All roadmap development is evaluated against these non-negotiable operational pr
    - Continuous zero-manual-fix autonomous operation: route circuit breaker automatically isolates hung accounts and auto-restores them on recovery streaks.
    - Incidents resolved automatically within 15 minutes without manual intervention.
 3. **Core Architectural Invariants:**
-   - **Zero Idle Tokens (ADR-0001):** Monitoring performs passive file reads only; no scheduled background probes while the agent is idle.
+   - **Zero Idle Tokens (ADR-0001, amended by ADR-0009):** Monitoring performs passive file reads only. Route probing runs on hook events, manual checks, or the conditional recovery sweep, which only runs while restorable exclusions exist and the agent is idle.
    - **Local-First Simplicity:** Operates entirely on local SQLite state (`omp-toolkit-history.db`); zero cross-machine sync, zero cloud dependencies.
    - **Source-Only Distribution (ADR-0003):** Runs directly from source checkout with Bun; zero public npm publishing or binary distribution overhead.
-   - **Pure Domain Boundary:** `packages/core` contains zero filesystem I/O, zero network, zero process calls, and zero ANSI escapes.
+   - **Pure Domain Boundary:** `packages/core` contains no network, OMP, or arbitrary filesystem I/O; path resolution only (`environment.ts`, `templates.ts`), and no ANSI escapes.
 
 ---
 
@@ -37,7 +37,6 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `C06` | Deduplicate Desktop & CLI Pacing Stores | `packages/core/src/pacing.ts`, `apps/provider-usage/src/pacing-store.ts` | Single shared store helper extracted; desktop re-exports from provider-usage; `packages/core` purity preserved; `bun run check` and `build:desktop` pass |
 | `C07` | Re-Evaluate Model Pairings | `scripts/eval/eval-model-roles.ts` | 2x2 model pairing evaluator and scorecard calculation verified via `--dry-run --report`; Pair A cost leadership confirmed |
 | `C08` | Targeted Wire-Normalizer Fixes | `apps/omp-extension/src/gemini-normalizer.ts` | Expanded pre-tool conversational chatter stripping; stripped chatter from model parts with function calls; empty text parts filtered out |
-| `C10` | Programmatic Two-Strike Escalation | `apps/omp-extension/src/auto-heal.ts` | Two-strike escalation circuit breaker; Strike 1 notifies reasoning elevation; Strike 2 logs alert event in history and halts retry loop |
 | `C11` | Multi-Account Weekly Pacing | `packages/core/src/dashboard/builder.ts`, `pacing.ts` | Removed single-account gate; multi-account sections calculate pacing ceiling markers per row across providers |
 | `C12` | Cross-Platform OS Incident Toast | `apps/omp-extension/src/toast.ts` | Added platform-aware dispatch: `osascript` on macOS, `notify-send` on Linux, PowerShell on Windows |
 | `C13` | Desktop Provider Logo for `muse-code` | `apps/desktop/src/renderer/provider-logos.ts` | Created `muse-code.svg` asset and mapped in `PROVIDER_LOGOS`; unit tests verified |
@@ -67,7 +66,7 @@ No open development Musts. A new item is promoted to Must only when daily operat
 
 High-leverage execution quality and reliability improvements backed by measured empirical benchmarks or regression prevention.
 
-No open Shoulds. Desktop launch hardening (`D03`, `D02` from [`docs/research/desktop-moscow-roadmap.md`](research/desktop-moscow-roadmap.md)) completed 2026-11-02; see Completed.
+No open Shoulds. Desktop launch hardening (`D03`, `D02`) completed 2026-11-02; see Completed.
 
 ---
 
@@ -87,11 +86,11 @@ Contingent enhancements, minor ergonomics, and external developer tooling. These
 Explicitly rejected based on empirical refutation, architectural invariants, or roadmap boundaries:
 
 - **`C02`: Lock Pair A Model Roles in User Config — DECLINED BY OPERATOR.**
-  Current `~/.omp/agent/config.yml` presets (plan/default `google-antigravity/gemini-3.8-flash:high`) are kept. Pair A eval evidence remains in `docs/research/model-pairing-eval-results.md` if revisited.
+  Current `~/.omp/agent/config.yml` presets (plan/default `google-antigravity/gemini-3.8-flash:high`) are kept; Pair A was declined by the operator.
 - **`C03`: Apply Handoff Contract Template — DECLINED BY OPERATOR.**
   Global `~/.omp/agent/AGENTS.md` rules are kept; `templates/plan-exec-handoff/` remains available via `/template apply plan-exec-handoff` on demand.
 - **`C15`: Reverse Proxy Stream Compression (`billion-context`) — REJECTED.**
-  Empirically refuted on 2026-10-29 (`billion-context-evaluation.md`). Produced 0% token savings on agent tasks; hardcoded 50k threshold stayed idle; expanded request payloads by $+8.3\%$ ($+11.1\text{ KiB}$) per turn; breaks byte-stable prefix caching (93–94% hit rate); license attribution conflicts with clean distribution.
+  Empirically refuted on 2026-10-29. Produced 0% token savings on agent tasks; hardcoded 50k threshold stayed idle; expanded request payloads by $+8.3\%$ ($+11.1\text{ KiB}$) per turn; breaks byte-stable prefix caching (93–94% hit rate); license attribution conflicts with clean distribution.
 - **`C16`: Graphify Inside `packages/core` & In-Process Repo Map — PROHIBITED.**
   Placing Tree-sitter parsing or file indexing into `packages/core` violates pure zero-I/O domain boundaries. Compiler LSP (`xd://lsp`) and `ast-grep outline` already provide deterministic symbol precision at $\sim 50\text{--}150$ tokens per query without persistent indexing overhead.
 - **`C17`: Public Packaging, npm Publishing & Signed Binaries — EXCLUDED.**

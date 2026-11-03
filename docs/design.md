@@ -76,7 +76,7 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
   - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh (`mdiRefresh`), Minimize (`mdiWindowMinimize`), and Close (`mdiClose`) vector icon buttons from Material Design Icons (`@mdi/js`).
   - Summary: provider count, account count, >=80% count, maxed count, tightest provider:account.
   - Content: scrollable container holding cards per provider section.
-  - Provider cards: each card features a 24 px provider logo slot before the title. Google Antigravity (Gemini mark), OpenAI, and DeepSeek display vector marks from Dashboard-Icons; OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays an empty slot to maintain vertical alignment.
+  - Provider cards: each card features a 24 px provider logo slot before the title. Google Antigravity (Gemini mark), OpenAI, and DeepSeek display vendored vector marks from `@lobehub/icons-static-svg` (`assets/providers/SOURCES.md`); OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays `muse-code.svg`.
   - Table: `ACCOUNT` (26%), `ROUTE` (12%), and provider limit columns. Account cell colored by row severity.
   - Route cell: text badge (`OK`, `HANG`, `AUTH`, `MODEL`, `ERR`, `—`) with semantic color.
   - Limits: progress bar (`<progress>` with `currentColor` value) + numeric percentage + reset countdown; DeepSeek displays currency amount with red `LOW` label.

@@ -40,6 +40,6 @@ CLI and UI hosts.
 - Time window calculations remain completely deterministic, fast, and isolated
   within `packages/core` without system clock dependencies or mocking.
 - Operators can instantly inspect local equivalent schedules via
-  `omp usage --schedule`.
+  `bun run monitor --schedule`.
 - Future providers introducing time-varying rates can register policies without
   modifying dashboard or presentation rendering code.

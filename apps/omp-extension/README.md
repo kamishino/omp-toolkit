@@ -367,7 +367,7 @@ All local state files reside under `<agentDir>` (`PI_CODING_AGENT_DIR` or `~/.om
 | `omp-toolkit-machine.json` | Persistent local machine identity UUID for reliability event attribution. | Created automatically on first history write. |
 | `extensions/gemini-health.js` | Production extension bundle loaded by OMP. | Installed by `bun run install:omp`. |
 | `scripts/windows-toast.ps1` | Windows PowerShell notification helper script. | Installed by `bun run install:omp`. |
-| `backups/<timestamp>/` | Pre-apply template backups and installer backups. | Retains the 10 most recent template-apply backups. |
+| `backups/templates/<timestamp>/` | Template-apply backups of AGENTS.md and RULES.md. | Retains the 10 most recent template backups. Installer backups live in backups/<timestamp>/ and are never pruned. |
 
 ### External state: OMP routing policies
 

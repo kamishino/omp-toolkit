@@ -52,9 +52,9 @@ If none of these candidates contains a valid `omp-toolkit` checkout, the command
 
 Before applying any template that overwrites or removes live files, the extension automatically copies all existing live files to a timestamped backup directory:
 ```text
-~/.omp/agent/backups/YYYY-MM-DDTHH-mm-ss-sssZ/
+~/.omp/agent/backups/templates/YYYY-MM-DDTHH-mm-ss-sssZ/
 ```
-Backups are preserved indefinitely and are never automatically pruned. If an error occurs midway through applying a template, changes are rolled back automatically from memory, and the backup remains available for manual restoration.
+The 10 most recent template backups are retained; older template backups are pruned. Installer backups under `~/.omp/agent/backups/<timestamp>/` are never touched.
 
 ## Hand-Authoring Templates
 

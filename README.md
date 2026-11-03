@@ -21,7 +21,7 @@
 
 OMP Toolkit is an unofficial, Windows-first, cross-platform toolkit for OMP. It aggregates `omp usage --json` and cached route health snapshots into a single ANSI frame or desktop tray widget, revealing quota consumption, circuit-broken accounts, and reset countdowns across providers.
 
-The monitor performs passive reads and never probes models directly, ensuring an active monitoring tab consumes zero model tokens. Route health checks are strictly event-driven or manually triggered, exclusions are tracked in atomic state files and a 30-day SQLite history ledger, and managed exclusions auto-restore only after spaced healthy-check streaks.
+The monitor performs passive reads and never probes models directly, ensuring an active monitoring tab consumes zero model tokens. Route health checks run on OMP hook events and manual commands, plus a recovery sweep that runs at most every 300 s and only while restorable exclusions exist and the agent is idle. Exclusions are tracked in atomic state files and a 30-day SQLite history ledger, and managed exclusions auto-restore only after spaced healthy-check streaks.
 
 ## Features
 
@@ -39,7 +39,7 @@ The codebase enforces strict unidirectional layering with zero I/O leakage into 
 
 | Layer                       | Package / Path        | Responsibility                                                                                                                          |
 | --------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Domain**                  | `packages/core`       | Pure usage grouping, column selection, route ordering, streak transitions, and dashboard models (0 filesystem, network, or OMP imports) |
+| **Domain**                  | `packages/core`       | Pure usage grouping, column selection, route ordering, streak transitions, and dashboard models (no network, OMP, or arbitrary I/O imports; deterministic path resolution only) |
 | **Presentation (terminal)** | `packages/tui`        | ANSI design tokens, semantic thresholds, progress bars, percentages, and provider usage views                                           |
 | **Presentation (desktop)**  | `apps/desktop`        | Electron host, system tray, OS login item, and context-isolated webview panel styled via OKLCH tokens                                   |
 | **Adapters (OMP)**          | [apps/omp-extension](apps/omp-extension/README.md) | OMP hooks, auto-heal coordinator, CLI commands, tool definitions, account probing client, and state persistence                         |
@@ -245,7 +245,7 @@ packages/
   tui/                  ANSI presentation tokens, formatting widgets, and terminal views
 design/tokens.json      Design-token single source of truth for ANSI and OKLCH
 docs/
-  adr/                  Architecture decision records (ADR 0001–0008)
+  adr/                  Architecture decision records (ADR 0001–0009)
   architecture.md       Layering, build pipelines, and Mermaid interaction diagrams
   design.md             Visual tokens, layout spacing, and threshold rules
   roadmap.md            MoSCoW product roadmap and reliability backlog
@@ -268,10 +268,8 @@ bun run build:desktop   # Compile desktop bundles only
 
 - [OMP Extension Guide](apps/omp-extension/README.md)
 - [Architecture Blueprint](docs/architecture.md)
-- [Folder Structure Blueprint](Project_Folders_Structure_Blueprint.md)
 - [Design Tokens & UI System](docs/design.md)
 - [Operational Runbook](docs/runbook.md)
 - [MoSCoW Product Roadmap](docs/roadmap.md)
 - [Architecture Decision Records (ADRs)](docs/adr/README.md)
 - [System Glossary](GLOSSARY.md)
-- [Industry Architecture Comparison](docs/research/architecture-industry-comparison.md)
