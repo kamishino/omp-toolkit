@@ -65,4 +65,11 @@ You can author templates directly without running `/template save`:
 
 ## Public Repository Notice
 
-This repository is public. Templates saved in `templates/` become trackable by git. **Never** include API keys, credentials, private tokens, or confidential instructions in `AGENTS.md` or `RULES.md` templates before committing or pushing changes.
+This repository is public. Template bundles saved by `/template save` are ignored
+by default (`templates/*/AGENTS.template.md`, `templates/*/RULES.template.md`),
+so personal personas stay local.
+
+To publish a template intentionally, review it for API keys, credentials, private
+tokens, and confidential instructions, then force-add it:
+`git add -f templates/<name>/AGENTS.template.md`. The tracked
+`templates/plan-exec-handoff/` example stays public.

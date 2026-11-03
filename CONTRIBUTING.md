@@ -85,12 +85,16 @@ binaries (ADR-0003).
 
 ## AI assistant artifacts
 
-Do not commit `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.cursor/`, `.claude/`,
-`.codex/`, `.agents/`, `.omp/`, `copilot-instructions.md`, session handoffs,
-agent transcripts, local skill files, or prompt files. They are gitignored and
-must remain local. The `~/.omp/agent` paths in source and docs are the OMP
-runtime directory required by the product; they are not a request to publish
-local agent state.
+Do not commit `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.cursorrules`, `.cursor/`,
+`.claude/`, `.codex/`, `.agents/`, `.omp/`, `.mcp.json`,
+`copilot-instructions.md`, session handoffs, agent transcripts, local skill files,
+or prompt files. They are gitignored and must remain local. The `~/.omp/agent`
+paths in source and docs are the OMP runtime directory required by the product;
+they are not a request to publish local agent state.
+
+Local prompt-template bundles, internal research notes under `docs/research/`,
+runtime state files, and credentials are also gitignored; force-add only after
+review. The public `templates/plan-exec-handoff/` example remains tracked.
 
 ## Security
 

@@ -33,25 +33,34 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
-# Editors
-.vscode/*
-!.vscode/extensions.json
-.idea/
-*.swp
-*.swo
-*~
+# Secrets and local credentials
+.npmrc
+.netrc
+*.pem
+*.key
+*.p12
+*.pfx
+*.p8
+.mcp.json
+GEMINI.md
+.gemini/
 
-# OS
-.DS_Store
-Thumbs.db
-Desktop.ini
-
-# Local databases and test state
+# Local databases and runtime state
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 *.sqlite
 *.sqlite3
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+gemini-health-*.json
+gemini-warmup-state.json
+omp-toolkit-machine.json
+omp-toolkit.lock
+gemini-warmup.lock
+backups/
 
 # Private agent/session artifacts
 HANDOFF.md
@@ -73,3 +82,34 @@ OMP_PROVIDER_USAGE_WINDOWS_TRAY.md
 **/*.prompt.md
 **/*.skill.md
 **/*.transcript.md
+
+# Local prompt templates (tracked plan-exec-handoff example remains public)
+templates/*/AGENTS.template.md
+!templates/plan-exec-handoff/AGENTS.template.md
+templates/*/RULES.template.md
+
+# Internal research notes
+docs/research/
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.history/
+*.code-workspace
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary and merge artifacts
+/tmp/
+/.cache/
+*.tmp
+*.bak
+*.orig
+*.rej
