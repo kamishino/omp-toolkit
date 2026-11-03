@@ -5,6 +5,7 @@ export function generateClientRecipe(
   options: RecipeOptions,
 ): ClientRecipe {
   const domain = options.domain || "gateway.example.com";
+  const base = options.baseUrl || `https://${domain}`;
   const gatewayToken = options.gatewayToken || "<YOUR_OMP_GATEWAY_TOKEN>";
   const model = options.model || "google-antigravity/gemini-3.8-flash";
   const cfClientId = options.cfClientId;
@@ -23,7 +24,7 @@ export function generateClientRecipe(
         .filter(Boolean)
         .join("\n");
 
-      const snippet = `curl -X POST https://${domain}/v1/chat/completions \\
+      const snippet = `curl -X POST ${base}/v1/chat/completions \\
 ${headers} \\
   -d '{
     "model": "${model}",
@@ -46,7 +47,7 @@ ${headers} \\
       const snippet = `from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://${domain}/v1",
+    base_url="${base}/v1",
     api_key="${gatewayToken}",${defaultHeaders}
 )
 
@@ -73,7 +74,7 @@ for chunk in response:
       const snippet = `import anthropic
 
 client = anthropic.Anthropic(
-    base_url="https://${domain}",
+    base_url="${base}",
     api_key="${gatewayToken}",${defaultHeaders}
 )
 
@@ -102,7 +103,7 @@ print(message.content[0].text)`;
       "title": "${model} (OMP Gateway)",
       "provider": "openai",
       "model": "${model}",
-      "apiBase": "https://${domain}/v1",
+      "apiBase": "${base}/v1",
       "apiKey": "${gatewayToken}"${extraHeaders}
     }
   ]
@@ -113,6 +114,54 @@ print(message.content[0].text)`;
         title: "VS Code Extensions (Continue / Cline config.json)",
         snippet,
       };
+    }
+
+    case "claude-code": {
+      // Anthropic-protocol clients must avoid Gemini 2.5 models for tool use:
+      // the gateway translator drops thought signatures, which 2.5 enforces
+      // (research §11). gemini-3.8-flash and claude-* backends round-trip.
+      const snippet = `# PowerShell (Windows)
+$env:ANTHROPIC_BASE_URL = "${base}"
+$env:ANTHROPIC_AUTH_TOKEN = "${gatewayToken}"
+$env:ANTHROPIC_MODEL = "${model}"
+$env:ANTHROPIC_DEFAULT_HAIKU_MODEL = "${model}"
+$env:ANTHROPIC_DEFAULT_SONNET_MODEL = "${model}"
+$env:ANTHROPIC_DEFAULT_OPUS_MODEL = "${model}"
+$env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+Muse
+
+# bash (macOS / Linux)
+# export ANTHROPIC_BASE_URL="${base}"
+# export ANTHROPIC_AUTH_TOKEN="${gatewayToken}"
+# export ANTHROPIC_MODEL="${model}"
+# export ANTHROPIC_DEFAULT_HAIKU_MODEL="${model}"
+# export ANTHROPIC_DEFAULT_SONNET_MODEL="${model}"
+# export ANTHROPIC_DEFAULT_OPUS_MODEL="${model}"
+# export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1"
+# Muse`;
+      return { platform: "claude-code", title: "Muse (loopback gateway)", snippet };
+    }
+
+    case "opencode": {
+      const snippet = `{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "omp-gateway/${model}",
+  "permission": "allow",
+  "provider": {
+    "omp-gateway": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OMP Gateway (loopback)",
+      "options": {
+        "baseURL": "${base}/v1",
+        "apiKey": "${gatewayToken}"
+      },
+      "models": {
+        "${model}": { "name": "${model} via OMP Gateway" }
+      }
+    }
+  }
+}`;
+      return { platform: "opencode", title: "OpenCode (opencode.json)", snippet };
     }
   }
 }

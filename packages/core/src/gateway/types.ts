@@ -8,7 +8,9 @@ export type ClientRecipePlatform =
   | "curl"
   | "python-openai"
   | "python-anthropic"
-  | "vscode-continue";
+  | "vscode-continue"
+  | "claude-code"
+  | "opencode";
 
 export interface ClientRecipe {
   platform: ClientRecipePlatform;
@@ -22,4 +24,6 @@ export interface RecipeOptions {
   cfClientId?: string;
   cfClientSecret?: string;
   model?: string;
+  /** Full gateway base URL (e.g. http://127.0.0.1:4000). Overrides https://<domain>. */
+  baseUrl?: string;
 }

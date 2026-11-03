@@ -70,4 +70,39 @@ describe("generateClientRecipe", () => {
     expect(recipe.snippet).toContain("https://gateway.example.com/v1/chat/completions");
     expect(recipe.snippet).toContain("<YOUR_OMP_GATEWAY_TOKEN>");
   });
+
+  test("generates Muse loopback recipe with a tool-safe default model", () => {
+    const recipe = generateClientRecipe("claude-code", {
+      domain: "",
+      gatewayToken: "tok123",
+      baseUrl: "http://127.0.0.1:4000",
+    });
+    expect(recipe.snippet).toContain('ANTHROPIC_BASE_URL = "http://127.0.0.1:4000"');
+    expect(recipe.snippet).toContain("google-antigravity/gemini-3.8-flash");
+    expect(recipe.snippet).toContain("ANTHROPIC_AUTH_TOKEN");
+  });
+
+  test("generates OpenCode loopback provider config", () => {
+    const recipe = generateClientRecipe("opencode", {
+      domain: "",
+      gatewayToken: "tok123",
+      baseUrl: "http://127.0.0.1:4000",
+      model: "google-antigravity/gemini-2.5-flash",
+    });
+    const parsed = JSON.parse(recipe.snippet) as {
+      model: string;
+      provider: Record<string, { options: { baseURL: string } }>;
+    };
+    expect(parsed.model).toBe("omp-gateway/google-antigravity/gemini-2.5-flash");
+    expect(parsed.provider["omp-gateway"]?.options.baseURL).toBe("http://127.0.0.1:4000/v1");
+  });
+
+  test("baseUrl overrides the https domain in curl recipes", () => {
+    const recipe = generateClientRecipe("curl", {
+      domain: "gateway.example.com",
+      gatewayToken: "tok123",
+      baseUrl: "http://127.0.0.1:4000",
+    });
+    expect(recipe.snippet).toContain("http://127.0.0.1:4000/v1/chat/completions");
+  });
 });
