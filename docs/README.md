@@ -1,7 +1,6 @@
 # Documentation
 
 - [Architecture](architecture.md)
-- [Folder Structure Blueprint](../Project_Folders_Structure_Blueprint.md)
 - [Design](design.md)
 - [Runbook](runbook.md)
 - [Roadmap](roadmap.md)
@@ -9,11 +8,3 @@
 - [Glossary](../GLOSSARY.md)
 - [Contributing](../CONTRIBUTING.md)
 - [Security](../SECURITY.md)
-- [OMP brain score research](research/omp-brain-score.md)
-- [Model intelligence and planning](research/model-intelligence-planning-vs-execution.md)
-- [Planning vs execution model selection](research/model-selection-planning-vs-execution.md)
-- [Agent harness, model selection, and prompting](research/agent-harness-model-selection-prompting.md)
-- [Prompt engineering and extension boundaries](research/prompt-engineering-agent-skills.md)
-- [Gemini family prompt dynamics and wire protocols](research/gemini-family-prompt-and-wire.md)
-- [MoSCoW feature prioritization](research/moscow-feature-prioritization.md)
-- [Industry architecture comparison](research/architecture-industry-comparison.md)
