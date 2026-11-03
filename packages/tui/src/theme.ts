@@ -8,7 +8,6 @@ import {
   type Line,
   Modifier,
   type Span,
-  type Style,
   styleAddModifier,
   styleFg,
   type Text,
@@ -30,36 +29,6 @@ export const COLOR_INDICES = {
   hot: ansiIndex(tokens.color.hot.$value),
   danger: ansiIndex(tokens.color.danger.$value),
 } as const;
-
-export const TERMINUI_STYLES = {
-  border: styleFg(createStyle(), indexedColor(COLOR_INDICES.border)),
-  muted: styleFg(createStyle(), indexedColor(COLOR_INDICES.muted)),
-  accent: styleFg(createStyle(), indexedColor(COLOR_INDICES.accent)),
-  accentBold: styleAddModifier(
-    styleFg(createStyle(), indexedColor(COLOR_INDICES.accent)),
-    Modifier.BOLD,
-  ),
-  bold: styleAddModifier(createStyle(), Modifier.BOLD),
-  ok: styleFg(createStyle(), indexedColor(COLOR_INDICES.ok)),
-  warn: styleFg(createStyle(), indexedColor(COLOR_INDICES.warn)),
-  hot: styleFg(createStyle(), indexedColor(COLOR_INDICES.hot)),
-  danger: styleFg(createStyle(), indexedColor(COLOR_INDICES.danger)),
-};
-
-export function styleForLevel(level: UsageLevel): Style {
-  switch (level) {
-    case "ok":
-      return TERMINUI_STYLES.ok;
-    case "warn":
-      return TERMINUI_STYLES.warn;
-    case "hot":
-      return TERMINUI_STYLES.hot;
-    case "critical":
-      return TERMINUI_STYLES.danger;
-    case "unknown":
-      return TERMINUI_STYLES.muted;
-  }
-}
 
 export const ANSI = {
   reset: "\x1b[0m",

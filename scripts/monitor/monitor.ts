@@ -1,13 +1,9 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import {
-  DEFAULT_MONITOR_INTERVAL,
-  parseMonitorCliConfig,
-} from "../../apps/provider-usage/src/config";
+import { parseMonitorCliConfig } from "../../apps/provider-usage/src/config";
 import { resolveMonitorScriptCandidates } from "../../packages/core/src/environment";
 
-export const DEFAULT_INTERVAL = DEFAULT_MONITOR_INTERVAL;
 export const USAGE =
   "usage: bun run monitor [--interval=<seconds>] [--no-health] [--no-alt-screen]";
 

@@ -68,10 +68,6 @@ export class ThemeManager {
     this.apply(this.activePreference);
   }
 
-  getPreference(): DesktopTheme {
-    return this.activePreference;
-  }
-
   apply(theme: DesktopTheme): void {
     this.activePreference = theme;
     if (theme === "system") {
@@ -94,10 +90,6 @@ export class ThemeManager {
 }
 
 export const themeManager = new ThemeManager();
-
-export function getActiveThemePreference(): DesktopTheme {
-  return themeManager.getPreference();
-}
 
 export function applyThemePreference(theme: DesktopTheme): void {
   themeManager.apply(theme);

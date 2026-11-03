@@ -3,14 +3,9 @@ import type {
   HealthState,
   Policy,
   ProbeResult,
-  Status,
   StreakEntry,
   StreakState,
 } from "./types";
-
-export function isFailure(status: Status): boolean {
-  return status === "hang" || status === "error";
-}
 
 export function nextStreaks(
   streaks: StreakState,
