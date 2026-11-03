@@ -54,7 +54,3 @@ export function registerUsageProviderAdapter(adapter: UsageProviderAdapter): voi
 export function getUsageProviderAdapter(provider: string): UsageProviderAdapter | undefined {
   return registry.get(provider);
 }
-
-export function getAllUsageProviderAdapters(): UsageProviderAdapter[] {
-  return Array.from(registry.values());
-}

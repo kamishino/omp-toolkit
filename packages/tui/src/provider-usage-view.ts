@@ -8,6 +8,8 @@ import {
   formatAge,
   money,
   type ProviderSection,
+  padPercent,
+  padResetCompact,
   summaryText,
   type UsageLevel,
 } from "@omp-toolkit/core";
@@ -20,8 +22,6 @@ import {
   HEALTH_THRESHOLDS,
   padVisible,
   paint,
-  percent,
-  resetInAt,
   USAGE_THRESHOLDS,
 } from "./theme";
 
@@ -83,22 +83,22 @@ function columnBlock(limit: DashboardLimit, width: number): string {
       const pctText = `${Math.round(value * 100)}/${Math.round(limit.pacing.todayCeilingFraction * 100)}%`;
       const barWidth = Math.max(4, width - pctText.length - 8);
       return padVisible(
-        `${ceilingBar(value, limit.pacing.todayCeilingFraction, barWidth, limit.level)} ${paint(pctText, colorForLevel(limit.level))} ${paint(resetInAt(limit.resetsAt), ANSI.muted)}`,
+        `${ceilingBar(value, limit.pacing.todayCeilingFraction, barWidth, limit.level)} ${paint(pctText, colorForLevel(limit.level))} ${paint(padResetCompact(limit.resetsAt), ANSI.muted)}`,
         width,
       );
     }
     return padVisible(
-      `${paint(bar(value, Math.max(1, width - 14)), colorForLevel(limit.level))} ${paint(percent(value), colorForLevel(limit.level))} ${paint(resetInAt(limit.resetsAt), ANSI.muted)}`,
+      `${paint(bar(value, Math.max(1, width - 14)), colorForLevel(limit.level))} ${paint(padPercent(value), colorForLevel(limit.level))} ${paint(padResetCompact(limit.resetsAt), ANSI.muted)}`,
       width,
     );
   }
   if (width >= 13) {
     return padVisible(
-      `${paint(percent(value), colorForLevel(limit.level))} ${paint(resetInAt(limit.resetsAt), ANSI.muted)}`,
+      `${paint(padPercent(value), colorForLevel(limit.level))} ${paint(padResetCompact(limit.resetsAt), ANSI.muted)}`,
       width,
     );
   }
-  return padVisible(paint(percent(value), colorForLevel(limit.level)), width);
+  return padVisible(paint(padPercent(value), colorForLevel(limit.level)), width);
 }
 
 export function renderProviderUsageFromDashboard(

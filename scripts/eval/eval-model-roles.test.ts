@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
-  BENCHMARK_TASKS,
   calculateModelCost,
   calculateSummary,
   estimateTokenCount,
   formatScorecard,
   mockMetricsForDryRun,
   PAIR_CONFIGS,
-  parseCliArgs,
-} from "./eval-model-roles";
+} from "./eval-metrics";
+import { parseCliArgs } from "./eval-model-roles";
+import { BENCHMARK_TASKS } from "./eval-tasks";
 
 describe("eval-model-roles harness", () => {
   test("PAIR_CONFIGS contains all 4 candidate configurations", () => {

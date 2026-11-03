@@ -18,10 +18,6 @@ export function resolveTemplatesDir(checkoutRoot: string): string {
   return path.join(checkoutRoot, "templates");
 }
 
-export function resolveTemplateDir(checkoutRoot: string, name: string): string {
-  return path.join(resolveTemplatesDir(checkoutRoot), name);
-}
-
 export function resolveCheckoutCandidates(
   env: Record<string, string | undefined> = process.env,
   cwd: string = process.cwd(),

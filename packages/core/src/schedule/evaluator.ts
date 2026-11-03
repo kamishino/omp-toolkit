@@ -2,10 +2,6 @@ import { buildScheduleTable } from "./timetable";
 import type { ScheduleRow, TimeWindowPolicy, WindowEvaluation } from "./types";
 import { evaluateWindow } from "./window";
 
-export { buildScheduleTable } from "./timetable";
-export { evaluateWindow } from "./window";
-export { formatDuration } from "./zoned-time";
-
 /**
  * Deep domain module encapsulating time window policy evaluation,
  * timezone-aware transition countdowns, and schedule table generation.

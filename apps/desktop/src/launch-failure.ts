@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { logLine } from "./logger";
+import { errorLogPathFor } from "./paths";
 
 export interface LaunchFailure {
   at: number;
@@ -28,17 +30,10 @@ export function recordLaunchFailure(agentDir: string, error: unknown, now = Date
   } catch {
     // best effort
   }
-  try {
-    const logPath = path.join(agentDir, "desktop-widget-error.log");
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    fs.appendFileSync(
-      logPath,
-      `[${new Date(now).toISOString()}] LAUNCH FAILED: ${message}\n`,
-      "utf8",
-    );
-  } catch {
-    // best effort
-  }
+  logLine(
+    `[${new Date(now).toISOString()}] LAUNCH FAILED: ${message}\n`,
+    errorLogPathFor(agentDir),
+  );
 }
 
 /** Read and clear the pending launch-failure marker, if any. */

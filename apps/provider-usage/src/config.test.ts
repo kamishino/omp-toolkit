@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildCliArgs,
   DEFAULT_MONITOR_INTERVAL,
   parseMonitorCliConfig,
   parseThreshold,
@@ -55,21 +54,6 @@ describe("parseThreshold", () => {
     expect(parseThreshold("-3", 5)).toBe(5);
     expect(parseThreshold("invalid", 5)).toBe(5);
     expect(parseThreshold(undefined, 5)).toBe(5);
-  });
-});
-
-describe("buildCliArgs", () => {
-  test("serializes config into CLI flag strings", () => {
-    const flags = buildCliArgs({
-      watch: true,
-      interval: 20,
-      health: true,
-      altScreen: false,
-    });
-    expect(flags).toContain("--watch");
-    expect(flags).toContain("--interval=20");
-    expect(flags).toContain("--health");
-    expect(flags).toContain("--no-alt-screen");
   });
 });
 

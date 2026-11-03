@@ -103,6 +103,10 @@ export function resolveCheckout(
   return null;
 }
 
+export function errorLogPathFor(agentDir: string): string {
+  return path.join(agentDir, "desktop-widget-error.log");
+}
+
 export function errorLogPath(env = process.env, home = os.homedir()): string {
-  return path.join(agentDir(env, home), "desktop-widget-error.log");
+  return errorLogPathFor(agentDir(env, home));
 }

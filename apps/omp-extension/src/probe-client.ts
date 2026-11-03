@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import { promisify } from "node:util";
 import type { Account, ProbeResult, Status } from "@omp-toolkit/core";
-import { PROVIDER } from "./config";
+import { DEFAULT_EXEC_OPTS, PROVIDER, resolveOmpBin } from "./config";
 import { short } from "./fs-util";
 
 const execFileAsync = promisify(execFile);
@@ -17,13 +17,6 @@ export const DEFAULT_ENDPOINT =
 
 const UA_VERSION = process.env.PI_AI_ANTIGRAVITY_VERSION ?? "2.24.0";
 export const DEFAULT_USER_AGENT = `antigravity/hub/${UA_VERSION} (aidev_client; os_type=darwin; arch=arm64; cl=963137146)`;
-
-export const DEFAULT_EXEC_OPTS = {
-  encoding: "utf8" as const,
-  timeout: 25_000,
-  windowsHide: true,
-  maxBuffer: 2 * 1024 * 1024,
-};
 
 export interface ProbeClientOptions {
   endpoint?: string;
@@ -75,7 +68,7 @@ export class AntigravityProbeClient {
     this.confirmDelayMs = options.confirmDelayMs ?? DEFAULT_CONFIRM_DELAY_MS;
     this.provider = options.provider ?? DEFAULT_PROVIDER;
 
-    const bin = options.ompBin ?? process.env.OMP_BIN ?? "omp";
+    const bin = options.ompBin ?? resolveOmpBin();
     this.ompBinResolver = typeof bin === "function" ? bin : () => bin;
 
     this.execFile =

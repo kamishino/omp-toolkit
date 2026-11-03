@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import {
   type Account,
@@ -11,7 +10,7 @@ import {
   type WarmUpSkip,
   warmUpEligibility,
 } from "@omp-toolkit/core";
-import { short, writeFileAtomic } from "./fs-util";
+import { readJsonFile, short, writeFileAtomic } from "./fs-util";
 import { withLock } from "./lock";
 export interface WarmUpAdapter {
   readonly provider: string;
@@ -43,23 +42,19 @@ export function readWarmUpCooldowns(agentDir: string): {
   lastWarmupAt: Record<string, number>;
 } {
   const filePath = path.join(agentDir, "gemini-warmup-state.json");
-  try {
-    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8")) as {
-      lastWarmupAt?: Record<string, number>;
-    };
-    if (parsed && typeof parsed.lastWarmupAt === "object" && !Array.isArray(parsed.lastWarmupAt)) {
-      const valid: Record<string, number> = {};
-      for (const [email, ts] of Object.entries(parsed.lastWarmupAt)) {
-        if (typeof ts === "number" && Number.isFinite(ts) && ts >= 0) {
-          valid[email.toLowerCase()] = ts;
-        }
+  const parsed = readJsonFile<{ lastWarmupAt?: Record<string, number> }>(filePath, {
+    lastWarmupAt: {},
+  });
+  if (parsed && typeof parsed.lastWarmupAt === "object" && !Array.isArray(parsed.lastWarmupAt)) {
+    const valid: Record<string, number> = {};
+    for (const [email, ts] of Object.entries(parsed.lastWarmupAt)) {
+      if (typeof ts === "number" && Number.isFinite(ts) && ts >= 0) {
+        valid[email.toLowerCase()] = ts;
       }
-      return { lastWarmupAt: valid };
     }
-    return { lastWarmupAt: {} };
-  } catch {
-    return { lastWarmupAt: {} };
+    return { lastWarmupAt: valid };
   }
+  return { lastWarmupAt: {} };
 }
 
 export function writeWarmUpCooldowns(

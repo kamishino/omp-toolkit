@@ -92,18 +92,3 @@ export function parseMonitorCliConfig(
     unknown,
   };
 }
-
-export function buildCliArgs(config: Partial<MonitorCliConfig>): string[] {
-  const args: string[] = [];
-  if (config.schedule) args.push("--schedule");
-  if (config.json) args.push("--json");
-  if (config.watch) args.push("--watch");
-  if (config.interval !== undefined) args.push(`--interval=${config.interval}`);
-  if (config.health === false) {
-    args.push("--no-health");
-  } else if (config.health === true) {
-    args.push("--health");
-  }
-  if (config.altScreen === false) args.push("--no-alt-screen");
-  return args;
-}

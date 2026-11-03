@@ -22,7 +22,7 @@ export type MonitorExecFn = (
   },
 ) => Promise<{ stdout: string }>;
 
-const defaultExec: MonitorExecFn = async (file, args, options) => {
+export const defaultMonitorExec: MonitorExecFn = async (file, args, options) => {
   const { stdout } = await execFileAsync(file, args, {
     encoding: "utf8",
     timeout: options?.timeoutMs ?? 25_000,
@@ -85,7 +85,7 @@ export async function fetchDashboard(
     env.DEEPSEEK_BALANCE_ALERT_USD = String(options.balanceAlert.usd);
   }
 
-  const exec = deps.execFn ?? defaultExec;
+  const exec = deps.execFn ?? defaultMonitorExec;
   const { stdout } = await exec(source.bun, [source.script, "--json", "--health"], {
     timeoutMs: options?.timeoutMs,
     signal: options?.signal,

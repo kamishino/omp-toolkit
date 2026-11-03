@@ -2,13 +2,14 @@ import { Database } from "bun:sqlite";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { promisify } from "node:util";
 import {
   resolveAgentDir,
   resolveHistoryDbPath,
   resolveLockPath,
   resolveMachinePath,
 } from "../packages/core/src/environment";
-import { resolveOrcaBin } from "./monitor/orca-monitor";
+import { listFloatingTerminals, resolveOrcaBin } from "./monitor/orca-monitor";
 
 export interface DoctorDependencies {
   execFileFn?: (
@@ -36,21 +37,13 @@ function defaultIsPidAlive(pid: number): boolean {
   }
 }
 
-function execFilePromise(
+const execFileAsync = promisify(execFile);
+const execFilePromise: (
   file: string,
   args: string[],
-  options: { timeout?: number; windowsHide?: boolean } = {},
-): Promise<{ stdout: string | Buffer; stderr?: string | Buffer }> {
-  return new Promise((resolve, reject) => {
-    execFile(file, args, options, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve({ stdout, stderr });
-      }
-    });
-  });
-}
+  options?: { timeout?: number; windowsHide?: boolean },
+) => Promise<{ stdout: string | Buffer; stderr?: string | Buffer }> = (file, args, options = {}) =>
+  execFileAsync(file, args, options);
 
 export async function runDoctor(deps: DoctorDependencies = {}): Promise<DoctorResult> {
   const lines: string[] = [];
@@ -197,12 +190,7 @@ export async function runDoctor(deps: DoctorDependencies = {}): Promise<DoctorRe
   // 6. check Orca floating selector with orca terminal list --worktree id:global-floating-terminal --json
   try {
     const orcaBin = resolveOrcaBin();
-    const res = await exec(
-      orcaBin,
-      ["terminal", "list", "--worktree", "id:global-floating-terminal", "--json"],
-      { timeout: 10_000, windowsHide: true },
-    );
-    const parsed = JSON.parse(String(res.stdout)) as
+    const parsed = (await listFloatingTerminals(exec, orcaBin)) as
       | { ok?: boolean; result?: { terminals?: unknown[] } }
       | unknown[];
     const isArray = Array.isArray(parsed);

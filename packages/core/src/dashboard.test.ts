@@ -8,7 +8,7 @@ import {
   routeFor,
   summaryText,
   usageLevel,
-} from "./dashboard";
+} from "./dashboard/index";
 import type { HealthResult, HealthSnapshot, UsageReport } from "./types";
 import { sectionsFor } from "./usage";
 

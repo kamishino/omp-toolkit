@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { build } from "plist";
+import { writeFileAtomic } from "./fs-util";
 
 // Electron app is lazily accessed so unit tests can run outside Electron runtime
 function getElectronApp() {
@@ -68,22 +69,6 @@ X-GNOME-Autostart-enabled=true
 `;
 }
 
-function writeAtomic(filePath: string, content: string): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(tempPath, content, "utf8");
-  try {
-    fs.renameSync(tempPath, filePath);
-  } catch {
-    fs.copyFileSync(tempPath, filePath);
-    try {
-      fs.unlinkSync(tempPath);
-    } catch {
-      // ignore
-    }
-  }
-}
-
 export function createLoginItem(options: CreateLoginItemOptions): LoginItem {
   const { platform, home, electronPath, appPath, iconPath } = options;
 
@@ -124,7 +109,7 @@ export function createLoginItem(options: CreateLoginItemOptions): LoginItem {
             electronPath,
             appPath,
           });
-          writeAtomic(plistPath, content);
+          writeFileAtomic(plistPath, content);
 
           if (uid !== null && fs.existsSync("/bin/launchctl")) {
             try {
@@ -168,7 +153,7 @@ export function createLoginItem(options: CreateLoginItemOptions): LoginItem {
           appPath,
           iconPath,
         });
-        writeAtomic(desktopPath, content);
+        writeFileAtomic(desktopPath, content);
       } else {
         if (fs.existsSync(desktopPath)) {
           fs.unlinkSync(desktopPath);

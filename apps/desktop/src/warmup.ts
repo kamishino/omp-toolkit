@@ -1,9 +1,5 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { isWarmUpReport, type WarmUpReport, type WarmUpRequest } from "@omp-toolkit/core";
-import type { DataSource } from "./data";
-
-const execFileAsync = promisify(execFile);
+import { type DataSource, defaultMonitorExec } from "./data";
 
 export function parseWarmUpReport(text: string): WarmUpReport {
   let parsed: unknown;
@@ -105,11 +101,8 @@ export async function fetchWarmUp(
   const timeout = options?.timeoutMs ?? defaultTimeout;
 
   try {
-    const { stdout } = await execFileAsync(source.bun, args, {
-      encoding: "utf8",
-      timeout,
-      windowsHide: true,
-      maxBuffer: 2 * 1024 * 1024,
+    const { stdout } = await defaultMonitorExec(source.bun, args, {
+      timeoutMs: timeout,
       signal: options?.signal,
     });
 

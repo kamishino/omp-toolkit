@@ -3,7 +3,7 @@ import path from "node:path";
 import { PNG } from "pngjs";
 import { generateTrayManifest, type TrayMode } from "../../apps/desktop/src/tray-path";
 import tokens from "../../design/tokens.json";
-import type { UsageLevel } from "../../packages/core/src/dashboard";
+import type { UsageLevel } from "../../packages/core/src/dashboard/index";
 import { oklchToRgb, type Rgb } from "../tokens/color";
 
 const desktop = tokens.desktop;

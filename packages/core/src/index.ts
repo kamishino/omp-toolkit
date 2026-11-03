@@ -1,4 +1,4 @@
-export * from "./dashboard";
+export * from "./dashboard/index";
 export * from "./data-source";
 export * from "./deepseek";
 export * from "./desktop-build";

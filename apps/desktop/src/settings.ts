@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { writeFileAtomic } from "./fs-util";
 
 export type DesktopTheme = "system" | "dark" | "light";
 
@@ -114,19 +115,7 @@ export function settingsFilePath(userDataDir: string): string {
 
 export function saveDesktopSettings(userDataDir: string, settings: DesktopSettings): void {
   const file = settingsFilePath(userDataDir);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  fs.writeFileSync(temp, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-  try {
-    fs.renameSync(temp, file);
-  } catch {
-    fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-    try {
-      fs.rmSync(temp, { force: true });
-    } catch {
-      // Best-effort temp cleanup
-    }
-  }
+  writeFileAtomic(file, `${JSON.stringify(settings, null, 2)}\n`);
 }
 
 export function loadDesktopSettings(options: {

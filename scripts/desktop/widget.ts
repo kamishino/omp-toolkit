@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { newestMtime } from "../../apps/desktop/src/freshness";
 import { recordLaunchFailure } from "../../apps/desktop/src/launch-failure";
 import { DESKTOP_DIST_ARTIFACTS, desktopWatchPaths } from "../../packages/core/src/desktop-build";
 import { resolveAgentDir } from "../../packages/core/src/environment";
@@ -13,24 +14,12 @@ const distDir = path.join(appDir, "dist");
 const distMain = path.join(distDir, "main.cjs");
 const requiredArtifacts = DESKTOP_DIST_ARTIFACTS.map((file) => path.join(distDir, file));
 
-function getNewestMtime(entry: string): number {
-  if (!fs.existsSync(entry)) return 0;
-  const stat = fs.statSync(entry);
-  if (!stat.isDirectory()) return stat.mtimeMs;
-  let max = stat.mtimeMs;
-  for (const child of fs.readdirSync(entry)) {
-    const childMtime = getNewestMtime(path.join(entry, child));
-    if (childMtime > max) max = childMtime;
-  }
-  return max;
-}
-
 export async function buildIfNeeded(): Promise<void> {
   const watchPaths = desktopWatchPaths(root);
 
   let newest = 0;
   for (const p of watchPaths) {
-    const mtime = getNewestMtime(p);
+    const mtime = newestMtime(p, true).mtimeMs;
     if (mtime > newest) newest = mtime;
   }
 

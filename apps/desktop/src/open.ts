@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { quote } from "shell-quote";
+import which from "which";
 
 function copyToClipboard(text: string): void {
   try {
@@ -84,14 +85,7 @@ export function findInPath(file: string): boolean {
   if (path.isAbsolute(file)) {
     return fs.existsSync(file);
   }
-  const dirs = (process.env.PATH ?? "").split(path.delimiter);
-  return dirs.some((dir) => {
-    try {
-      return fs.existsSync(path.join(dir, file));
-    } catch {
-      return false;
-    }
-  });
+  return which.sync(file, { nothrow: true }) !== null;
 }
 
 export function openTerminal(platform: NodeJS.Platform, command: string[]): "opened" | "copied" {

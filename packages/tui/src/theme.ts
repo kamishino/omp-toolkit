@@ -1,4 +1,4 @@
-import { formatPercent, formatResetCompact, type UsageLevel, usageLevel } from "@omp-toolkit/core";
+import type { UsageLevel } from "@omp-toolkit/core";
 import {
   createLine,
   createSpan,
@@ -50,8 +50,6 @@ export const USAGE_THRESHOLDS = {
 } as const;
 
 export const HEALTH_THRESHOLDS = {
-  restoreStreak: tokens.health.restoreStreak.$value,
-  restoreGapSeconds: tokens.health.restoreGapSeconds.$value,
   staleSnapshotMinutes: tokens.health.staleSnapshotMinutes.$value,
 } as const;
 
@@ -90,22 +88,10 @@ export function colorForLevel(level: UsageLevel): string {
   }
 }
 
-export function colorFor(value: number | undefined): string {
-  return colorForLevel(usageLevel(value, USAGE_THRESHOLDS));
-}
-
 export function bar(value: number | undefined, width = 10): string {
   if (value === undefined) return "░".repeat(width);
   const filled = Math.round(value * width);
   return "█".repeat(filled) + "░".repeat(width - filled);
-}
-
-export function percent(value: number | undefined): string {
-  return formatPercent(value).padStart(6);
-}
-
-export function resetInAt(resetsAt: number | undefined): string {
-  return formatResetCompact(resetsAt, Date.now()).padStart(6);
 }
 
 export function ansiToText(raw: string): Text {

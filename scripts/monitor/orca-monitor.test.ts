@@ -1,11 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  buildMonitorCommand,
-  floatingShortcut,
-  isOrcaAvailable,
-  quoteArg,
-  resolveOrcaBin,
-} from "./orca-monitor";
+import { buildMonitorCommand, floatingShortcut, quoteArg, resolveOrcaBin } from "./orca-monitor";
 
 describe("cross-platform Orca launcher", () => {
   test("resolves ORCA_BIN first", () => {
@@ -61,13 +55,5 @@ describe("cross-platform Orca launcher", () => {
     expect(posixCmd.startsWith("& ")).toBe(false);
     expect(posixCmd).toContain("'/usr/bin/bun'");
     expect(posixCmd).toContain("'--interval=10'");
-  });
-
-  test("isOrcaAvailable returns false cleanly when binary missing", async () => {
-    const available = await isOrcaAvailable(
-      { ORCA_BIN: "definitely-nonexistent-orca-binary-12345" },
-      "linux",
-    );
-    expect(available).toBe(false);
   });
 });

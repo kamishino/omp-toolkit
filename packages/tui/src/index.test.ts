@@ -11,7 +11,6 @@ import {
 import {
   ANSI,
   bar,
-  colorFor,
   colorForLevel,
   createStdoutBackend,
   createTerminal,
@@ -20,7 +19,6 @@ import {
   drawProviderUsage,
   drawScheduleView,
   padVisible,
-  percent,
   renderProviderUsage,
   renderScheduleView,
   stripAnsi,
@@ -69,17 +67,11 @@ describe("terminal formatting", () => {
   });
 
   test("formats percentages and visible padding", () => {
-    expect(percent(0.5)).toBe(" 50.0%");
-    expect(percent(undefined)).toBe("     —");
     expect(stripAnsi(`${ANSI.red}x${ANSI.reset}`)).toBe("x");
     expect(padVisible(`${ANSI.red}x${ANSI.reset}`, 3)).toBe(`${ANSI.red}x${ANSI.reset}  `);
   });
 
   test("maps usage to semantic colors", () => {
-    expect(colorFor(0.9)).toBe(ANSI.red);
-    expect(colorFor(0.75)).toBe(ANSI.orange);
-    expect(colorFor(0.5)).toBe(ANSI.yellow);
-    expect(colorFor(0.1)).toBe(ANSI.green);
     expect(colorForLevel("critical")).toBe(ANSI.red);
     expect(colorForLevel("hot")).toBe(ANSI.orange);
     expect(colorForLevel("warn")).toBe(ANSI.yellow);

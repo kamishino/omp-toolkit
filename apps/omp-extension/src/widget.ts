@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import {
   excludedEmails,
   type HealthResult,
@@ -6,7 +5,7 @@ import {
   resolveWidgetStatePath,
 } from "@omp-toolkit/core";
 import { RESTORE_STREAK } from "./config";
-import { writeFileAtomic } from "./fs-util";
+import { readJsonFile, writeFileAtomic } from "./fs-util";
 import { healthManager } from "./health-manager";
 
 export interface WidgetContext {
@@ -27,12 +26,8 @@ function widgetStatePath(): string {
 }
 
 export function widgetEnabled(): boolean {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(widgetStatePath(), "utf8")) as { enabled?: boolean };
-    return parsed.enabled !== false;
-  } catch {
-    return true;
-  }
+  const parsed = readJsonFile<{ enabled?: boolean }>(widgetStatePath(), { enabled: true });
+  return parsed.enabled !== false;
 }
 
 export function setWidgetEnabled(enabled: boolean): void {

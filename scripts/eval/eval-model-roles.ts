@@ -28,9 +28,6 @@ import {
 } from "./eval-metrics";
 import { BENCHMARK_TASKS, type BenchmarkTask, TASK_PROMPTS } from "./eval-tasks";
 
-export * from "./eval-metrics";
-export * from "./eval-tasks";
-
 export interface PromptExecutionResult {
   text: string;
   seconds: number;

@@ -1,17 +1,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { Policy } from "@omp-toolkit/core";
+import { DEFAULT_EXEC_OPTS, resolveOmpBin } from "./config";
 
 const execFileAsync = promisify(execFile);
 
 export const DEFAULT_POLICY_CONFIG_KEY = "auth.accountPolicies";
-
-export const DEFAULT_EXEC_OPTS = {
-  encoding: "utf8" as const,
-  timeout: 25_000,
-  windowsHide: true,
-  maxBuffer: 2 * 1024 * 1024,
-};
 
 export interface PolicyStoreOptions {
   configKey?: string;
@@ -38,7 +32,7 @@ export class RoutingPolicyStore {
 
   constructor(options: PolicyStoreOptions = {}) {
     this.configKey = options.configKey ?? DEFAULT_POLICY_CONFIG_KEY;
-    const bin = options.ompBin ?? process.env.OMP_BIN ?? "omp";
+    const bin = options.ompBin ?? resolveOmpBin();
     this.ompBinResolver = typeof bin === "function" ? bin : () => bin;
     this.execFile =
       options.execFileFn ??

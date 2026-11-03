@@ -21,3 +21,11 @@ export function writeFileAtomic(file: string, content: string): void {
     }
   }
 }
+
+export function readJsonFile<T>(file: string, fallback: T): T {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8")) as T;
+  } catch {
+    return fallback;
+  }
+}

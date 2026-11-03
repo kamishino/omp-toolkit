@@ -17,7 +17,7 @@ import {
   type StreakState,
 } from "@omp-toolkit/core";
 import { PROVIDER, RESTORE_GAP_MS, RESTORE_STREAK } from "./config";
-import { short, writeFileAtomic } from "./fs-util";
+import { readJsonFile, short, writeFileAtomic } from "./fs-util";
 import {
   getHistoryStore,
   type HistoryEventInput,
@@ -139,18 +139,14 @@ export class AntigravityHealthManager {
   // --- State Persistence ---
 
   readState(): HealthState {
-    try {
-      const file = path.join(this.targetDir, "gemini-health-state.json");
-      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as HealthState;
-      if (!parsed || !Array.isArray(parsed.excluded)) {
-        return { excluded: [] };
-      }
-      return {
-        excluded: parsed.excluded.filter((email): email is string => typeof email === "string"),
-      };
-    } catch {
+    const file = path.join(this.targetDir, "gemini-health-state.json");
+    const parsed = readJsonFile<HealthState>(file, { excluded: [] });
+    if (!parsed || !Array.isArray(parsed.excluded)) {
       return { excluded: [] };
     }
+    return {
+      excluded: parsed.excluded.filter((email): email is string => typeof email === "string"),
+    };
   }
 
   writeState(state: HealthState): void {
@@ -159,13 +155,9 @@ export class AntigravityHealthManager {
   }
 
   readStreaks(): StreakState {
-    try {
-      const file = path.join(this.targetDir, "gemini-health-streaks.json");
-      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as StreakState;
-      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-    } catch {
-      return {};
-    }
+    const file = path.join(this.targetDir, "gemini-health-streaks.json");
+    const parsed = readJsonFile<StreakState>(file, {});
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   }
 
   writeStreaks(streaks: StreakState): void {

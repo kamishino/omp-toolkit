@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { CloudflareAccessCredentials } from "../../packages/core/src/gateway/types";
 
 export interface GatewayDoctorDependencies {
@@ -24,24 +25,13 @@ export interface GatewayDoctorResult {
   exitCode: 0 | 1;
 }
 
-function execFilePromise(
+const execFileAsync = promisify(execFile);
+const execFilePromise: (
   file: string,
   args: string[],
-  options: { timeout?: number; windowsHide?: boolean } = {},
-): Promise<{ stdout: string | Buffer; stderr?: string | Buffer }> {
-  const { promise, resolve, reject } = Promise.withResolvers<{
-    stdout: string | Buffer;
-    stderr?: string | Buffer;
-  }>();
-  execFile(file, args, options, (error, stdout, stderr) => {
-    if (error) {
-      reject(error);
-    } else {
-      resolve({ stdout, stderr });
-    }
-  });
-  return promise;
-}
+  options?: { timeout?: number; windowsHide?: boolean },
+) => Promise<{ stdout: string | Buffer; stderr?: string | Buffer }> = (file, args, options = {}) =>
+  execFileAsync(file, args, options);
 
 export async function runGatewayDoctor(
   deps: GatewayDoctorDependencies = {},

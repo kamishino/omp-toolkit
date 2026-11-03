@@ -76,11 +76,7 @@ export function createDesktopShortcut(options: CreateShortcutOptions = {}): Shor
       }
     }
 
-    const candidatePsScripts = [
-      path.join(repoRoot, "scripts", "desktop", "create-desktop-shortcut.ps1"),
-      path.join(repoRoot, "scripts", "create-desktop-shortcut.ps1"),
-    ];
-    const psScript = candidatePsScripts.find((p) => fs.existsSync(p)) ?? candidatePsScripts[0];
+    const psScript = path.join(repoRoot, "scripts", "desktop", "create-desktop-shortcut.ps1");
 
     execFileSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psScript], {
       stdio: options.silent ? "ignore" : "inherit",

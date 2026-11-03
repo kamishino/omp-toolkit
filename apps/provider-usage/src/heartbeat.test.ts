@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { heartbeatPath, writeHeartbeat } from "./heartbeat";
+import { resolveHeartbeatPath } from "@omp-toolkit/core";
+import { writeHeartbeat } from "./heartbeat";
 
 let tempDir: string;
 
@@ -23,7 +24,7 @@ describe("monitor heartbeat", () => {
   test("writes heartbeat file with current timestamp, hostname, and pid", () => {
     writeHeartbeat();
 
-    const file = heartbeatPath();
+    const file = resolveHeartbeatPath();
     expect(fs.existsSync(file)).toBe(true);
 
     const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {

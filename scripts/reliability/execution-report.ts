@@ -1,7 +1,5 @@
-import {
-  getHistoryStore,
-  type ReliabilityHistoryStore,
-} from "../../apps/omp-extension/src/history-store";
+import type { ReliabilityHistoryStore } from "../../apps/omp-extension/src/history-store";
+import { runReportCli } from "./report-cli";
 
 export interface ExecutionReportOptions {
   args?: string[];
@@ -13,34 +11,14 @@ export function runExecutionReport(options: ExecutionReportOptions = {}): {
   exitCode: number;
   lines: string[];
 } {
-  const args = options.args ?? process.argv.slice(2);
-  const out = options.out ?? console.log;
-
-  if (args.includes("--help") || args.includes("-h")) {
-    const helpMsg =
-      "Usage: bun scripts/reliability/execution-report.ts [--days=<n>] [--machine=<id|all>]";
-    out(helpMsg);
-    return { exitCode: 0, lines: [helpMsg] };
-  }
-
-  const daysArg = args.find((arg) => arg.startsWith("--days="));
-  const rawDays = Number(daysArg?.slice("--days=".length) ?? 14);
-  const days = Math.min(366, Math.max(1, Number.isFinite(rawDays) ? rawDays : 14));
-
-  const machineArg = args.find((arg) => arg.startsWith("--machine="));
-  const machineFilter = machineArg?.slice("--machine=".length) ?? "all";
-
-  const store = options.store ?? getHistoryStore();
-  const res = store.buildExecutionReport({ days, machineFilter });
-  if (res.status !== "success") {
-    out(res.message);
-    return { exitCode: 1, lines: [res.message] };
-  }
-
-  for (const line of res.data.lines) {
-    out(line);
-  }
-  return { exitCode: 0, lines: res.data.lines };
+  return runReportCli({
+    ...options,
+    defaultDays: 14,
+    helpText:
+      "Usage: bun scripts/reliability/execution-report.ts [--days=<n>] [--machine=<id|all>]",
+    build: (store, opts) => store.buildExecutionReport(opts),
+    exitCode: () => 0,
+  });
 }
 
 export function generateExecutionReport(): void {

@@ -9,7 +9,26 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-const FLOATING_WORKTREE = "id:global-floating-terminal";
+export const FLOATING_WORKTREE = "id:global-floating-terminal";
+
+export async function listFloatingTerminals(
+  exec: (
+    file: string,
+    args: string[],
+    options: { timeout?: number; windowsHide?: boolean },
+  ) => Promise<{ stdout: string | Buffer }>,
+  orcaBin: string = ORCA,
+): Promise<unknown> {
+  const { stdout } = await exec(
+    orcaBin,
+    ["terminal", "list", "--worktree", FLOATING_WORKTREE, "--json"],
+    {
+      timeout: 10_000,
+      windowsHide: true,
+    },
+  );
+  return JSON.parse(String(stdout));
+}
 const TITLE = "OMP Provider Usage";
 export function resolveOrcaBin(
   env: NodeJS.ProcessEnv = process.env,
@@ -46,23 +65,6 @@ export function buildMonitorCommand(
     ...monitorCommandArgs(script, options).map((part) => quoteArg(part, platform)),
   ];
   return platform === "win32" ? `& ${parts.join(" ")}` : parts.join(" ");
-}
-
-export async function isOrcaAvailable(
-  env: NodeJS.ProcessEnv = process.env,
-  platform: NodeJS.Platform = process.platform,
-): Promise<boolean> {
-  const bin = resolveOrcaBin(env, platform);
-  try {
-    await execFileAsync(bin, ["--version"], {
-      encoding: "utf8",
-      timeout: 3000,
-      windowsHide: true,
-    });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 const ORCA = resolveOrcaBin();

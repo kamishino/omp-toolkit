@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   GOOGLE_ANTIGRAVITY_ADAPTER,
-  getAllUsageProviderAdapters,
   getUsageProviderAdapter,
   registerUsageProviderAdapter,
   type UsageProviderAdapter,
@@ -56,11 +55,10 @@ describe("UsageProviderRegistry", () => {
     expect(retrieved).toEqual(customAdapter);
   });
 
-  test("getAllUsageProviderAdapters returns all registered adapters", () => {
-    const all = getAllUsageProviderAdapters();
-    expect(all.length).toBeGreaterThanOrEqual(4);
-    const providers = all.map((a) => a.provider);
-    expect(providers).toContain("google-antigravity");
-    expect(providers).toContain("deepseek");
+  test("registered adapters resolve by provider id", () => {
+    expect(getUsageProviderAdapter("google-antigravity")).toBeDefined();
+    expect(getUsageProviderAdapter("deepseek")).toBeDefined();
+    expect(getUsageProviderAdapter("openai-codex")).toBeDefined();
+    expect(getUsageProviderAdapter("muse-code")).toBeDefined();
   });
 });

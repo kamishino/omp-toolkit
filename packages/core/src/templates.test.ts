@@ -5,7 +5,6 @@ import {
   compareTemplateToLive,
   isValidTemplateName,
   resolveCheckoutCandidates,
-  resolveTemplateDir,
   resolveTemplatesDir,
   TEMPLATE_LIVE_FILES,
   templateFileName,
@@ -38,12 +37,9 @@ describe("core templates module", () => {
     expect(templateFileName("RULES.md")).toBe("RULES.template.md");
   });
 
-  test("resolveTemplatesDir and resolveTemplateDir construct expected paths", () => {
+  test("resolveTemplatesDir constructs expected path", () => {
     const root = path.join("fake", "repo");
     expect(resolveTemplatesDir(root)).toBe(path.join(root, "templates"));
-    expect(resolveTemplateDir(root, "my-template")).toBe(
-      path.join(root, "templates", "my-template"),
-    );
   });
 
   test("checkoutProbePath points to scripts/monitor/orca-monitor.ts", () => {

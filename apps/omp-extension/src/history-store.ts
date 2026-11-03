@@ -9,7 +9,7 @@ import {
   resolveHeartbeatPath,
   resolveHistoryDbPath,
 } from "@omp-toolkit/core";
-import { writeFileAtomic } from "./fs-util";
+import { readJsonFile, writeFileAtomic } from "./fs-util";
 
 export interface EventRow {
   at: number;
@@ -234,21 +234,13 @@ export class ReliabilityHistoryStore {
   }
 
   readLocalMachine(): LocalMachine | null {
-    try {
-      const file = path.join(this.agentDir, "omp-toolkit-machine.json");
-      return JSON.parse(fs.readFileSync(file, "utf8")) as LocalMachine;
-    } catch {
-      return null;
-    }
+    const file = path.join(this.agentDir, "omp-toolkit-machine.json");
+    return readJsonFile<LocalMachine | null>(file, null);
   }
 
   readLocalHeartbeat(): LocalHeartbeat | null {
-    try {
-      const file = resolveHeartbeatPath({ PI_CODING_AGENT_DIR: this.agentDir });
-      return JSON.parse(fs.readFileSync(file, "utf8")) as LocalHeartbeat;
-    } catch {
-      return null;
-    }
+    const file = resolveHeartbeatPath({ PI_CODING_AGENT_DIR: this.agentDir });
+    return readJsonFile<LocalHeartbeat | null>(file, null);
   }
 
   aggregateMachineStats(

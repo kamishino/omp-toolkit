@@ -2,15 +2,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { desktopWatchPaths } from "@omp-toolkit/core";
 
-function newestMtime(entry: string): { mtimeMs: number; file: string } {
+export function newestMtime(
+  entry: string,
+  includeDirectories = false,
+): { mtimeMs: number; file: string } {
   if (!fs.existsSync(entry)) return { mtimeMs: 0, file: entry };
   const stat = fs.statSync(entry);
   if (!stat.isDirectory()) return { mtimeMs: stat.mtimeMs, file: entry };
-  // Files only: directory mtimes change on any child add/remove and would
-  // mask the actual newest source file.
-  let best = { mtimeMs: 0, file: entry };
+  let best = includeDirectories
+    ? { mtimeMs: stat.mtimeMs, file: entry }
+    : { mtimeMs: 0, file: entry };
   for (const child of fs.readdirSync(entry)) {
-    const candidate = newestMtime(path.join(entry, child));
+    const candidate = newestMtime(path.join(entry, child), includeDirectories);
     if (candidate.mtimeMs > best.mtimeMs) best = candidate;
   }
   return best;
