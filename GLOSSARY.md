@@ -23,6 +23,11 @@ The result of a route probe: OK, HANG, ERR, AUTH, or MODEL.
 A route that emits no first SSE event within the probe timeout, or that fails
 with a qualifying retryable error.
 
+## Route circuit breaker
+
+The automatic exclusion of a provider account whose route stalls, plus guarded
+restoration after consecutive healthy checks.
+
 ## Snapshot
 
 The latest recorded route-health result for every probed account.
@@ -45,12 +50,13 @@ the required healthy-check streak.
 ## Recovery sweep
 
 A conditional probe run that happens only while at least one restorable
-exclusion exists.
+exclusion exists, at most every 300 seconds, and only when the agent is idle.
 
 ## Manual intervention
 
 An operator action that manually changes exclusions or forces recovery: enabling
 an excluded account, running a manual heal, or manually restoring policies.
+
 ## Incident
 
 A state where every account fails, or where automatic recovery cannot restore
@@ -85,6 +91,7 @@ status and toggles the desktop widget panel.
 ## Panel
 
 The compact, always-on-top window owned by the desktop widget.
+
 ## History
 
 The 30-day local record of route checks, policy changes, manual interventions,
@@ -168,88 +175,3 @@ multiplier, discount percentage, and duration until the next schedule transition
 
 A non-blocking visibility cue (such as a dashboard badge or countdown timer)
 informing the operator of the active pricing window and cost implications.
-
-## Double-buffered cell diffing
-
-An in-memory grid comparison that emits ANSI escapes only for modified terminal
-cells between consecutive frames, eliminating screen flicker.
-
-## Terminal backend
-
-The stream or buffer adapter (such as Node stdout, a crossterm bridge, or an
-in-memory test buffer) that receives cell writes from a terminal instance.
-
-## Frame buffer
-
-A two-dimensional grid of cell structs (character, foreground, background, and
-modifiers) representing a single render pass before flushing.
-
-## Dashboard engine
-
-A unified domain subsystem that accepts raw provider reports and route health
-snapshots and constructs a fully hydrated, thresholded view model in one step.
-
-## Circuit breaker module
-
-An autonomous subsystem that monitors route stalls, tracks healthy check streaks,
-and applies temporary routing exclusions to protect session pins from hanging.
-
-## Terminal launcher
-
-A deep platform adapter that encapsulates shell command construction, PATH
-executable discovery, child process spawning, and clipboard fallback.
-
-## Agent environment resolver
-
-A centralized domain module that deterministically maps agent directories, state
-paths, snapshots, database files, and script search candidates without I/O.
-
-## Usage provider registry
-
-An extensible adapter registry in which upstream providers register column
-filtering rules, balance extractors, and currency formatting handlers.
-
-## Autostart manager
-
-A deep platform module that manages operating-system startup registration across
-Windows Registry, macOS LaunchAgent plists, and Linux XDG desktop entries.
-## Desktop panel
-
-A deep lifecycle coordinator module that encapsulates BrowserWindow creation,
-screen geometry detection, tray edge clamping, visibility transitions, and IPC
-state synchronization.
-
-## Reliability history store
-
-A repository subsystem encapsulating SQLite database access, schema migrations,
-event persistence, and analytical reporting queries.
-
-## Monitor config
-
-A configuration module encapsulating CLI argument parsing, environment variable
-fallbacks, interval bounding, and flag validation into a unified type.
-## Antigravity probe client
-
-A deep communication module encapsulating OAuth bearer token resolution,
-in-memory TTL token caching, and SSE streaming HTTP health probes to Google
-Antigravity endpoints.
-
-## Interactive monitor
-
-A deep execution module encapsulating terminal alternate screen switching,
-raw-mode keystroke decoding, double-buffered frame state, and periodic polling.
-
-## Desktop tray coordinator
-
-A deep lifecycle module encapsulating Electron Tray instance management, tooltip
-formatting, context menu assembly, and OS theme event subscriptions.
-
-## Routing policy store
-
-A repository subsystem encapsulating OMP routing policy serialization, CLI
-fallback execution, and temporary exclusion mutations.
-
-## Schedule evaluator
-
-A deep domain module encapsulating timezone-aware pricing window evaluations,
-transition countdowns, and schedule timetable generation.
