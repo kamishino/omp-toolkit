@@ -16,6 +16,7 @@ import {
 import { short, writeFileAtomic } from "./fs-util";
 
 const MAX_TEMPLATE_BACKUPS = 10;
+const TEMPLATE_BACKUP_SUBDIR = "templates";
 
 function isRegularFile(filePath: string): boolean {
   try {
@@ -172,7 +173,7 @@ export function applyTemplate(
   let backupDir: string | null = null;
   if (livePresentFiles.length > 0) {
     const timestamp = now.toISOString().replace(/[:.]/g, "-");
-    backupDir = path.join(agentDirPath, "backups", timestamp);
+    backupDir = path.join(agentDirPath, "backups", TEMPLATE_BACKUP_SUBDIR, timestamp);
     fs.mkdirSync(backupDir, { recursive: true });
     for (const file of livePresentFiles) {
       fs.copyFileSync(path.join(agentDirPath, file), path.join(backupDir, file));
@@ -229,7 +230,7 @@ export function applyTemplate(
   }
 
   try {
-    const backupsRoot = path.join(agentDirPath, "backups");
+    const backupsRoot = path.join(agentDirPath, "backups", TEMPLATE_BACKUP_SUBDIR);
     if (fs.existsSync(backupsRoot)) {
       const entries = fs
         .readdirSync(backupsRoot, { withFileTypes: true })

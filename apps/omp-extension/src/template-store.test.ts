@@ -110,7 +110,12 @@ describe("template-store module", () => {
       expect(applyRes.unchanged).toEqual([]);
 
       // Expected backup dir
-      const expectedBackupDir = path.join(h.agentDir, "backups", "2026-10-28T12-00-00-000Z");
+      const expectedBackupDir = path.join(
+        h.agentDir,
+        "backups",
+        "templates",
+        "2026-10-28T12-00-00-000Z",
+      );
       expect(applyRes.backupDir).toBe(expectedBackupDir);
       expect(fs.existsSync(expectedBackupDir)).toBe(true);
       expect(fs.readFileSync(path.join(expectedBackupDir, "AGENTS.md"), "utf8")).toBe(
@@ -323,12 +328,18 @@ describe("template-store module", () => {
       fs.writeFileSync(path.join(h.agentDir, "AGENTS.md"), "live initial\n");
 
       // Seed 12 fake backup dirs
-      const backupsRoot = path.join(h.agentDir, "backups");
+      // Seed 12 fake template backup dirs under backups/templates
+      const backupsRoot = path.join(h.agentDir, "backups", "templates");
       fs.mkdirSync(backupsRoot, { recursive: true });
       for (let i = 1; i <= 12; i++) {
         const pad = String(i).padStart(2, "0");
         fs.mkdirSync(path.join(backupsRoot, `2026-01-${pad}T00-00-00-000Z`));
       }
+
+      // Seed an installer backup under backups/ that must NEVER be pruned
+      const installerBackup = path.join(h.agentDir, "backups", "2026-02-01T00-00-00-000Z");
+      fs.mkdirSync(installerBackup, { recursive: true });
+      fs.writeFileSync(path.join(installerBackup, "gemini-health.js"), "installer backup\n");
 
       const applyRes = applyTemplate(h.templatesDir, h.agentDir, "demo");
       expect(applyRes.backupDir).not.toBeNull();
@@ -341,6 +352,9 @@ describe("template-store module", () => {
 
       expect(remaining.length).toBe(10);
       expect(remaining).toContain(path.basename(applyRes.backupDir));
+      expect(fs.readFileSync(path.join(installerBackup, "gemini-health.js"), "utf8")).toBe(
+        "installer backup\n",
+      );
     } finally {
       h.cleanup();
     }
