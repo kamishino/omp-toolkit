@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 import {
   type GatewayCommandDependencies,
   handleGatewayCommand,
@@ -93,18 +94,19 @@ describe("handleGatewayCommand", () => {
 
 describe("resolveGatewayScriptPath (Slice 1)", () => {
   test("prefers installed script under ~/.omp/agent/scripts/ if present", () => {
-    const agentDir = "C:\\Users\\test\\.omp\\agent";
-    const installedScript = "C:\\Users\\test\\.omp\\agent\\scripts\\omp-gateway.ps1";
+    const agentDir = path.join(path.parse(process.cwd()).root, "Users", "test", ".omp", "agent");
+    const installedScript = path.join(agentDir, "scripts", "omp-gateway.ps1");
     const resolved = resolveGatewayScriptPath({}, agentDir, (p) => p === installedScript);
     expect(resolved).toBe(installedScript);
   });
 
   test("uses OMP_TOOLKIT_HOME when installed script is absent", () => {
-    const toolkitHome = "D:\\Projects\\omp-toolkit";
-    const toolkitScript = "D:\\Projects\\omp-toolkit\\scripts\\gateway\\omp-gateway.ps1";
+    const root = path.parse(process.cwd()).root;
+    const toolkitHome = path.join(root, "Projects", "omp-toolkit");
+    const toolkitScript = path.join(toolkitHome, "scripts", "gateway", "omp-gateway.ps1");
     const resolved = resolveGatewayScriptPath(
       { OMP_TOOLKIT_HOME: toolkitHome },
-      "C:\\Users\\test\\.omp\\agent",
+      path.join(root, "Users", "test", ".omp", "agent"),
       (p) => p === toolkitScript,
     );
     expect(resolved).toBe(toolkitScript);

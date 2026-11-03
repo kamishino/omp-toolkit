@@ -43,7 +43,15 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
   });
 
   test("applies healing logic across check results", async () => {
-    const manager = new AntigravityHealthManager();
+    let policies: Policy[] = [];
+    const mockPolicyStore = {
+      readPolicies: async () => policies,
+      readPoliciesStrict: async () => policies,
+      writePolicies: async (p: Policy[]) => {
+        policies = p;
+      },
+    } as unknown as RoutingPolicyStore;
+    const manager = new AntigravityHealthManager({ policyStore: mockPolicyStore });
     const action = await manager.applyHeal([]);
     expect(action.reason).toBe("no accounts to check");
 

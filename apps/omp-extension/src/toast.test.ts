@@ -69,6 +69,7 @@ describe("dispatchToast helper", () => {
   test("silently returns false if script does not exist", () => {
     clearToastCooldownsForTest();
     const result = dispatchToast("test", "msg", {
+      platform: "win32",
       scriptPath: "/nonexistent/toast.ps1",
     });
     expect(result).toBe(false);
