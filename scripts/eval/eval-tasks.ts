@@ -21,7 +21,7 @@ export const BENCHMARK_TASKS: BenchmarkTask[] = [
     title: "Diagnostic Null-Safety",
     description:
       "Add null-safety to table rendering when a provider balance report lacks currency metadata.",
-    verificationCommand: "bun test packages/tui/src/table.test.ts",
+    verificationCommand: "bun test packages/tui",
   },
   {
     id: "T2",
@@ -60,9 +60,9 @@ export const TASK_PROMPTS: Record<string, BenchmarkTaskPrompt> = {
   T1: {
     id: "T1",
     planPrompt:
-      "Task: In packages/tui/src/table.ts, add null-safety when a provider balance report lacks currency metadata.\n" +
+      "Task: In packages/tui/src/provider-usage-view.ts, add null-safety when a provider balance report lacks currency metadata.\n" +
       "Produce a step-by-step plan: identify the exact file, the function to change, the check command, and invariants.",
-    planVerificationKeywords: ["table.ts", "packages/tui", "null", "currency"],
+    planVerificationKeywords: ["provider-usage-view.ts", "packages/tui", "null", "currency"],
     executionPrompt: (planText) =>
       `Given this plan:\n${planText}\n\n` +
       "Write the TypeScript code snippet or diff to add null-safety for missing currency metadata in table rendering.",
