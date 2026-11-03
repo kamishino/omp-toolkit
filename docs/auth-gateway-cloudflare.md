@@ -122,7 +122,7 @@ originRequest:
    ```bash
    cloudflared tunnel create omp-gateway
    ```
-3. Copy `templates/gateway/cloudflared-config.example.yaml` to `~/.cloudflared/config.yaml`:
+3. Copy `templates/gateway/cloudflared-config.example.yaml` to `~/.cloudflared/config.yaml` (Windows: `%USERPROFILE%\.cloudflared\config.yaml`):
    ```yaml
    tunnel: <YOUR_TUNNEL_UUID>
    credentials-file: ~/.cloudflared/<YOUR_TUNNEL_UUID>.json
@@ -147,7 +147,7 @@ originRequest:
    - **Policy:** Action = `Service Auth`, Rule = `Include > Service Token > omp-gateway-client`.
 
 ### Step 3: Configure Local Credentials
-Copy `templates/gateway/cf-access.example.json` to `~/.omp/cf-access.json`:
+Copy `templates/gateway/cf-access.example.json` to `~/.omp/cf-access.json` (Windows: `%USERPROFILE%\.omp\cf-access.json`). `omp-gateway.ps1` and `doctor-gateway.ts` read this file for automated status probes and inference tests:
 ```json
 {
   "clientId": "<YOUR_CF_ACCESS_CLIENT_ID>",
