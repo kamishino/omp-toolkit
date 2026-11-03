@@ -1,15 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 
-- Fix the Biome barrel-export ordering gate in `packages/core`.
-- Remove unused exports and the unused `packages/core/src/history.ts` module.
-- Fix template backup retention: template backups now live in `backups/templates/` and installer backups under `~/.omp/agent/backups/` are never pruned.
-- Replace the personal account address in the desktop warm-up fixture with `alpha@example.com`.
-- Isolate extension tests from host-specific absolute paths and real OMP state so the CI matrix runs without an installed `omp` binary.
-- Delete the internal research corpus, folder blueprint, and refactor log; correct stale architecture, recovery, security, design, roadmap, and changelog claims.
-- Restrict `GLOSSARY.md` to domain vocabulary.
-- Add ADR-0009 for the conditional idle recovery sweep.
+- Add the Auth Gateway for secondary PCs: daemon manager, scoped client tokens with SHA-256 hashing and revocation, Cloudflare Tunnel templates, gateway doctor probe, `/gateway` slash command, desktop status indicator, and client onboarding bundles.
+- Add prompt templates: `/template save|apply|list|show|delete` for named global `AGENTS.md` + `RULES.md` bundles, with checkout resolution, atomic backups, and a plan-to-executor handoff template.
+- Add weekly quota pacing with daily pacing, ceiling and headroom markers in the TUI and desktop panel, multi-account pacing, and a shared pacing store.
+- Add reliability operations: opt-in auto-restore with a conditional idle recovery timer (ADR-0009), incident lifecycle with OS toasts, two-strike escalation, agent-run telemetry with `execution:report`, an exclusive health lock, and strict policy reads.
+- Add `bun run doctor` diagnostics and the probe wire-pin audit.
+- Surface Settings in the desktop footer and on `Ctrl+,`, and add typed IPC contracts, tray status/settings entries, dynamic panel height, gateway status, launch-failure persistence, and a stale-`dist` guard.
+- Deepen core seams with `DashboardEngine`, shared `UsageDataSource`, `ScheduleRegistry`, `AntigravityHealthManager`, `DesktopRuntime`, and `MonitorRunner`; segregate core types by domain, wire, and presentation.
+- Vendor Lobe provider logos, add the Muse Code mark, and explain accounts, routes, and limit cells in the desktop panel.
+- Sort accounts by weekly usage and mark weekly pacing ceilings.
+- Rewrite the README for operator-first reading, restrict the glossary to domain vocabulary, and record ADR-0009 for the conditional idle recovery sweep.
+- Fix template backup retention so installer backups are never pruned.
+- Isolate extension tests from host paths and real OMP state so CI runs without an installed `omp` binary.
+- Harden health locks against TOCTOU theft, keep SQLite connections readonly, and make restore eligibility case-insensitive.
+- Strip trailing user turns and empty parts from Gemini wire requests and expand chatter filtering.
+- Resolve the installed gateway script path, pass DeepSeek thresholds into desktop compilation, and fix CSP style blocking.
+- Remove unused modules and exports, internal research notes, the folder blueprint, and the refactor log; scrub the personal account fixture; fix the Biome barrel-order gate.
 - Pin `typescript`, `@biomejs/biome`, `@types/bun`, and `@types/node` to resolved versions.
 
 ## 0.4.0 — Desktop configuration settings, script modularization, and UX polish (2026-10-26)
@@ -41,6 +49,7 @@
 - Add `desktop`, `desktop:preview`, and `desktop:once` NPM scripts; keep
   `bun run widget` as a compatibility alias.
 - Fix desktop Electron entry point path to resolve `dist/main.cjs`.
+
 ## 0.2.0 — Cross-platform desktop widget (2026-10-21)
 
 - Add Electron desktop widget host (`bun run widget`) with a notification-area /
@@ -59,6 +68,7 @@
   Windows/macOS/Linux CI matrix.
 - Add `THIRD_PARTY_NOTICES.md` covering all third-party dependencies and brand
   trademarks.
+
 ## 0.1.0 — Initial public release (2026-10-21)
 
 - Add `@omp-toolkit/core` domain package for provider usage grouping, column
