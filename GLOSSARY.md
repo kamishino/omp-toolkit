@@ -132,8 +132,10 @@ snapshot contains route health for any account.
 ## Warm-up
 
 A deliberate minimal model request to one provider account that establishes or
-verifies the account's model route before use. Warm-up does not change the OMP
-account pin, policy, or exclusion state.
+verifies the account's model route before use. Warm-up is route readiness, not a
+quota-window control: whether the provider starts a 5-hour window on that request
+is not modeled. Warm-up does not change the OMP account pin, policy, or exclusion
+state.
 
 ## Warm-up eligible
 

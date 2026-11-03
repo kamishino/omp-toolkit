@@ -27,6 +27,9 @@ without operator consent would violate ADR-0001's zero-idle-token policy.
 - Safety & routing boundary: Warm-up does not mutate OMP account pins,
   `auth.accountPolicies`, or `reservePct`. It only tests and records route
   health.
+- Scope: warm-up is route readiness, not a quota-window control. It sends a real
+  model request and consumes a small amount of quota; whether the provider starts
+  a 5-hour window on that request is not modeled.
 - HANG safety: Provider-wide warm-up skips known non-OK accounts (`hang`,
   `error`, `auth`, `model-error`). Individual non-OK rows expose an unhang Check
   action instead.

@@ -129,6 +129,12 @@ apart. Checks occur on an event or manual probe, plus a recovery sweep that runs
 ```
 
 - Warm-up sends a minimal model request (`Reply with exactly: OK`, max 8 tokens).
+- Warm-up is a route-readiness check, not a quota-window control: it does not
+  model or promise a 5-hour window start. `window.resetsAt` always comes from
+  `omp usage`.
+- To test the provider side effect, pick an idle account, record its 5-hour
+  `window.resetsAt` from `omp usage --json`, run `/gemini-warmup <account>`, then
+  read it again. Document a change only if it is observed.
 - Provider-wide warm-up skips known non-OK accounts (`hang`, `error`, `auth`, `model-error`).
 - Use `/gemini-check` to verify whether a hung or failed account has recovered.
 - Warm-up enforces a 60-second cooldown per account and a cross-process lock (`gemini-warmup.lock`).

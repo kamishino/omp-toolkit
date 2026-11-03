@@ -130,6 +130,8 @@ Inside OMP:
 
 **Does monitoring cost model tokens?** No. Health probes cost roughly 11 tokens per account and a warm-up about 8.
 
+**Does a warm-up start the 5-hour window?** Warm-up only verifies the route. Whether the provider starts a window on that request is not modeled; compare `omp usage --json` before and after if it matters.
+
 **Does it send data anywhere?** No telemetry and no upload path. It reads local OMP state and calls `https://api.deepseek.com/user/balance` only when `DEEPSEEK_API_KEY` is set.
 
 **How do I uninstall?** Run `/gemini-restore` first so no account stays excluded, then delete `~/.omp/agent/extensions/gemini-health.js`, `~/.omp/agent/scripts/omp-provider-usage.js`, `~/.omp/agent/scripts/windows-toast.ps1`, and `~/.omp/agent/scripts/omp-gateway.ps1` if present. Delete the checkout; optionally delete `~/.omp/agent/gemini-health-*.json`, `gemini-warmup-state.json`, `omp-toolkit-history.db*`, and `omp-toolkit-machine.json`.

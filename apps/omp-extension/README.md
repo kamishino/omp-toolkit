@@ -107,6 +107,10 @@ flowchart TD
 
 Probes use OMP-issued account OAuth Bearer tokens and a minimal wire request.
 
+Warm-up and check both use this probe. Warm-up is route readiness, not a
+quota-window control; whether the provider starts a 5-hour window on the request
+is provider behavior the toolkit does not model.
+
 ---
 
 ## Requirements and installation
