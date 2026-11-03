@@ -177,3 +177,37 @@ multiplier, discount percentage, and duration until the next schedule transition
 
 A non-blocking visibility cue (such as a dashboard badge or countdown timer)
 informing the operator of the active pricing window and cost implications.
+
+## Gateway client
+
+A harness or machine authorized to call the gateway under one scoped token,
+with its own model and account allowlists. A gateway client is not an Account.
+_Avoid_: Gateway account, gateway user
+
+## Account pin
+
+The durable binding of one gateway client (or OMP session) to one account of a
+provider, held until that account becomes ineligible.
+
+## Credential block
+
+A temporary marker that makes one account ineligible for a scope until a stated
+time. A credential block is not a Managed exclusion: it may originate upstream
+from quota or auth outcomes and expires on its own.
+
+## Gateway host
+
+The Machine that holds the credential vault and serves the gateway to gateway
+clients. Other machines hold no provider credentials.
+_Avoid_: Vault PC, server
+
+## Control plane
+
+The toolkit's gateway management layer: lifecycle, compatibility checks,
+visibility, and policy writes. It carries no model traffic.
+
+## Data plane
+
+The OMP gateway request path that carries model traffic between gateway
+clients and providers. The toolkit does not implement a data plane
+(ADR-0010).

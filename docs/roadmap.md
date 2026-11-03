@@ -42,6 +42,7 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `C13` | Desktop Provider Logo for `muse-code` | `apps/desktop/src/renderer/provider-logos.ts` | Created `muse-code.svg` asset and mapped in `PROVIDER_LOGOS`; unit tests verified |
 | `D03` | Detached-Launch Error Visibility | commit `8826202` | Launcher records failures to `desktop-widget-error.log` + one-shot marker; Electron surfaces it on next start; `launch-failure.test.ts` (record/consume/corrupt) passes |
 | `D02` | Dist-Freshness Guard on Launch | commit `05cbe10` | Electron main refuses silent stale `dist` on any entry point; verified live: stale launch logs, `build:desktop` clears; `freshness.test.ts` passes |
+| `G01` | Gateway Control Plane over OMP ([spec](gateway-control-plane.md), [ADR-0010](adr/0010-gateway-control-plane-over-omp.md)) | `apps/gateway`, `packages/core/src/gateway/control.ts`, [client guide](gateway-clients.md) | S1-S4 live-verified 2026-11-03: fail-closed doctor caught argv drift; alt-port cold lifecycle; client 200→revoke 401; block/drain/undrain/restore; Muse + OpenCode tool turns on `gemini-3.8-flash` (Gemini 2.5 tool turns blocked upstream, research §11) |
 
 ---
 
@@ -66,7 +67,7 @@ No open development Musts. A new item is promoted to Must only when daily operat
 
 High-leverage execution quality and reliability improvements backed by measured empirical benchmarks or regression prevention.
 
-No open Shoulds. Desktop launch hardening (`D03`, `D02`) completed 2026-11-02; see Completed.
+No open Shoulds. Desktop launch hardening (`D03`, `D02`) completed 2026-11-02 and Gateway Control Plane (`G01`, S1-S4) completed 2026-11-03; see Completed. Gateway phase 2 (Cloudflare lifecycle under the Bun manager, spec S5) needs its own review before promotion.
 
 ---
 
@@ -96,7 +97,7 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 - **`C17`: Public Packaging, npm Publishing & Signed Binaries — EXCLUDED.**
   Source-only distribution policy (ADR-0003). The solo operator executes directly from git checkouts; public release infrastructure wastes weekly capacity.
 - **`C18`: Standalone Web Dashboard Server — EXCLUDED.**
-  The desktop Electron tray widget and TerminUI terminal monitor completely satisfy operator observability without maintaining a separate HTTP server process.
+  The desktop Electron tray widget and TerminUI terminal monitor completely satisfy operator observability without maintaining a separate HTTP server process. Gateway management (`G01`, ADR-0010) stays CLI/TerminUI/widget; the `omp auth-gateway` HTTP process is OMP's data plane, not a toolkit dashboard.
 - **`C19`: Provider SDK & Generalized Extension Interfaces — EXCLUDED.**
   Purpose-built for OMP; creating generic provider SDK abstractions is dead-weight complexity for a fixed 4-provider deployment.
 - **`C20`: Additional Usage Providers (Copilot, Anthropic) — EXCLUDED.**
@@ -106,7 +107,7 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 - **`C22`: Periodic Background Idle Route Probing — PROHIBITED.**
   Probing routes while no session is active wastes provider token quotas, violating the zero-idle-token invariant (ADR-0001).
 - **`C23`: Cross-Machine State Synchronization & Distributed DB — PROHIBITED.**
-  State is local-first: each workstation keeps an isolated local SQLite database; no network synchronization is built or needed.
+  State is local-first: each workstation keeps an isolated local SQLite database; no network synchronization is built or needed. Remote gateway clients (`G01` phase 2) consume inference only and hold no toolkit state, so this prohibition stands.
 - **`C24`: Lower-Model Fallback or Thinking Degradation on Error — PROHIBITED.**
   Silently falling back to weaker models or reducing thinking levels during errors degrades code quality. Route circuit breaking and auto-restore are the sole authorized remedies.
 
@@ -114,9 +115,9 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 
 ## Recommended Execution Sequence
 
-All Must and Should development items are complete. Desktop launch hardening (`D03` → `D02`) landed 2026-11-02 in that order.
+Desktop launch hardening (`D03` → `D02`) landed 2026-11-02 and `G01` S1 to S4 landed 2026-11-03, each slice verified live before the next started. No Must or Should thread is open.
 
-Work is pulled from `## Could Have` only when its named trigger fires.
+Other work is pulled from `## Could Have` only when its named trigger fires.
 
 ---
 

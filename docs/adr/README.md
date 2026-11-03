@@ -11,3 +11,4 @@
 | [0007](0007-multi-provider-time-window-scheduling.md) | Multi-provider time-window scheduling and context-aware monitoring | Accepted                                                  |
 | [0008](0008-terminui-terminal-refactor.md)            | TerminUI terminal UI refactoring                                   | Accepted                                                  |
 | [0009](0009-conditional-idle-recovery.md)             | Conditional idle recovery sweep                                    | Accepted; supersedes ADR-0001 no-periodic-probe clause    |
+| [0010](0010-gateway-control-plane-over-omp.md)        | Gateway control plane over OMP                                     | Accepted                                                  |
