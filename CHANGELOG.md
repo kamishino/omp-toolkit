@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Fix the Biome barrel-export ordering gate in `packages/core`.
+- Remove unused exports and the unused `packages/core/src/history.ts` module.
+- Fix template backup retention: template backups now live in `backups/templates/` and installer backups under `~/.omp/agent/backups/` are never pruned.
+- Replace the personal account address in the desktop warm-up fixture with `alpha@example.com`.
+- Delete the internal research corpus, folder blueprint, and refactor log; correct stale architecture, recovery, security, design, roadmap, and changelog claims.
+- Restrict `GLOSSARY.md` to domain vocabulary.
+- Add ADR-0009 for the conditional idle recovery sweep.
+- Pin `typescript`, `@biomejs/biome`, `@types/bun`, and `@types/node` to resolved versions.
+
 ## 0.4.0 — Desktop configuration settings, script modularization, and UX polish (2026-10-26)
 
 - Add in-panel Desktop User Configuration Settings view toggled via header gear icon.
@@ -13,7 +24,7 @@
 ## 0.3.0 — Desktop widget refresh, terminal launchers, and scrolling (2026-10-22)
 
 - Add cross-platform terminal launchers (`omp-widget.cmd`, `omp-widget.sh`) and
-  Windows desktop shortcut creator (`scripts/create-desktop-shortcut.ps1`).
+  Windows desktop shortcut creator (`scripts/desktop/create-desktop-shortcut.ps1`).
 - Fix desktop panel container height so provider content scrolls properly
   instead of clipping off-screen.
 - Replace theSVG provider marks with Dashboard-Icons (Gemini, OpenAI,
@@ -34,7 +45,7 @@
 - Add Electron desktop widget host (`bun run widget`) with a notification-area /
   menu-bar icon and compact always-on-top panel.
 - Add OKLCH desktop light and dark color tokens, spacing, typography, and an
-  automated APCA (|Lc| >= 60) contrast gate (`scripts/check-tokens.ts`).
+  automated APCA (|Lc| >= 60) contrast gate (`scripts/tokens/check-tokens.ts`).
 - Add pure shared dashboard model in `@omp-toolkit/core` with versioned schema-2
   JSON payload in `apps/provider-usage`.
 - Refactor `@omp-toolkit/tui` to consume the shared core dashboard model without
