@@ -4,7 +4,7 @@ Connect DSH on this PC to the OMP gateway on the primary PC through the
 Cloudflare tunnel. No Cloudflare software is needed here: DSH talks direct
 HTTPS to the tunnel hostname.
 
-- Tunnel hostname: `https://<your-tunnel-host>`
+- Tunnel hostname: `https://<your-tunnel-host>` (your tunnel's public hostname)
 - Gateway model: `google-antigravity/gemini-3.8-flash`
 - Local model label in DSH: `Gemini 3.8 Flash (OMP)`
 
