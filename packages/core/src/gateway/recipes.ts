@@ -274,23 +274,34 @@ model:
     }
 
     case "dsh": {
-      const snippet = `# $DSH_HOME/settings.yaml (key resolves from the env named by apiKeyEnv)
-llm-deepseek:
-  baseURL: ${base}/v1
-  apiKeyEnv: OMP_GATEWAY_TOKEN
-  thinking: disabled
-  models:
-    - id: ${model}
-      name: ${model}
-      contextWindow: 1048576
-agent-default-model:
-  provider: deepseek-official
-  model: ${model}
+      // Verified live: the DeepSeek-native llm-deepseek route sends x-api-key,
+      // which the gateway rejects (401). The pi-ai hand-declared route speaks
+      // openai-completions with a Bearer [REDACTED]
+      const snippet = `# $DSH_HOME/cordis.patch.yml (home patch: every profile incl. desktop)
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      omp-gateway:
+        displayName: OMP Gateway
+        apiKeyEnv: OMP_GATEWAY_TOKEN
+        api: openai-completions
+        baseURL: ${base}/v1
+        models:
+          - id: ${model}
+            name: ${model} (OMP)
+            contextWindow: 1048576
+            maxTokens: 65536
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: omp-gateway
+    model: ${model}
 
-# environment: OMP_GATEWAY_TOKEN=${gatewayToken}`;
+# environment: OMP_GATEWAY_TOKEN=${gatewayToken} (launch env wins; restart DSH Desktop)`;
       return {
         platform: "dsh",
-        title: "DeepSeek Harness / dsh ($DSH_HOME/settings.yaml)",
+        title: "DeepSeek Harness / dsh ($DSH_HOME/cordis.patch.yml)",
         snippet,
       };
     }

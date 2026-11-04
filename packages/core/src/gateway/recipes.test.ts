@@ -122,7 +122,11 @@ describe("generateClientRecipe", () => {
     ).toBe("openai-compat");
     expect(generateClientRecipe("qwen-code", opts).snippet).toContain("OPENAI_BASE_URL");
     expect(generateClientRecipe("hermes", opts).snippet).toContain('provider: "custom"');
-    expect(generateClientRecipe("dsh", opts).snippet).toContain("apiKeyEnv: OMP_GATEWAY_TOKEN");
+    const dsh = generateClientRecipe("dsh", opts).snippet;
+    expect(dsh).toContain("apiKeyEnv: OMP_GATEWAY_TOKEN");
+    expect(dsh).toContain("id: llm-pi-ai");
+    expect(dsh).toContain("api: openai-completions");
+    expect(dsh).toContain("provider: omp-gateway");
   });
 
   test("baseUrl overrides the https domain in curl recipes", () => {
