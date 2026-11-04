@@ -39,6 +39,12 @@ export interface DoctorFacts {
   expectedGatewayBind: string;
   expectedClientsPath: string;
   requireRunning: boolean;
+  /** True when the operator asked for remote access (start --with-tunnel). */
+  tunnelRequested: boolean;
+  cloudflaredPath: string | null;
+  tunnelConfigPath: string;
+  tunnelConfigPresent: boolean;
+  tunnelHealth: EndpointHealth;
 }
 
 export interface DoctorCheck {
@@ -113,6 +119,27 @@ export function evaluateDoctorChecks(facts: DoctorFacts): DoctorCheck[] {
   };
   healthCheck("broker-health", "broker", facts.brokerHealth);
   healthCheck("gateway-health", "gateway", facts.gatewayHealth);
+
+  if (!facts.tunnelRequested) {
+    pass("tunnel", "remote access not requested; start --with-tunnel to enable it");
+  } else if (!facts.cloudflaredPath) {
+    fail("tunnel-binary", "cloudflared not found on PATH; install cloudflared first");
+    fail("tunnel-config", "cannot check tunnel config without the cloudflared binary");
+    fail("tunnel-health", "cannot check tunnel health without the cloudflared binary");
+  } else {
+    pass("tunnel-binary", facts.cloudflaredPath);
+    if (facts.tunnelConfigPresent)
+      pass("tunnel-config", `tunnel config present: ${facts.tunnelConfigPath}`);
+    else
+      fail(
+        "tunnel-config",
+        `tunnel config missing: ${facts.tunnelConfigPath}; run cloudflared tunnel login, create the tunnel, and write the config first`,
+      );
+    if (facts.tunnelHealth === "ok") pass("tunnel-health", "tunnel metrics healthy");
+    else if (facts.requireRunning)
+      fail("tunnel-health", "tunnel not reachable; run: gateway:ctl start --with-tunnel");
+    else warn("tunnel-health", "tunnel not running; start --with-tunnel will launch it");
+  }
 
   if (facts.gatewayArgv === null) {
     pass("gateway-argv", "no running gateway process to drift-check");

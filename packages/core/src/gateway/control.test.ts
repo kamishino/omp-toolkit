@@ -31,6 +31,11 @@ const HEALTHY: DoctorFacts = {
   expectedGatewayBind: "127.0.0.1:4000",
   expectedClientsPath: "C:/Users/x/.omp/gateway-clients.json",
   requireRunning: true,
+  tunnelRequested: false,
+  cloudflaredPath: null,
+  tunnelConfigPath: "C:/Users/x/.omp/cloudflared/config.yml",
+  tunnelConfigPresent: false,
+  tunnelHealth: "down",
 };
 
 describe("omp version parsing", () => {
@@ -79,6 +84,27 @@ describe("evaluateDoctorChecks", () => {
     });
     expect(checks.find((c) => c.id === "broker-health")?.status).toBe("warn");
     expect(checks.filter((c) => c.status === "fail")).toEqual([]);
+  });
+  test("tunnel not requested is a single passing check", () => {
+    const checks = evaluateDoctorChecks(HEALTHY);
+    expect(checks.find((c) => c.id === "tunnel")?.status).toBe("pass");
+    expect(checks.find((c) => c.id === "tunnel-binary")).toBeUndefined();
+  });
+  test("requested tunnel without cloudflared fails closed", () => {
+    const checks = evaluateDoctorChecks({ ...HEALTHY, tunnelRequested: true });
+    expect(checks.find((c) => c.id === "tunnel-binary")?.status).toBe("fail");
+    expect(checks.find((c) => c.id === "tunnel-config")?.status).toBe("fail");
+  });
+  test("requested tunnel without config fails the config check only", () => {
+    const checks = evaluateDoctorChecks({
+      ...HEALTHY,
+      tunnelRequested: true,
+      cloudflaredPath: "C:/Program Files (x86)/cloudflared/cloudflared.exe",
+      requireRunning: false,
+    });
+    expect(checks.find((c) => c.id === "tunnel-binary")?.status).toBe("pass");
+    expect(checks.find((c) => c.id === "tunnel-config")?.status).toBe("fail");
+    expect(checks.find((c) => c.id === "tunnel-health")?.status).toBe("warn");
   });
 });
 
