@@ -129,7 +129,16 @@ async function main(): Promise<void> {
     case "recipe": {
       const all: ClientRecipePlatform[] = [
         "claude-code",
+        "codex",
         "opencode",
+        "pi",
+        "cline",
+        "aider",
+        "goose",
+        "crush",
+        "qwen-code",
+        "hermes",
+        "dsh",
         "curl",
         "python-openai",
         "python-anthropic",
@@ -143,13 +152,15 @@ async function main(): Promise<void> {
       const platforms = wanted
         ? [wanted as ClientRecipePlatform]
         : (["claude-code", "opencode", "curl"] as const);
-      // Default model for every recipe is gemini-3.8-flash: it is the
-      // tool-safe Antigravity model on all harness paths (research §11).
+      // Tool-safe defaults per harness path (research §11): Codex tool turns
+      // only round-trip on the Muse backend; every other path is verified
+      // or documented against gemini-3.8-flash.
       const recipes = platforms.map((platform) =>
         generateClientRecipe(platform, {
           domain: "",
           gatewayToken: "omp_gw_<your-client-token>",
           baseUrl: bindToBaseUrl(config.gatewayBind),
+          ...(platform === "codex" ? { model: "google-antigravity/claude-sonnet-4-6" } : {}),
         }),
       );
       print(

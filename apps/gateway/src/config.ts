@@ -192,7 +192,7 @@ Read commands:
   accounts  Antigravity accounts: check status, blocks, policies, quota (masked)
   clients   Scoped gateway clients (digests shown as fingerprints only)
   pool      Pool summary: availability, earliest reset, pin distribution
-  recipe [claude-code|opencode|curl|python-openai|python-anthropic|vscode-continue]
+  recipe [claude-code|codex|opencode|pi|cline|aider|goose|crush|qwen-code|hermes|dsh|curl|...]
             Loopback client setup snippet (placeholder token; default: harnesses)
   autostart-install|autostart-remove|autostart-status
             Windows Startup-folder entry that runs start at sign-in
