@@ -27,3 +27,17 @@ export async function runClientsCommand(ctx: CommandContext): Promise<void> {
   }
   print(config, { clients }, renderClientsText(clients));
 }
+
+export async function runModelsCommand(ctx: CommandContext): Promise<void> {
+  const { config, client } = ctx;
+  let models: string[];
+  try {
+    models = await client.getModels();
+  } catch (err) {
+    console.error(
+      `models: gateway unreachable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    process.exit(1);
+  }
+  print(config, { models }, models);
+}

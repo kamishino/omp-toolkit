@@ -67,4 +67,18 @@ describe("parseGatewayCtlConfig", () => {
     expect(config.withTunnel).toBe(true);
     expect(config.tunnelConfigPath).toBe("C:/x/t.yml");
   });
+  test("remote-pack parses platform target and secret inputs", () => {
+    const config = parseGatewayCtlConfig(
+      ["remote-pack", "dsh", "--base-url=https://gw.example.com", "--gateway-token=omp_gw_x"],
+      { OMP_CF_CLIENT_ID: "id", OMP_CF_CLIENT_SECRET: "s" },
+      HOME,
+    );
+    expect(config.command).toBe("remote-pack");
+    expect(config.target).toBe("dsh");
+    expect(config.baseUrl).toBe("https://gw.example.com");
+    expect(config.packGatewayToken).toBe("omp_gw_x");
+    expect(config.cfClientId).toBe("id");
+    expect(config.cfClientSecret).toBe("s");
+    expect(config.unknown).toEqual([]);
+  });
 });

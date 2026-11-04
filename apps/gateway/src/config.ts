@@ -9,6 +9,7 @@ export type GatewayCommand =
   | "status"
   | "accounts"
   | "clients"
+  | "models"
   | "clients-add"
   | "clients-revoke"
   | "pool"
@@ -20,6 +21,7 @@ export type GatewayCommand =
   | "unblock-all"
   | "policy"
   | "recipe"
+  | "remote-pack"
   | "autostart-install"
   | "autostart-remove"
   | "autostart-status"
@@ -33,6 +35,7 @@ const COMMANDS: readonly string[] = [
   "status",
   "accounts",
   "clients",
+  "models",
   "clients-add",
   "clients-revoke",
   "pool",
@@ -44,6 +47,7 @@ const COMMANDS: readonly string[] = [
   "unblock-all",
   "policy",
   "recipe",
+  "remote-pack",
   "autostart-install",
   "autostart-remove",
   "autostart-status",
@@ -83,6 +87,8 @@ export interface GatewayCtlConfig {
   recipeModel: string | null;
   cfClientId: string | null;
   cfClientSecret: string | null;
+  /** Client token rendered into remote packs (flag or OMP_GATEWAY_TOKEN env). */
+  packGatewayToken: string | null;
   unknown: string[];
 }
 
@@ -144,6 +150,7 @@ export function parseGatewayCtlConfig(
     "--model=",
     "--cf-client-id=",
     "--cf-client-secret=",
+    "--gateway-token=",
   ];
   const unknown = argv.filter(
     (a) =>
@@ -201,6 +208,7 @@ export function parseGatewayCtlConfig(
     recipeModel: flagValue(argv, "model") ?? null,
     cfClientId: flagValue(argv, "cf-client-id") ?? env.OMP_CF_CLIENT_ID ?? null,
     cfClientSecret: flagValue(argv, "cf-client-secret") ?? env.OMP_CF_CLIENT_SECRET ?? null,
+    packGatewayToken: flagValue(argv, "gateway-token") ?? env.OMP_GATEWAY_TOKEN ?? null,
     unknown,
   };
 }
@@ -223,12 +231,17 @@ Read commands:
   status    Per-process lifecycle state
   accounts  Antigravity accounts: check status, blocks, policies, quota (masked)
   clients   Scoped gateway clients (digests shown as fingerprints only)
+  models    Served model ids from the gateway (/v1/models; --json for array)
   pool      Pool summary: availability, earliest reset, pin distribution
   recipe [claude-code|codex|opencode|pi|cline|aider|goose|crush|qwen-code|hermes|dsh|curl|...]
             Client setup snippet (placeholder token; default: harnesses).
             Remote: --base-url=https://<host> [--model=<id>]
             [--cf-client-id=<id>] [--cf-client-secret=<secret>]
             (or OMP_CF_CLIENT_ID / OMP_CF_CLIENT_SECRET env)
+  remote-pack dsh --base-url=https://<host> [--gateway-token=<tok> | OMP_GATEWAY_TOKEN]
+            One copy-paste block for a remote PC (env commands + patch).
+            Prints secrets: transmit the output securely, never commit it.
+            Prefer env over flags: flag values land in shell history
   autostart-install|autostart-remove|autostart-status
             Windows Startup-folder entry that runs start at sign-in
 

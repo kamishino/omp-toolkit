@@ -3,7 +3,8 @@ import { createCommandContext } from "./commands/context";
 import { runLifecycleCommand } from "./commands/lifecycle-commands";
 import { print } from "./commands/output";
 import { runRecipeCommand } from "./commands/recipe-commands";
-import { runAccountsCommand, runClientsCommand } from "./commands/view-commands";
+import { runRemotePackCommand } from "./commands/remote-commands";
+import { runAccountsCommand, runClientsCommand, runModelsCommand } from "./commands/view-commands";
 import { runWriteCommand } from "./commands/write-commands";
 import { GATEWAY_USAGE, parseGatewayCtlConfig } from "./config";
 import { renderDoctorText, runDoctorChecks } from "./doctor";
@@ -45,8 +46,16 @@ async function main(): Promise<void> {
       await runClientsCommand(ctx);
       return;
     }
+    case "models": {
+      await runModelsCommand(ctx);
+      return;
+    }
     case "recipe": {
       await runRecipeCommand(ctx);
+      return;
+    }
+    case "remote-pack": {
+      await runRemotePackCommand(ctx);
       return;
     }
     case "autostart-install":
