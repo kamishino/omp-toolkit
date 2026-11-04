@@ -52,7 +52,7 @@ Status key: **Verified** = run end-to-end on this machine (tool turn, exit 0).
 | Crush | `openai-compat` provider | `crush.json` | `recipe crush` | Documented |
 | Qwen Code | OpenAI Compatible | env `OPENAI_BASE_URL/API_KEY/MODEL` | `recipe qwen-code` | Documented |
 | Hermes Agent | Custom endpoint (OpenAI Chat) | `~/.hermes/config.yaml` `model.provider: "custom"` | `recipe hermes` | Documented |
-| DeepSeek Harness (`dsh`) | OpenAI Chat (pi-ai `openai-completions` route) | `$DSH_HOME/cordis.patch.yml` home patch + `OMP_GATEWAY_TOKEN` env | `recipe dsh` | Verified live (headless `GATEWAY-OK`); DeepSeek-native route unusable (`x-api-key` 401s) |
+| DeepSeek Harness (`dsh`) | OpenAI Chat (pi-ai `openai-completions` route) | `$DSH_HOME/cordis.patch.yml` home patch + `OMP_GATEWAY_TOKEN` env | `recipe dsh` (`--base-url` + `--cf-client-id/secret` for remote) | Verified live loopback (`GATEWAY-OK`) and remote (`REMOTE-OK`); DeepSeek-native route unusable (`x-api-key` 401s); PC2 steps in `docs/remote-setup/README.md` |
 | Roo Code / Kilo Code | OpenAI Compatible (same settings family as Cline) | extension settings: base URL + key + model id | same values as Cline | Documented |
 | Continue | OpenAI provider | `config.yaml` models entry with `apiBase` | `recipe vscode-continue` | Documented |
 | Cursor | OpenAI API key + base URL override | Settings -> Models; add the model id manually | universal rule above | Documented; some Cursor cloud features bypass custom endpoints |

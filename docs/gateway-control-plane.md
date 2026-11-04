@@ -183,7 +183,7 @@ not behavior the control plane can repair.
 | S2 | Read-only control plane: Bun daemon manager, fail-closed doctor, account/client/pool views (CLI) | Done 2026-11-03 (`apps/gateway`, `bun run gateway:ctl <doctor|start|stop|restart|status|accounts|clients|pool>`); A1–A4 verified live |
 | S3 | Writes: clients, policies, blocks, drain; History audit; TUI + widget status | Done 2026-11-03; A5–A8 verified live. Write actions are CLI-only; TUI/widget status rides the existing `/gateway` command and desktop gateway probe unchanged |
 | S4 | Harness acceptance: Muse + one OpenAI-format harness on loopback, recipes regenerated | Done 2026-11-03; A9 passes with the §5.7 model constraint, A10 recorded in research §11 and `docs/gateway-clients.md` |
-| S5 (phase 2) | Cloudflare lifecycle under the Bun manager, multi-machine client packs | Separate review |
+| S5 (phase 2) | Cloudflare lifecycle under the Bun manager (`start --with-tunnel`, tunnel doctor checks, metrics-depth probe), DSH remote recipe variant, PC2 README | Done 2026-11-04; tunnel migrated under the manager and verified live (`REMOTE-OK` through Access + tunnel + gateway); remote setup in `docs/remote-setup/README.md` |
 
 ## 7. Acceptance criteria
 
