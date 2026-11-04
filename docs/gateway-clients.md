@@ -1,54 +1,75 @@
 # Gateway Clients (Loopback)
 
-How local agent harnesses use the OMP gateway on this machine. Design:
+How agent harnesses use the OMP gateway on this machine. Design:
 [Gateway Control Plane](gateway-control-plane.md) / [ADR-0010](adr/0010-gateway-control-plane-over-omp.md).
-Generate every snippet below with `bun run gateway:ctl recipe [platform]`
-(output uses a placeholder token; substitute a scoped client token from
-`gateway:ctl clients-add <name>`, shown once at creation).
+Generate any snippet with `bun run gateway:ctl recipe [platform]` (placeholder
+token; substitute a scoped client token from `gateway:ctl clients-add <name>`,
+shown once at creation).
 
-## Model guidance (verified 2026-11-03)
+## The universal rule
 
-Tool calling through the gateway is model-sensitive. Gemini 2.5 models
-enforce `thought_signature` round-tripping: the OpenAI wire carries it in
-`extra_content.google.thought_signature`, but the Anthropic translation
-drops it, and AI-SDK clients drop `extra_content` on replay. Result:
-`400 Function call is missing a thought_signature` on the second turn.
+Every harness below reduces to three settings:
 
-| Client path | Tool-safe models | Avoid for tools |
+| Setting | Value |
+|---|---|
+| Base URL | `http://127.0.0.1:4000` for Anthropic, `http://127.0.0.1:4000/v1` for OpenAI protocols |
+| API key | A scoped client token (`omp_gw_…`) or the master gateway token |
+| Model id | Any id from `GET /v1/models`, passed through unchanged (e.g. `google-antigravity/gemini-3.8-flash`) |
+
+One token per harness or machine: the token is also the account-pin unit, so
+each harness sticks to one account and rotates only on quota/auth failure.
+
+## Which model is correct (verified 2026-11-03/04)
+
+Tool calling is model-sensitive. Gemini 2.5 backends enforce
+`thought_signature` round-tripping that Anthropic translation and AI-SDK
+clients drop, failing turn 2 with `400`; Codex (Responses) additionally
+breaks Gemini tool continuation ("Requests ending with a model turn").
+Verified tool-safe defaults, already baked into the recipes:
+
+| Harness path | Verified tool model | Also fine |
 |---|---|---|
-| Anthropic (`/v1/messages`, Muse) | `google-antigravity/gemini-3.8-flash`, `google-antigravity/claude-sonnet-4-6` | `google-antigravity/gemini-2.5-flash` (400 on tool round-trip) |
-| OpenAI (`/v1/chat/completions`, OpenCode) | `google-antigravity/gemini-3.8-flash`; raw-SDK replay with `extra_content` preserved also passes on 2.5 | `google-antigravity/gemini-2.5-flash` via AI-SDK-style clients |
+| Anthropic: Muse | `google-antigravity/gemini-3.8-flash` | `google-antigravity/claude-sonnet-4-6` |
+| OpenAI Chat: OpenCode, Cline, pi | `google-antigravity/gemini-3.8-flash` | 2.5 only with raw SDK replay preserving `extra_content` |
+| Responses: Codex | `google-antigravity/claude-sonnet-4-6` | Gemini backends: text only |
 
-Text-only turns work on every model and protocol. All recipes therefore
-default to `google-antigravity/gemini-3.8-flash`.
+Text-only turns work on every model. When in doubt, take the recipe default.
 
-## Muse
+## Compatibility matrix
 
-```powershell
-bun run gateway:ctl recipe claude-code
-```
+Status key: **Verified** = run end-to-end on this machine (tool turn, exit 0).
+**Documented** = config shape taken from the tool's own docs; not run here.
 
-Sets `ANTHROPIC_BASE_URL=http://127.0.0.1:4000`, `ANTHROPIC_AUTH_TOKEN`,
-and pins all default model slots to the gateway model. Verified: Muse
-Code 2.0.55, streamed Bash tool turn, exit 0 in 2 turns (spec A9).
+| Harness | Protocol | Where the config lives | Generate | Status |
+|---|---|---|---|---|
+| Muse | Anthropic Messages | env vars (`ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, model slots) | `recipe claude-code` | Verified (2 turns, Bash) |
+| Muse | OpenAI Responses | `~/.codex/config.toml` `[model_providers.*]`, `wire_api = "responses"` | `recipe codex` | Verified on Claude backend; Gemini tool turns fail upstream |
+| OpenCode | OpenAI Chat (AI SDK) | `opencode.json` `@ai-sdk/openai-compatible` | `recipe opencode` | Verified (bash tool) |
+| pi / Pi-family | OpenAI Chat | `~/.pi/agent/models.json`, `api: "openai-completions"` | `recipe pi` | Verified (bash tool) |
+| Cline (CLI + VS Code) | OpenAI Compatible | `cline auth openai -b … -k … -m …` / extension settings | `recipe cline` | Verified CLI (tool run) |
+| Aider | OpenAI Chat (LiteLLM) | `~/.aider.conf.yml`, model prefixed `openai/<id>` | `recipe aider` | Documented |
+| Goose | OpenAI provider, custom host | `goose configure`, `OPENAI_HOST` + `OPENAI_BASE_PATH` | `recipe goose` | Documented |
+| Crush | `openai-compat` provider | `crush.json` | `recipe crush` | Documented |
+| Qwen Code | OpenAI Compatible | env `OPENAI_BASE_URL/API_KEY/MODEL` | `recipe qwen-code` | Documented |
+| Hermes Agent | Custom endpoint (OpenAI Chat) | `~/.hermes/config.yaml` `model.provider: "custom"` | `recipe hermes` | Documented |
+| DeepSeek Harness (`dsh`) | OpenAI Chat (DeepSeek adapter) | `$DSH_HOME/settings.yaml` `llm-deepseek.baseURL` | `recipe dsh` | Documented |
+| Roo Code / Kilo Code | OpenAI Compatible (same settings family as Cline) | extension settings: base URL + key + model id | same values as Cline | Documented |
+| Continue | OpenAI provider | `config.yaml` models entry with `apiBase` | `recipe vscode-continue` | Documented |
+| Cursor | OpenAI API key + base URL override | Settings -> Models; add the model id manually | universal rule above | Documented; some Cursor cloud features bypass custom endpoints |
+| Zed | `openai_compatible` language model | `settings.json` | universal rule above | Documented |
+| Any SDK agent (OpenAI / Anthropic / Vercel AI / LangGraph) | either | `baseURL` client option | `recipe python-openai` / `python-anthropic` | Verified at protocol level |
+| OMP / Oh My Pi itself | native | already uses the broker; nothing to do | — | Native |
 
-## OpenCode
+### Tools that cannot use this gateway
 
-```powershell
-bun run gateway:ctl recipe opencode
-```
-
-Save the output as `opencode.json` in the project directory. Verified:
-OpenCode 1.18.9, bash tool executed via `google-antigravity/gemini-3.8-flash`,
-exit 0 (spec A9). The same run on `gemini-2.5-flash` fails with the
-`thought_signature` 400 above.
-
-## SDKs and curl
-
-`recipe curl`, `recipe python-openai`, `recipe python-anthropic`, and
-`recipe vscode-continue` print loopback snippets against
-`http://127.0.0.1:4000`. For remote (Cloudflare) deployments, see
-[OMP Auth Gateway + Cloudflare](auth-gateway-cloudflare.md).
+- **Gemini CLI / Antigravity CLI in Google OAuth mode** talk to Google
+  directly with their own auth; there is no custom base-URL seam for the
+  pooled accounts. (API-key modes that accept a custom Generative Language
+  endpoint still don't speak Chat Completions, so they don't fit either.)
+- **Closed cloud agents without BYOK/custom endpoints** (e.g. hosted-only
+  modes of Copilot, Amp, or Droid): if the tool offers no base-URL setting,
+  no gateway can interpose. Check for "OpenAI Compatible", "Custom
+  endpoint", or "BYOK" in its settings — that field is the whole test.
 
 ## Daily-driver setup
 
@@ -64,13 +85,14 @@ exit 0 (spec A9). The same run on `gemini-2.5-flash` fails with the
 
 ## Scoped tokens
 
-Issue one token per harness or machine; it is also the account-pin unit:
-
 ```powershell
-bun run gateway:ctl clients-add claude-code-laptop --models=google-antigravity/*
-bun run gateway:ctl clients-revoke claude-code-laptop
+bun run gateway:ctl clients-add claude-code --models=google-antigravity/*
+bun run gateway:ctl clients-revoke claude-code
 ```
 
-Note: scoped tokens only work when the gateway runs with `--clients`
-pointing at the clients file. Gateways started by `gateway:ctl start` do;
+Scoped tokens only work when the gateway runs with `--clients` pointing at
+the clients file. Gateways started by `gateway:ctl start` do;
 `gateway:ctl doctor` FAILs a running gateway whose argv does not.
+
+For remote (Cloudflare) deployments, see
+[OMP Auth Gateway + Cloudflare](auth-gateway-cloudflare.md).

@@ -212,7 +212,11 @@ not behavior the control plane can repair.
   Verified 2026-11-03 (Claude Code 2.0.55, OpenCode 1.18.9) on
   `gemini-3.8-flash` per §5.7; `gemini-2.5-flash` tool turns fail upstream
   and are explicitly out of the passing set until OMP fixes signature
-  translation.
+  translation. Extended 2026-11-04: pi and Cline CLI verified on
+  `gemini-3.8-flash`; Codex (Responses) verified on `claude-sonnet-4-6`
+  only — Codex tool continuation on Gemini backends fails upstream with
+  "Requests ending with a model turn". The full harness matrix lives in
+  `docs/gateway-clients.md`.
 - **A10** S1 findings for streaming errors and exhaust `429` shape are
   recorded, and §5.5/§5.6 are updated to match observation before S4 ships.
 
