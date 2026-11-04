@@ -97,6 +97,34 @@ describe("generateClientRecipe", () => {
     expect(parsed.provider["omp-gateway"]?.options.baseURL).toBe("http://127.0.0.1:4000/v1");
   });
 
+  test("generates Codex Responses provider TOML", () => {
+    const recipe = generateClientRecipe("codex", {
+      domain: "",
+      gatewayToken: "tok123",
+      baseUrl: "http://127.0.0.1:4000",
+      model: "google-antigravity/claude-sonnet-4-6",
+    });
+    expect(recipe.snippet).toContain('wire_api = "responses"');
+    expect(recipe.snippet).toContain('base_url = "http://127.0.0.1:4000/v1"');
+    expect(recipe.snippet).toContain("claude-sonnet-4-6");
+  });
+
+  test("generates pi, cline, aider, goose, crush, qwen, hermes, and dsh recipes", () => {
+    const opts = { domain: "", gatewayToken: "tok123", baseUrl: "http://127.0.0.1:4000" };
+    expect(generateClientRecipe("pi", opts).snippet).toContain('"api": "openai-completions"');
+    expect(generateClientRecipe("cline", opts).snippet).toContain("cline auth openai");
+    expect(generateClientRecipe("aider", opts).snippet).toContain(
+      "model: openai/google-antigravity/gemini-3.8-flash",
+    );
+    expect(generateClientRecipe("goose", opts).snippet).toContain("OPENAI_BASE_PATH");
+    expect(
+      JSON.parse(generateClientRecipe("crush", opts).snippet).providers["omp-gateway"].type,
+    ).toBe("openai-compat");
+    expect(generateClientRecipe("qwen-code", opts).snippet).toContain("OPENAI_BASE_URL");
+    expect(generateClientRecipe("hermes", opts).snippet).toContain('provider: "custom"');
+    expect(generateClientRecipe("dsh", opts).snippet).toContain("apiKeyEnv: OMP_GATEWAY_TOKEN");
+  });
+
   test("baseUrl overrides the https domain in curl recipes", () => {
     const recipe = generateClientRecipe("curl", {
       domain: "gateway.example.com",

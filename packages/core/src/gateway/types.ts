@@ -10,7 +10,16 @@ export type ClientRecipePlatform =
   | "python-anthropic"
   | "vscode-continue"
   | "claude-code"
-  | "opencode";
+  | "opencode"
+  | "codex"
+  | "pi"
+  | "cline"
+  | "aider"
+  | "goose"
+  | "crush"
+  | "qwen-code"
+  | "hermes"
+  | "dsh";
 
 export interface ClientRecipe {
   platform: ClientRecipePlatform;

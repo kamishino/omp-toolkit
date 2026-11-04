@@ -163,5 +163,136 @@ Muse
 }`;
       return { platform: "opencode", title: "OpenCode (opencode.json)", snippet };
     }
+
+    case "codex": {
+      // Codex speaks Responses only. Tool turns verified on the Muse
+      // backend model; Gemini backends fail tool continuation upstream.
+      const snippet = `# ~/.codex/config.toml  (set OMP_GATEWAY_TOKEN in the environment)
+model = "${model}"
+model_provider = "omp-gateway"
+
+[model_providers.omp-gateway]
+name = "OMP Gateway (loopback)"
+base_url = "${base}/v1"
+env_key = "OMP_GATEWAY_TOKEN"
+wire_api = "responses"`;
+      return { platform: "codex", title: "Muse (~/.codex/config.toml)", snippet };
+    }
+
+    case "pi": {
+      const snippet = `{
+  "providers": {
+    "omp-gateway": {
+      "baseUrl": "${base}/v1",
+      "api": "openai-completions",
+      "apiKey": "${gatewayToken}",
+      "models": [
+        {
+          "id": "${model}",
+          "name": "${model} via OMP Gateway",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 1048576,
+          "maxTokens": 65536,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    }
+  }
+}
+# save as ~/.pi/agent/models.json, then: pi --model omp-gateway/${model}`;
+      return { platform: "pi", title: "pi / Pi-family (~/.pi/agent/models.json)", snippet };
+    }
+
+    case "cline": {
+      const snippet = `# Cline CLI (one-time auth, then plain runs work):
+cline auth openai --apikey "${gatewayToken}" --baseurl "${base}/v1" --modelid "${model}"
+cline "your task"
+
+# VS Code extension: Settings -> API Provider = "OpenAI Compatible",
+# Base URL = ${base}/v1, API Key = your token, Model ID = ${model}`;
+      return { platform: "cline", title: "Cline (CLI auth / VS Code settings)", snippet };
+    }
+
+    case "aider": {
+      const snippet = `# ~/.aider.conf.yml  (the openai/ prefix selects the OpenAI-compatible client)
+openai-api-base: ${base}/v1
+openai-api-key: ${gatewayToken}
+model: openai/${model}`;
+      return { platform: "aider", title: "Aider (~/.aider.conf.yml)", snippet };
+    }
+
+    case "goose": {
+      const snippet = `# Environment (or run: goose configure -> OpenAI, custom host)
+$env:GOOSE_PROVIDER = "openai"
+$env:GOOSE_MODEL = "${model}"
+$env:OPENAI_HOST = "${base}"
+$env:OPENAI_BASE_PATH = "v1/chat/completions"
+$env:OPENAI_API_KEY = "${gatewayToken}"
+goose session`;
+      return { platform: "goose", title: "Goose (OpenAI provider, custom host)", snippet };
+    }
+
+    case "crush": {
+      const snippet = `{
+  "$schema": "https://charm.land/crush.json",
+  "providers": {
+    "omp-gateway": {
+      "type": "openai-compat",
+      "base_url": "${base}/v1",
+      "api_key": "${gatewayToken}",
+      "models": [{ "id": "${model}", "name": "${model} via OMP Gateway" }]
+    }
+  },
+  "models": {
+    "large": { "model": "${model}", "provider": "omp-gateway" },
+    "small": { "model": "${model}", "provider": "omp-gateway" }
+  }
+}`;
+      return { platform: "crush", title: "Crush (crush.json)", snippet };
+    }
+
+    case "qwen-code": {
+      const snippet = `# Environment (OpenAI-compatible auth type)
+$env:OPENAI_BASE_URL = "${base}/v1"
+$env:OPENAI_API_KEY = "${gatewayToken}"
+$env:OPENAI_MODEL = "${model}"
+qwen`;
+      return { platform: "qwen-code", title: "Qwen Code (OpenAI-compatible env)", snippet };
+    }
+
+    case "hermes": {
+      const snippet = `# ~/.hermes/config.yaml (key goes in ~/.hermes/.env as OPENAI_API_KEY)
+model:
+  provider: "custom"
+  base_url: "${base}/v1"
+  default: "${model}"
+
+# ~/.hermes/.env
+# OPENAI_API_KEY=${gatewayToken}`;
+      return { platform: "hermes", title: "Hermes Agent (~/.hermes/config.yaml)", snippet };
+    }
+
+    case "dsh": {
+      const snippet = `# $DSH_HOME/settings.yaml (key resolves from the env named by apiKeyEnv)
+llm-deepseek:
+  baseURL: ${base}/v1
+  apiKeyEnv: OMP_GATEWAY_TOKEN
+  thinking: disabled
+  models:
+    - id: ${model}
+      name: ${model}
+      contextWindow: 1048576
+agent-default-model:
+  provider: deepseek-official
+  model: ${model}
+
+# environment: OMP_GATEWAY_TOKEN=${gatewayToken}`;
+      return {
+        platform: "dsh",
+        title: "DeepSeek Harness / dsh ($DSH_HOME/settings.yaml)",
+        snippet,
+      };
+    }
   }
 }
