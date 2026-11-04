@@ -57,5 +57,6 @@ export function generateClientRecipe(
     cfClientId,
     cfClientSecret,
     hasCfAccess,
+    envRefs: options.envRefs ?? false,
   });
 }

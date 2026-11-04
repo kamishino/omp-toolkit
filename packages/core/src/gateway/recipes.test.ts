@@ -144,6 +144,21 @@ describe("generateClientRecipe", () => {
     expect(snippet).toContain("CF-Access-Client-Secret: s3cret");
   });
 
+  test("dsh recipe with envRefs emits env expressions and no literal secrets", () => {
+    const snippet = generateClientRecipe("dsh", {
+      domain: "gw.example.com",
+      gatewayToken: "tok123",
+      baseUrl: "https://gw.example.com",
+      cfClientId: "id.access",
+      cfClientSecret: "s3cret",
+      envRefs: true,
+    }).snippet;
+    expect(snippet).toContain("CF-Access-Client-Id: !!js process.env.OMP_CF_CLIENT_ID");
+    expect(snippet).toContain("CF-Access-Client-Secret: !!js process.env.OMP_CF_CLIENT_SECRET");
+    expect(snippet).not.toContain("s3cret");
+    expect(snippet).not.toContain("tok123");
+  });
+
   test("baseUrl overrides the https domain in curl recipes", () => {
     const recipe = generateClientRecipe("curl", {
       domain: "gateway.example.com",
