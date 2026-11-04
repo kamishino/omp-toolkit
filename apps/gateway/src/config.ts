@@ -73,6 +73,16 @@ export interface GatewayCtlConfig {
   priority: number | null;
   reservePct: number | null;
   force: boolean;
+  /** Manage the cloudflared tunnel alongside broker/gateway (start/stop/status). */
+  withTunnel: boolean;
+  cloudflaredBin: string;
+  tunnelConfigPath: string;
+  tunnelMetricsBind: string;
+  /** Recipe base URL override (remote access); defaults to the loopback gateway. */
+  baseUrl: string | null;
+  recipeModel: string | null;
+  cfClientId: string | null;
+  cfClientSecret: string | null;
   unknown: string[];
 }
 
@@ -127,12 +137,20 @@ export function parseGatewayCtlConfig(
     "--minutes=",
     "--priority=",
     "--reserve-pct=",
+    "--cloudflared-bin=",
+    "--tunnel-config=",
+    "--tunnel-metrics-bind=",
+    "--base-url=",
+    "--model=",
+    "--cf-client-id=",
+    "--cf-client-secret=",
   ];
   const unknown = argv.filter(
     (a) =>
       a.startsWith("--") &&
       a !== "--json" &&
       a !== "--force" &&
+      a !== "--with-tunnel" &&
       !knownPrefixes.some((p) => a.startsWith(p)),
   );
   const positionals = argv.filter((a) => !a.startsWith("--")).slice(1);
@@ -172,6 +190,17 @@ export function parseGatewayCtlConfig(
     priority: numberFlag(argv, "priority"),
     reservePct: numberFlag(argv, "reserve-pct"),
     force: argv.includes("--force"),
+    withTunnel: argv.includes("--with-tunnel") || env.OMP_WITH_TUNNEL === "1",
+    cloudflaredBin: flagValue(argv, "cloudflared-bin") ?? env.OMP_CLOUDFLARED_BIN ?? "cloudflared",
+    tunnelConfigPath:
+      flagValue(argv, "tunnel-config") ??
+      env.OMP_TUNNEL_CONFIG ??
+      path.join(ompDir, "cloudflared", "config.yml"),
+    tunnelMetricsBind: flagValue(argv, "tunnel-metrics-bind") ?? "127.0.0.1:48333",
+    baseUrl: flagValue(argv, "base-url") ?? null,
+    recipeModel: flagValue(argv, "model") ?? null,
+    cfClientId: flagValue(argv, "cf-client-id") ?? env.OMP_CF_CLIENT_ID ?? null,
+    cfClientSecret: flagValue(argv, "cf-client-secret") ?? env.OMP_CF_CLIENT_SECRET ?? null,
     unknown,
   };
 }
@@ -181,11 +210,14 @@ export const GATEWAY_USAGE = `omp-toolkit gateway control plane (ADR-0010)
 Usage: gateway:ctl <command> [target] [--json]
        [--broker-bind=127.0.0.1:8765] [--gateway-bind=127.0.0.1:4000]
        [--clients=<gateway-clients.json>] [--run-dir=<dir>] [--omp-bin=<path>]
+       [--with-tunnel] [--tunnel-config=<config.yml>] [--cloudflared-bin=<path>]
+       (env: OMP_WITH_TUNNEL=1 OMP_TUNNEL_CONFIG=<config.yml> OMP_CLOUDFLARED_BIN=<path>)
 
 Read commands:
   doctor    Fail-closed compatibility checks (binary, version, capabilities,
-            token files, health, running-gateway drift)
-  start     Start broker then gateway (doctor-gated, idempotent)
+            token files, health, running-gateway drift, tunnel when requested)
+  start     Start broker then gateway (doctor-gated, idempotent);
+            --with-tunnel also starts the cloudflared remote-access tunnel
   stop      Stop only daemon-manager-recorded processes
   restart   Stop then start managed processes
   status    Per-process lifecycle state
@@ -193,7 +225,10 @@ Read commands:
   clients   Scoped gateway clients (digests shown as fingerprints only)
   pool      Pool summary: availability, earliest reset, pin distribution
   recipe [claude-code|codex|opencode|pi|cline|aider|goose|crush|qwen-code|hermes|dsh|curl|...]
-            Loopback client setup snippet (placeholder token; default: harnesses)
+            Client setup snippet (placeholder token; default: harnesses).
+            Remote: --base-url=https://<host> [--model=<id>]
+            [--cf-client-id=<id>] [--cf-client-secret=<secret>]
+            (or OMP_CF_CLIENT_ID / OMP_CF_CLIENT_SECRET env)
   autostart-install|autostart-remove|autostart-status
             Windows Startup-folder entry that runs start at sign-in
 
