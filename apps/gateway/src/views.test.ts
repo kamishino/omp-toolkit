@@ -11,6 +11,7 @@ function fakeClient(): BrokerClient {
   return {
     brokerHealth: async () => true,
     gatewayHealth: async () => true,
+    tunnelHealth: async () => false,
     getSnapshot: async () => [
       { id: 1, provider: "google-antigravity", identityKey: "email:alice@example.com", blocks: [] },
       { id: 2, provider: "google-antigravity", identityKey: "email:bob@example.com", blocks: [] },

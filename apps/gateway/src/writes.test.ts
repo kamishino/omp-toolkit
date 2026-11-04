@@ -20,6 +20,7 @@ function harness() {
   const client: BrokerClient = {
     brokerHealth: async () => true,
     gatewayHealth: async () => true,
+    tunnelHealth: async () => false,
     getSnapshot: async () => [
       { id: 1, provider: "google-antigravity", identityKey: "email:alice@example.com" },
       { id: 6, provider: "google-antigravity", identityKey: "email:bob@example.com" },

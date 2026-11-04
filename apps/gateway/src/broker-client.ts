@@ -17,6 +17,7 @@ export interface BrokerClientDependencies {
 export interface BrokerClient {
   brokerHealth(): Promise<boolean>;
   gatewayHealth(): Promise<boolean>;
+  tunnelHealth(): Promise<boolean>;
   getSnapshot(): Promise<SnapshotEntryLike[]>;
   getCredentialCheck(): Promise<CredentialCheckLike[]>;
   getUsage(): Promise<UsageReportLike[]>;
@@ -96,9 +97,29 @@ export function createBrokerClient(
     }
   }
 
+  /**
+   * Tunnel health requires at least one registered edge connection, not just
+   * a serving metrics listener: a process that lost the edge must read down.
+   */
+  async function tunnelHealth(url: string): Promise<boolean> {
+    try {
+      const res = await fetcher(url, { signal: AbortSignal.timeout(2_500) });
+      if (!res.ok) return false;
+      const match = /cloudflared_tunnel_ha_connections\s+(\d+)/.exec(await res.text());
+      return match !== null && Number(match[1]) > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  // cloudflared --metrics serves Prometheus text at /metrics once the
+  // tunnel process is up; edge registration depth is verified live instead.
+  const tunnelMetrics = bindToBaseUrl(config.tunnelMetricsBind);
+
   return {
     brokerHealth: () => health(`${brokerBase}/v1/healthz`),
     gatewayHealth: () => health(`${gatewayBase}/healthz`),
+    tunnelHealth: () => tunnelHealth(`${tunnelMetrics}/metrics`),
     async getSnapshot(): Promise<SnapshotEntryLike[]> {
       const data = (await getJson(`${brokerBase}/v1/snapshot`, config.brokerTokenPath)) as {
         credentials?: SnapshotEntryLike[];

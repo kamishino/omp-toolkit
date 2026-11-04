@@ -4,7 +4,7 @@ import { bindToBaseUrl, type GatewayCtlConfig, portOfBind } from "./config";
 import type { DoctorReport } from "./doctor";
 import type { OmpAdapter } from "./omp-adapter";
 
-export type DaemonKind = "broker" | "gateway";
+export type DaemonKind = "broker" | "gateway" | "tunnel";
 
 export interface DaemonRecord {
   kind: DaemonKind;
@@ -13,6 +13,11 @@ export interface DaemonRecord {
   startedAtMs: number;
   /** Substring that must appear in the pid's live command line before we stop it. */
   marker: string;
+  /**
+   * Second required command-line token. Records written before this field
+   * existed fall back to `--bind=<bind>`.
+   */
+  match?: string;
 }
 
 export interface DaemonRecordStore {
@@ -73,6 +78,7 @@ export interface DaemonActionResult {
 }
 
 const KIND_ORDER: readonly DaemonKind[] = ["broker", "gateway"];
+const TUNNEL_ORDER: readonly DaemonKind[] = ["broker", "gateway", "tunnel"];
 
 export class DaemonManager {
   readonly #deps: DaemonManagerDependencies;
@@ -82,11 +88,24 @@ export class DaemonManager {
   }
 
   #bind(kind: DaemonKind): string {
-    return kind === "broker" ? this.#deps.config.brokerBind : this.#deps.config.gatewayBind;
+    if (kind === "broker") return this.#deps.config.brokerBind;
+    if (kind === "gateway") return this.#deps.config.gatewayBind;
+    return this.#deps.config.tunnelMetricsBind;
   }
 
   #marker(kind: DaemonKind): string {
-    return kind === "broker" ? "auth-broker" : "auth-gateway";
+    if (kind === "broker") return "auth-broker";
+    if (kind === "gateway") return "auth-gateway";
+    return "cloudflared";
+  }
+
+  #match(kind: DaemonKind): string {
+    if (kind === "tunnel") return `--config=${this.#deps.config.tunnelConfigPath}`;
+    return `--bind=${this.#bind(kind)}`;
+  }
+
+  #recordMatches(record: DaemonRecord, cmd: string): boolean {
+    return cmd.includes(record.marker) && cmd.includes(record.match ?? `--bind=${record.bind}`);
   }
 
   async #recordState(kind: DaemonKind): Promise<"managed" | "stale" | "none"> {
@@ -94,9 +113,22 @@ export class DaemonManager {
     if (!record) return "none";
     const cmd = await this.#deps.adapter.commandLineOf(record.pid);
     if (cmd === null) return "stale";
-    return cmd.includes(record.marker) && cmd.includes(`--bind=${record.bind}`)
-      ? "managed"
-      : "stale";
+    return this.#recordMatches(record, cmd) ? "managed" : "stale";
+  }
+
+  /**
+   * Kinds for stop/status: broker/gateway always, plus the tunnel when it was
+   * requested or a manager record for it exists (records outlive flags).
+   */
+  #lifecycleKinds(): DaemonKind[] {
+    const kinds: DaemonKind[] = ["broker", "gateway"];
+    if (
+      this.#deps.config.withTunnel ||
+      this.#deps.store.read("tunnel", this.#deps.config.tunnelMetricsBind) !== null
+    ) {
+      kinds.push("tunnel");
+    }
+    return kinds;
   }
 
   async #waitHealthy(kind: DaemonKind): Promise<boolean> {
@@ -121,7 +153,8 @@ export class DaemonManager {
       return { ok: false, lines };
     }
 
-    for (const kind of KIND_ORDER) {
+    const kinds = this.#deps.config.withTunnel ? TUNNEL_ORDER : KIND_ORDER;
+    for (const kind of kinds) {
       const bind = this.#bind(kind);
       const healthy = await this.#deps.probe(kind);
       if (healthy) {
@@ -139,31 +172,49 @@ export class DaemonManager {
       }
 
       const env: Record<string, string> = {};
-      const args =
-        kind === "broker"
-          ? ["auth-broker", "serve", `--bind=${bind}`]
-          : [
-              "auth-gateway",
-              "serve",
-              `--bind=${bind}`,
-              `--clients=${this.#deps.config.clientsPath}`,
-              // Matches the legacy manager: the loopback gateway may sit
-              // behind a local Cloudflare tunnel terminator.
-              "--trust-proxy-headers",
-            ];
-      if (kind === "gateway") {
-        env.OMP_AUTH_BROKER_URL = bindToBaseUrl(this.#deps.config.brokerBind);
-        const brokerToken = this.#deps.readBrokerToken();
-        if (brokerToken) env.OMP_AUTH_BROKER_TOKEN = brokerToken;
+      let pid: number;
+      if (kind === "tunnel") {
+        const exe =
+          (await this.#deps.adapter.resolveCloudflaredPath(this.#deps.config.cloudflaredBin)) ??
+          this.#deps.config.cloudflaredBin;
+        // Note the --flag=value forms: the pid record re-verifies --config=.
+        pid = await this.#deps.adapter.launchExe(
+          exe,
+          [
+            "tunnel",
+            `--config=${this.#deps.config.tunnelConfigPath}`,
+            `--metrics=${this.#deps.config.tunnelMetricsBind}`,
+            "run",
+          ],
+          env,
+        );
+      } else {
+        const args =
+          kind === "broker"
+            ? ["auth-broker", "serve", `--bind=${bind}`]
+            : [
+                "auth-gateway",
+                "serve",
+                `--bind=${bind}`,
+                `--clients=${this.#deps.config.clientsPath}`,
+                // Matches the legacy manager: the loopback gateway may sit
+                // behind a local Cloudflare tunnel terminator.
+                "--trust-proxy-headers",
+              ];
+        if (kind === "gateway") {
+          env.OMP_AUTH_BROKER_URL = bindToBaseUrl(this.#deps.config.brokerBind);
+          const brokerToken = this.#deps.readBrokerToken();
+          if (brokerToken) env.OMP_AUTH_BROKER_TOKEN = brokerToken;
+        }
+        pid = await this.#deps.adapter.launch(args, env);
       }
-
-      const pid = await this.#deps.adapter.launch(args, env);
       this.#deps.store.write({
         kind,
         pid,
         bind,
         startedAtMs: (this.#deps.now ?? Date.now)(),
         marker: this.#marker(kind),
+        match: this.#match(kind),
       });
       if (await this.#waitHealthy(kind)) lines.push(`${kind}: started pid=${pid} on ${bind}`);
       else {
@@ -179,7 +230,7 @@ export class DaemonManager {
   async stop(): Promise<DaemonActionResult> {
     const lines: string[] = [];
     let ok = true;
-    for (const kind of [...KIND_ORDER].reverse()) {
+    for (const kind of this.#lifecycleKinds().reverse()) {
       const bind = this.#bind(kind);
       const record = this.#deps.store.read(kind, bind);
       if (!record) {
@@ -197,7 +248,7 @@ export class DaemonManager {
         lines.push(`${kind}: stale record for pid=${record.pid} removed (process is gone)`);
         continue;
       }
-      if (!cmd.includes(record.marker) || !cmd.includes(`--bind=${record.bind}`)) {
+      if (!this.#recordMatches(record, cmd)) {
         lines.push(
           `${kind}: pid=${record.pid} command line does not match the record; refusing to stop it`,
         );
@@ -219,7 +270,7 @@ export class DaemonManager {
 
   async status(): Promise<DaemonActionResult> {
     const lines: string[] = [];
-    for (const kind of KIND_ORDER) {
+    for (const kind of this.#lifecycleKinds()) {
       const bind = this.#bind(kind);
       const healthy = await this.#deps.probe(kind);
       const state = await this.#recordState(kind);

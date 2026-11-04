@@ -17,13 +17,17 @@ function adapter(over: Partial<Record<string, string | null>> = {}): OmpAdapter 
     listOmpProcesses: async () => [],
     commandLineOf: async () => null,
     kill: async () => {},
+    resolveCloudflaredPath: async () => over.cloudflared ?? null,
+    runCloudflaredText: async () => "cloudflared version 2026.10.7",
+    launchExe: async () => 1,
   };
 }
 
-function client(): BrokerClient {
+function client(over: { tunnelHealth?: boolean } = {}): BrokerClient {
   return {
     brokerHealth: async () => true,
     gatewayHealth: async () => true,
+    tunnelHealth: async () => over.tunnelHealth ?? false,
     getSnapshot: async () => [],
     getCredentialCheck: async () => [],
     getUsage: async () => [],
@@ -50,5 +54,21 @@ describe("runDoctorChecks", () => {
     );
     expect(report.passed).toBe(false);
     expect(report.checks.find((c) => c.id === "omp-binary")?.status).toBe("fail");
+  });
+  test("tunnel checks only run when requested", async () => {
+    const plain = await runDoctorChecks({ adapter: adapter(), client: client(), config }, true);
+    expect(plain.checks.find((c) => c.id === "tunnel")?.status).toBe("pass");
+
+    const tunnelConfig = parseGatewayCtlConfig(
+      ["doctor", "--with-tunnel", "--tunnel-config=C:/missing/config.yml"],
+      {},
+      "C:/home/tester",
+    );
+    const missing = await runDoctorChecks(
+      { adapter: adapter(), client: client(), config: tunnelConfig },
+      false,
+    );
+    expect(missing.passed).toBe(false);
+    expect(missing.checks.find((c) => c.id === "tunnel-binary")?.status).toBe("fail");
   });
 });

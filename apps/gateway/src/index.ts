@@ -90,7 +90,11 @@ async function main(): Promise<void> {
         adapter,
         store: createFileRecordStore(config.runDir),
         probe: (kind: DaemonKind) =>
-          kind === "broker" ? client.brokerHealth() : client.gatewayHealth(),
+          kind === "broker"
+            ? client.brokerHealth()
+            : kind === "gateway"
+              ? client.gatewayHealth()
+              : client.tunnelHealth(),
         runDoctor: () => runDoctorChecks(doctorDeps, false),
         readBrokerToken: () => client.readBrokerToken(),
         config,
@@ -159,8 +163,13 @@ async function main(): Promise<void> {
         generateClientRecipe(platform, {
           domain: "",
           gatewayToken: "omp_gw_<your-client-token>",
-          baseUrl: bindToBaseUrl(config.gatewayBind),
-          ...(platform === "codex" ? { model: "google-antigravity/claude-sonnet-4-6" } : {}),
+          baseUrl: config.baseUrl ?? bindToBaseUrl(config.gatewayBind),
+          ...(platform === "codex" && !config.recipeModel
+            ? { model: "google-antigravity/claude-sonnet-4-6" }
+            : {}),
+          ...(config.recipeModel ? { model: config.recipeModel } : {}),
+          ...(config.cfClientId ? { cfClientId: config.cfClientId } : {}),
+          ...(config.cfClientSecret ? { cfClientSecret: config.cfClientSecret } : {}),
         }),
       );
       print(
