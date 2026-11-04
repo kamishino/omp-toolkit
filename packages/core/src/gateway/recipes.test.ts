@@ -127,6 +127,21 @@ describe("generateClientRecipe", () => {
     expect(dsh).toContain("id: llm-pi-ai");
     expect(dsh).toContain("api: openai-completions");
     expect(dsh).toContain("provider: omp-gateway");
+    expect(dsh).not.toContain("CF-Access-Client-Id");
+  });
+
+  test("dsh recipe carries Cloudflare Access headers for remote use", () => {
+    const snippet = generateClientRecipe("dsh", {
+      domain: "gw.example.com",
+      gatewayToken: "tok123",
+      baseUrl: "https://gw.example.com",
+      cfClientId: "id.access",
+      cfClientSecret: "s3cret",
+    }).snippet;
+    expect(snippet).toContain("baseURL: https://gw.example.com/v1");
+    expect(snippet).toContain("headers:");
+    expect(snippet).toContain("CF-Access-Client-Id: id.access");
+    expect(snippet).toContain("CF-Access-Client-Secret: s3cret");
   });
 
   test("baseUrl overrides the https domain in curl recipes", () => {
