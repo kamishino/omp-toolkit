@@ -18,6 +18,7 @@ export interface BrokerClient {
   brokerHealth(): Promise<boolean>;
   gatewayHealth(): Promise<boolean>;
   tunnelHealth(): Promise<boolean>;
+  getModels(): Promise<string[]>;
   getSnapshot(): Promise<SnapshotEntryLike[]>;
   getCredentialCheck(): Promise<CredentialCheckLike[]>;
   getUsage(): Promise<UsageReportLike[]>;
@@ -120,6 +121,14 @@ export function createBrokerClient(
     brokerHealth: () => health(`${brokerBase}/v1/healthz`),
     gatewayHealth: () => health(`${gatewayBase}/healthz`),
     tunnelHealth: () => tunnelHealth(`${tunnelMetrics}/metrics`),
+    async getModels(): Promise<string[]> {
+      const data = (await getJson(`${gatewayBase}/v1/models`, config.gatewayTokenPath)) as {
+        data?: { id?: unknown }[];
+      };
+      return (data.data ?? [])
+        .map((m) => m.id)
+        .filter((id): id is string => typeof id === "string");
+    },
     async getSnapshot(): Promise<SnapshotEntryLike[]> {
       const data = (await getJson(`${brokerBase}/v1/snapshot`, config.brokerTokenPath)) as {
         credentials?: SnapshotEntryLike[];

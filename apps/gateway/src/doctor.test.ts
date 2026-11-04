@@ -28,6 +28,7 @@ function client(over: { tunnelHealth?: boolean } = {}): BrokerClient {
     brokerHealth: async () => true,
     gatewayHealth: async () => true,
     tunnelHealth: async () => over.tunnelHealth ?? false,
+    getModels: async () => [],
     getSnapshot: async () => [],
     getCredentialCheck: async () => [],
     getUsage: async () => [],

@@ -30,3 +30,17 @@ describe("tunnelHealth", () => {
     expect(await client.tunnelHealth()).toBe(false);
   });
 });
+
+describe("getModels", () => {
+  test("returns served model ids, skipping malformed entries", async () => {
+    const client = createBrokerClient(CONFIG, {
+      fetchFn: stubFetch(
+        async () =>
+          new Response(JSON.stringify({ data: [{ id: "p/a" }, { id: 7 }, {}, { id: "p/b" }] }), {
+            headers: { "Content-Type": "application/json" },
+          }),
+      ),
+    });
+    expect(await client.getModels()).toEqual(["p/a", "p/b"]);
+  });
+});
