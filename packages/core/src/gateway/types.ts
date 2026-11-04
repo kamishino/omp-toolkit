@@ -36,3 +36,13 @@ export interface RecipeOptions {
   /** Full gateway base URL (e.g. http://127.0.0.1:4000). Overrides https://<domain>. */
   baseUrl?: string;
 }
+
+/** Resolved per-recipe inputs: defaults applied, one value per field. */
+export interface RecipeContext {
+  base: string;
+  gatewayToken: string;
+  model: string;
+  cfClientId?: string;
+  cfClientSecret?: string;
+  hasCfAccess: boolean;
+}
