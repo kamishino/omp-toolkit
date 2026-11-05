@@ -5,6 +5,19 @@
 A credential identity within a provider, identified by email, account id, or
 project id.
 
+## Account order
+
+The ordering of accounts inside one provider section. `weekly-reset` places the
+account whose weekly window resets soonest first and expired windows last;
+`weekly-usage` places the most-used account first. Route severity always
+outranks the configured order.
+
+## Locally authenticated provider
+
+A provider for which this Machine holds a live credential. A provider reported
+only from cached history on a Machine with no credential for it is not locally
+authenticated, and its section is hidden.
+
 ## Provider
 
 An upstream model service registered in OMP, such as Google Antigravity,

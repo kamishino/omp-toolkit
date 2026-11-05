@@ -163,7 +163,7 @@ bun run monitor
 
 Runs the installed monitor (falls back to `dist` or source in a checkout) with
 `--watch --health --interval=300`. Options: `--interval=<seconds>`,
-`--no-health`, `--no-alt-screen`.
+`--no-health`, `--no-alt-screen`, `--sort=weekly-reset|weekly-usage`.
 
 `--no-alt-screen` appends frames instead of using the alternate screen. The
 monitor also falls back automatically when `TERM=dumb` or stdout is not a TTY.

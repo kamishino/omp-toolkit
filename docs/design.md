@@ -44,7 +44,9 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
 - Each usage window: 24 characters = 10-character bar + 6-character percent +
   6-character reset.
 - Rows are sorted by route severity first (`HANG`/`ERR`, `AUTH`/`MODEL`, `OK`),
-  then by highest selected usage.
+  then by the configured account order: `weekly-reset` (default, soonest weekly
+  reset first, expired resets last) or `weekly-usage` (highest selected usage
+  first). Equal keys fall back to the next usage metric, then account name.
 - Summary: provider count, account count, >=80% count, maxed count, and the
   tightest provider:account.
 - Provider sections are separated by a full-width rule.
@@ -76,7 +78,7 @@ remain readable. Status is never color-only: `OK`, `HANG`, `AUTH`, `MODEL`, and
   - Header: title `OMP PROVIDER USAGE`, status subtitle (`updated HH:mm`, `Refreshing...`, or `Refresh failed`), Refresh (`mdiRefresh`), Minimize (`mdiWindowMinimize`), and Close (`mdiClose`) vector icon buttons from Material Design Icons (`@mdi/js`).
   - Summary: provider count, account count, >=80% count, maxed count, tightest provider:account.
   - Content: scrollable container holding cards per provider section.
-  - Provider cards: each card features a 24 px provider logo slot before the title. Google Antigravity (Gemini mark), OpenAI, and DeepSeek display vendored vector marks from `@lobehub/icons-static-svg` (`assets/providers/SOURCES.md`); OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays `muse-code.svg`.
+  - Provider cards: each card features a 24 px provider logo slot before the title. Google Antigravity (Gemini mark), OpenAI, and DeepSeek display vendored vector marks from `@lobehub/icons-static-svg` (`assets/providers/SOURCES.md`); OpenAI automatically swaps `openai-light.svg` on light themes and `openai-dark.svg` on dark themes; Muse Code displays `muse-code.svg`. A provider with no local OMP credential is omitted, so a Machine never shows another Machine's cached accounts.
   - Table: `ACCOUNT` (26%), `ROUTE` (12%), and provider limit columns. Account cell colored by row severity.
   - Route cell: text badge (`OK`, `HANG`, `AUTH`, `MODEL`, `ERR`, `—`) with semantic color.
   - Limits: progress bar (`<progress>` with `currentColor` value) + numeric percentage + reset countdown; DeepSeek displays currency amount with red `LOW` label.

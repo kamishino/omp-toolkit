@@ -289,6 +289,11 @@ flowchart TD
 - Probe `401/403` invalidates the token cache.
 - The usage monitor watch loop survives `omp usage` failures and keeps the last
   frame until the next successful read.
+- Provider sections are scoped to this Machine's credentials: reports for OAuth
+  providers absent from `omp usage accounts`, and cached ("carried") reports
+  without a local credential, are dropped before compilation. API-key providers
+  (DeepSeek) are kept. When the account lookup fails, only cached reports are
+  pruned.
 - The desktop widget never probes a model; it spawns the installed monitor CLI and renders its versioned JSON.
 - The desktop renderer is local-only, sandboxed, with context isolation and CSP blocking all network access.
 

@@ -86,7 +86,7 @@ Run `monitor` and `desktop` commands from the checkout (`~/.omp/omp-toolkit` aft
 | Desktop shortcut | `bun run desktop:shortcut` |
 | Orca floating tab | `bun run monitor:orca` (`Ctrl+Alt+A` / `Cmd+Alt+A`) |
 
-`--no-health` hides the route column; `--no-alt-screen` keeps output in the scrollback; in watch mode `Tab` switches between usage and schedule.
+`--no-health` hides the route column; `--no-alt-screen` keeps output in the scrollback; `--sort=weekly-reset|weekly-usage` picks the account order (soonest weekly reset by default); in watch mode `Tab` switches between usage and schedule.
 
 Inside OMP:
 
@@ -107,6 +107,7 @@ Inside OMP:
 | `DEEPSEEK_BALANCE_ALERT_CNY` | Low-balance threshold, CNY | `10` |
 | `DEEPSEEK_BALANCE_ALERT_USD` | Low-balance threshold, USD | `10` |
 | `OMP_BIN` | OMP executable name or path | `omp` |
+| `OMP_ACCOUNT_SORT` | Account order per provider: `weekly-reset` or `weekly-usage` | `weekly-reset` |
 | `OMP_TOOLKIT_HOME` | Checkout used by installers and templates | `~/.omp/omp-toolkit` |
 | `PI_CODING_AGENT_DIR` | OMP state directory | `~/.omp/agent` |
 | `OMP_TOOLKIT_HISTORY_DB` | Override the SQLite history file | `<agentDir>/omp-toolkit-history.db` |

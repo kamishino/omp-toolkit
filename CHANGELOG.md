@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add account ordering per provider section: `weekly-reset` (default, soonest weekly reset first) and `weekly-usage`, selectable in Desktop Settings and via `--sort` / `OMP_ACCOUNT_SORT`.
+- Hide provider sections with no local OMP credential on this machine, so secondary PCs no longer show cached usage from accounts they are not signed in to; API-key providers such as DeepSeek stay visible.
+
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 
 - Add the Auth Gateway for secondary PCs: daemon manager, scoped client tokens with SHA-256 hashing and revocation, Cloudflare Tunnel templates, gateway doctor probe, `/gateway` slash command, desktop status indicator, and client onboarding bundles.
