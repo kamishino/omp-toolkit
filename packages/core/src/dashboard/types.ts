@@ -3,6 +3,21 @@ import type { WindowEvaluation } from "../schedule";
 import type { BalanceAlertThresholds } from "../settings";
 import type { HealthIncident, Status } from "../types";
 export type UsageLevel = "ok" | "warn" | "hot" | "critical" | "unknown";
+
+export const ACCOUNT_SORT_ORDERS = ["weekly-reset", "weekly-usage"] as const;
+
+/**
+ * Account ordering inside a provider section.
+ * - `weekly-reset`: soonest weekly reset first (default).
+ * - `weekly-usage`: highest quota usage first.
+ */
+export type AccountSortOrder = (typeof ACCOUNT_SORT_ORDERS)[number];
+
+export function isAccountSortOrder(value: unknown): value is AccountSortOrder {
+  return typeof value === "string" && (ACCOUNT_SORT_ORDERS as readonly string[]).includes(value);
+}
+
+export const DEFAULT_ACCOUNT_SORT_ORDER: AccountSortOrder = "weekly-reset";
 export type RouteText = "OK" | "HANG" | "AUTH" | "MODEL" | "ERR" | "—";
 export const DASHBOARD_SCHEMA_VERSION = 2 as const;
 
@@ -103,4 +118,5 @@ export interface AssembleDashboardOptions {
   staleMinutes?: number;
   balanceAlert?: BalanceAlertThresholds;
   userTimeZone?: string;
+  accountSort?: AccountSortOrder;
 }

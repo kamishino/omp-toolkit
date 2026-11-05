@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseHealthSnapshot, parseRawUsage, UsageDataSource } from "./data-source";
+import type { UsageReport } from "./types";
 
 describe("UsageDataSource ports & adapters", () => {
   test("parseRawUsage extracts reports array from valid JSON", () => {
@@ -99,5 +100,75 @@ describe("UsageDataSource ports & adapters", () => {
     expect(dashboard.providers.length).toBe(1);
     expect(dashboard.providers[0].name).toBe("GOOGLE ANTIGRAVITY");
     expect(dashboard.health?.checkedAt).toBe(1_700_000_000_000);
+  });
+
+  test("fetchAuthenticatedProviders parses provider ids and degrades to undefined", async () => {
+    const source = new UsageDataSource({
+      execFile: async () => ({
+        stdout: JSON.stringify({
+          accounts: [{ provider: "muse-code" }, { provider: "google-antigravity" }],
+        }),
+      }),
+      readFile: () => "",
+    });
+    const providers = await source.fetchAuthenticatedProviders();
+    expect([...(providers ?? [])].sort()).toEqual(["google-antigravity", "muse-code"]);
+
+    const failing = new UsageDataSource({
+      execFile: async () => {
+        throw new Error("omp usage accounts failed");
+      },
+      readFile: () => "",
+    });
+    expect(await failing.fetchAuthenticatedProviders()).toBeUndefined();
+  });
+
+  test("fetchDashboard hides ghost OAuth providers but keeps API-key providers", async () => {
+    const ghostMuse: UsageReport = {
+      provider: "muse-code",
+      metadata: { email: "muse@example.com" },
+      limits: [
+        {
+          id: "1w",
+          label: "Weekly",
+          window: { label: "Weekly", resetsAt: 1_800_000_000_000 },
+          amount: { usedFraction: 0.99 },
+          notes: ["Carried from the last reported usage; later usage not visible"],
+        },
+      ],
+    };
+    const antigravity: UsageReport = {
+      provider: "google-antigravity",
+      metadata: { email: "agy@example.com" },
+      limits: [{ id: "gemini-weekly", label: "Gemini", amount: { usedFraction: 0.2 } }],
+    };
+    const deepseek: UsageReport = {
+      provider: "deepseek",
+      metadata: {
+        accountId: "api_key",
+        balance: { currency: "CNY", total: 24.1, available: true },
+      },
+      limits: [
+        {
+          id: "deepseek:balance",
+          label: "Balance",
+          amount: { remaining: 24.1, unit: "cny" },
+        },
+      ],
+    };
+
+    const source = new UsageDataSource({
+      execFile: async (_file, args) =>
+        args.includes("accounts")
+          ? { stdout: JSON.stringify({ accounts: [{ provider: "google-antigravity" }] }) }
+          : { stdout: JSON.stringify({ reports: [antigravity, deepseek, ghostMuse] }) },
+      readFile: () => "",
+    });
+
+    const dashboard = await source.fetchDashboard();
+    expect(dashboard.providers.map((provider) => provider.id)).toEqual([
+      "google-antigravity",
+      "deepseek",
+    ]);
   });
 });

@@ -446,3 +446,77 @@ describe("isDashboard validator", () => {
     }
   });
 });
+
+describe("account sort ordering", () => {
+  const now = 1_700_000_000_000;
+  const hour = 3_600_000;
+  const day = 86_400_000;
+
+  function weeklyReport(email: string, resetsAt: number, usedFraction: number): UsageReport {
+    return {
+      provider: "muse-code",
+      metadata: { email },
+      limits: [
+        {
+          label: "Weekly",
+          window: { label: "Weekly", resetsAt },
+          amount: { usedFraction },
+        },
+      ],
+    };
+  }
+
+  const reports: UsageReport[] = [
+    weeklyReport("far@example.com", now + 4 * day, 0.1),
+    weeklyReport("soon@example.com", now + 2 * hour, 0.2),
+    weeklyReport("mid@example.com", now + 1 * day, 0.9),
+    weeklyReport("expired@example.com", now - hour, 0.5),
+  ];
+
+  function rowAccounts(accountSort?: "weekly-reset" | "weekly-usage"): string[] {
+    const dashboard = DashboardEngine.compile(reports, null, { now, accountSort });
+    return (dashboard.providers[0]?.rows ?? []).map((row) => row.account);
+  }
+
+  test("weekly-reset orders accounts by soonest weekly reset, expired last", () => {
+    expect(rowAccounts("weekly-reset")).toEqual([
+      "soon@example.com",
+      "mid@example.com",
+      "far@example.com",
+      "expired@example.com",
+    ]);
+  });
+
+  test("weekly-reset is the default order", () => {
+    expect(rowAccounts()).toEqual([
+      "soon@example.com",
+      "mid@example.com",
+      "far@example.com",
+      "expired@example.com",
+    ]);
+  });
+
+  test("weekly-usage orders accounts by highest quota usage", () => {
+    expect(rowAccounts("weekly-usage")).toEqual([
+      "mid@example.com",
+      "expired@example.com",
+      "soon@example.com",
+      "far@example.com",
+    ]);
+  });
+
+  test("unhealthy routes stay first under both sort orders", () => {
+    const snapshot: HealthSnapshot = {
+      checkedAt: now,
+      results: [{ email: "far@example.com", status: "hang", ms: 15_000 }],
+    };
+    for (const accountSort of ["weekly-reset", "weekly-usage"] as const) {
+      const dashboard = DashboardEngine.compile(reports, snapshot, {
+        now,
+        accountSort,
+        showHealth: true,
+      });
+      expect(dashboard.providers[0]?.rows[0]?.account).toBe("far@example.com");
+    }
+  });
+});

@@ -1,3 +1,4 @@
+import type { AccountSortOrder } from "./dashboard/types";
 import type {
   HealthResult,
   ProviderRow,
@@ -110,27 +111,82 @@ function healthRank(row: ProviderRow): number {
   }
 }
 
+export interface RowSortOptions {
+  sortOrder?: AccountSortOrder;
+  now?: number;
+}
+
+interface SortableRow {
+  row: ProviderRow;
+  timeToReset: number;
+}
+
+function compareAscending(a: number, b: number): number {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
+/**
+ * Weekly limit for a report: the column labelled "weekly" when present,
+ * otherwise the first limit carrying a `window.resetsAt`.
+ */
+function weeklyResetAt(
+  report: UsageReport,
+  weeklyCol: UsageColumn | undefined,
+): number | undefined {
+  const weekly = weeklyCol ? limitFor(report, weeklyCol) : undefined;
+  const weeklyResetsAt = weekly?.window?.resetsAt;
+  if (typeof weeklyResetsAt === "number" && Number.isFinite(weeklyResetsAt)) return weeklyResetsAt;
+  for (const limit of report.limits ?? []) {
+    const resetsAt = limit.window?.resetsAt;
+    if (typeof resetsAt === "number" && Number.isFinite(resetsAt)) return resetsAt;
+  }
+  return undefined;
+}
+
+function compareWeeklyReset(a: SortableRow, b: SortableRow): number {
+  return (
+    compareAscending(a.timeToReset, b.timeToReset) ||
+    (b.row.primary ?? b.row.max) - (a.row.primary ?? a.row.max) ||
+    a.row.account.localeCompare(b.row.account)
+  );
+}
+
+function compareWeeklyUsage(a: SortableRow, b: SortableRow): number {
+  return (
+    (b.row.primary ?? b.row.max) - (a.row.primary ?? a.row.max) ||
+    (b.row.secondary ?? b.row.max) - (a.row.secondary ?? a.row.max) ||
+    b.row.max - a.row.max ||
+    a.row.account.localeCompare(b.row.account)
+  );
+}
+
 function rowsFor(
   reports: UsageReport[],
   columns: UsageColumn[],
   health: Map<string, HealthResult>,
+  options: RowSortOptions = {},
 ): ProviderRow[] {
   const weeklyCol = columns.find((c) => c.label.toLowerCase() === "weekly");
+  const now = options.now ?? Date.now();
+  const sortOrder = options.sortOrder ?? "weekly-reset";
 
-  return reports
-    .map((report) => {
-      const account = accountName(report);
-      const selected = columns
-        .map((column) => limitFor(report, column))
-        .filter((limit): limit is UsageLimit => !!limit);
-      const source = selected.length > 0 ? selected : (report.limits ?? []);
-      const max = Math.max(0, ...source.map((limit) => usedPercent(limit) ?? 0));
-      const weeklyLimit = weeklyCol ? limitFor(report, weeklyCol) : undefined;
-      const weeklyUsed = weeklyLimit ? usedPercent(weeklyLimit) : undefined;
-      const firstUsed = selected[0] ? (usedPercent(selected[0]) ?? 0) : max;
-      const primary = weeklyUsed !== undefined ? weeklyUsed : firstUsed;
-      const secondary = weeklyUsed !== undefined ? firstUsed : max;
-      return {
+  const sortable: SortableRow[] = reports.map((report) => {
+    const account = accountName(report);
+    const selected = columns
+      .map((column) => limitFor(report, column))
+      .filter((limit): limit is UsageLimit => !!limit);
+    const source = selected.length > 0 ? selected : (report.limits ?? []);
+    const max = Math.max(0, ...source.map((limit) => usedPercent(limit) ?? 0));
+    const weeklyLimit = weeklyCol ? limitFor(report, weeklyCol) : undefined;
+    const weeklyUsed = weeklyLimit ? usedPercent(weeklyLimit) : undefined;
+    const firstUsed = selected[0] ? (usedPercent(selected[0]) ?? 0) : max;
+    const primary = weeklyUsed !== undefined ? weeklyUsed : firstUsed;
+    const secondary = weeklyUsed !== undefined ? firstUsed : max;
+    const resetsAt = weeklyResetAt(report, weeklyCol);
+    return {
+      timeToReset: typeof resetsAt === "number" && resetsAt > now ? resetsAt - now : Infinity,
+      row: {
         report,
         account,
         health:
@@ -141,16 +197,13 @@ function rowsFor(
         max,
         primary,
         secondary,
-      };
-    })
-    .sort(
-      (a, b) =>
-        healthRank(a) - healthRank(b) ||
-        (b.primary ?? b.max) - (a.primary ?? a.max) ||
-        (b.secondary ?? b.max) - (a.secondary ?? a.max) ||
-        b.max - a.max ||
-        a.account.localeCompare(b.account),
-    );
+      },
+    };
+  });
+
+  const compare = sortOrder === "weekly-usage" ? compareWeeklyUsage : compareWeeklyReset;
+  sortable.sort((a, b) => healthRank(a.row) - healthRank(b.row) || compare(a, b));
+  return sortable.map((entry) => entry.row);
 }
 
 function groupReports(reports: UsageReport[]): Map<string, UsageReport[]> {
@@ -166,6 +219,7 @@ function groupReports(reports: UsageReport[]): Map<string, UsageReport[]> {
 export function sectionsFor(
   reports: UsageReport[],
   health: Map<string, HealthResult>,
+  options: RowSortOptions = {},
 ): ProviderSection[] {
   return [...groupReports(reports).entries()].map(([provider, providerReports]) => {
     const columns = columnsFor(provider, providerReports);
@@ -173,7 +227,43 @@ export function sectionsFor(
       provider,
       reports: providerReports,
       columns,
-      rows: rowsFor(providerReports, columns, health),
+      rows: rowsFor(providerReports, columns, health, options),
     };
+  });
+}
+
+/** Providers that authenticate through OAuth credentials (not plain API keys). */
+export const OAUTH_USAGE_PROVIDERS: readonly string[] = [
+  "google-antigravity",
+  "muse-code",
+  "openai-codex",
+];
+
+const CARRIED_NOTE = "Carried from the last reported usage";
+
+/** A report reconstructed from cached history because the live fetch failed. */
+export function isCarriedReport(report: UsageReport): boolean {
+  return (report.limits ?? []).some((limit) =>
+    (limit.notes ?? []).some((note) => note.includes(CARRIED_NOTE)),
+  );
+}
+
+/**
+ * Drops reports that cannot be backed by local credentials on this machine.
+ *
+ * `authenticatedProviders` comes from `omp usage accounts`; `undefined` means
+ * the lookup failed, so only cached "carried" reports are pruned.
+ */
+export function filterActiveReports(
+  reports: UsageReport[],
+  authenticatedProviders?: ReadonlySet<string> | null,
+): UsageReport[] {
+  const authenticated = authenticatedProviders ?? undefined;
+  return reports.filter((report) => {
+    const carried = isCarriedReport(report);
+    if (OAUTH_USAGE_PROVIDERS.includes(report.provider)) {
+      return authenticated ? authenticated.has(report.provider) : !carried;
+    }
+    return !carried || report.metadata?.balance?.available !== false;
   });
 }

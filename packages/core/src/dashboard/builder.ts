@@ -37,7 +37,10 @@ export function assembleDashboard(
   const health = new Map<string, HealthResult>(
     (snapshot?.results ?? []).map((result) => [result.email, result]),
   );
-  const sections = sectionsFor(reports, health);
+  const sections = sectionsFor(reports, health, {
+    sortOrder: options.accountSort,
+    now,
+  });
 
   return buildDashboard(sections, {
     fetchedAt: now,

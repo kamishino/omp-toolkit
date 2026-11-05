@@ -2,6 +2,7 @@ import { type DashboardCompileOptions, DashboardEngine } from "./dashboard/engin
 import type { Dashboard } from "./dashboard/types";
 import { resolveSnapshotPath } from "./environment";
 import type { HealthIncident, HealthSnapshot, UsageReport } from "./types";
+import { filterActiveReports } from "./usage";
 
 export function parseRawUsage(stdout: string): UsageReport[] {
   let parsed: unknown;
@@ -74,6 +75,25 @@ export interface UsageDataSourceOptions {
   env?: Record<string, string | undefined>;
 }
 
+export function parseAuthenticatedProviders(stdout: string): ReadonlySet<string> {
+  const parsed: unknown = JSON.parse(stdout);
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !("accounts" in parsed) ||
+    !Array.isArray(parsed.accounts)
+  ) {
+    throw new Error("omp usage accounts returned an unexpected payload");
+  }
+  const providers = new Set<string>();
+  for (const entry of parsed.accounts) {
+    if (!entry || typeof entry !== "object" || !("provider" in entry)) continue;
+    const provider = entry.provider;
+    if (typeof provider === "string" && provider.length > 0) providers.add(provider);
+  }
+  return providers;
+}
+
 /**
  * Deep Data Acquisition Coordinator.
  *
@@ -102,6 +122,28 @@ export class UsageDataSource {
     return parseRawUsage(String(res.stdout));
   }
 
+  /**
+   * Providers with a live credential on this machine; `undefined` when the
+   * lookup fails so callers prune only cached ("carried") reports.
+   */
+  async fetchAuthenticatedProviders(options?: {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+  }): Promise<ReadonlySet<string> | undefined> {
+    try {
+      const bin = this.options.ompBin || this.options.env?.OMP_BIN || "omp";
+      const res = await this.adapter.execFile(bin, ["usage", "accounts", "--json"], {
+        timeout: options?.timeoutMs ?? 25_000,
+        windowsHide: true,
+        maxBuffer: 2 * 1024 * 1024,
+        signal: options?.signal,
+      });
+      return parseAuthenticatedProviders(String(res.stdout));
+    } catch {
+      return undefined;
+    }
+  }
+
   readSnapshot(): HealthSnapshot | null {
     const snapshotFile = resolveSnapshotPath(
       this.options.agentDir ? { PI_CODING_AGENT_DIR: this.options.agentDir } : this.options.env,
@@ -115,10 +157,15 @@ export class UsageDataSource {
   }
 
   async fetchDashboard(compileOptions?: DashboardCompileOptions): Promise<Dashboard> {
-    const [reports, snapshot] = await Promise.all([
+    const [reports, snapshot, authenticated] = await Promise.all([
       this.fetchReports(),
       Promise.resolve(this.readSnapshot()),
+      this.fetchAuthenticatedProviders(),
     ]);
-    return DashboardEngine.compile(reports, snapshot, compileOptions);
+    return DashboardEngine.compile(
+      filterActiveReports(reports, authenticated),
+      snapshot,
+      compileOptions,
+    );
   }
 }
