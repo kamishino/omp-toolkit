@@ -1,4 +1,9 @@
-import { type BalanceAlertThresholds, DEFAULT_BALANCE_ALERT } from "@omp-toolkit/core";
+import {
+  type AccountSortOrder,
+  type BalanceAlertThresholds,
+  DEFAULT_ACCOUNT_SORT_ORDER,
+  DEFAULT_BALANCE_ALERT,
+} from "@omp-toolkit/core";
 
 export interface MonitorCliConfig {
   schedule: boolean;
@@ -8,6 +13,7 @@ export interface MonitorCliConfig {
   interval: number;
   altScreen: boolean;
   balanceAlert: BalanceAlertThresholds;
+  accountSort: AccountSortOrder;
   unknown: string[];
 }
 
@@ -34,6 +40,17 @@ export function useAlternateScreen(options: AlternateScreenOptions): boolean {
 export function parseThreshold(envValue: string | undefined, fallback: number): number {
   const value = Number(envValue);
   return Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+/** Maps `--sort`/`OMP_ACCOUNT_SORT` values (aliases allowed) to a sort order. */
+export function parseAccountSort(raw: string | undefined): AccountSortOrder {
+  switch (raw?.trim().toLowerCase()) {
+    case "weekly-usage":
+    case "usage":
+      return "weekly-usage";
+    default:
+      return DEFAULT_ACCOUNT_SORT_ORDER;
+  }
 }
 
 /**
@@ -68,6 +85,9 @@ export function parseMonitorCliConfig(
     usd: parseThreshold(env.DEEPSEEK_BALANCE_ALERT_USD, DEFAULT_BALANCE_ALERT.usd),
   };
 
+  const sortArg = argv.find((arg) => arg.startsWith("--sort="));
+  const accountSort = parseAccountSort(sortArg?.slice("--sort=".length) ?? env.OMP_ACCOUNT_SORT);
+
   const knownFlags: Record<string, true> = {
     "--schedule": true,
     "--json": true,
@@ -78,7 +98,11 @@ export function parseMonitorCliConfig(
     "--no-alt-screen": true,
   };
   const unknown = argv.filter(
-    (arg) => arg.startsWith("--") && !arg.startsWith("--interval=") && !knownFlags[arg],
+    (arg) =>
+      arg.startsWith("--") &&
+      !arg.startsWith("--interval=") &&
+      !arg.startsWith("--sort=") &&
+      !knownFlags[arg],
   );
 
   return {
@@ -89,6 +113,7 @@ export function parseMonitorCliConfig(
     interval,
     altScreen,
     balanceAlert,
+    accountSort,
     unknown,
   };
 }

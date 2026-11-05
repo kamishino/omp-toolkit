@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import { promisify } from "node:util";
 import {
+  filterActiveReports,
   type HealthSnapshot,
   UsageDataSource,
   type UsageDataSourceAdapter,
@@ -26,7 +27,11 @@ export const defaultAdapter: UsageDataSourceAdapter = {
 export const defaultDataSource = new UsageDataSource(defaultAdapter);
 
 export async function fetchUsage(): Promise<UsageReport[]> {
-  return defaultDataSource.fetchReports();
+  const [reports, authenticated] = await Promise.all([
+    defaultDataSource.fetchReports(),
+    defaultDataSource.fetchAuthenticatedProviders(),
+  ]);
+  return filterActiveReports(reports, authenticated);
 }
 
 export function readSnapshot(): HealthSnapshot | null {

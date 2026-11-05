@@ -46,6 +46,21 @@ describe("parseMonitorCliConfig", () => {
     expect(config.balanceAlert.cny).toBe(25.5);
     expect(config.balanceAlert.usd).toBe(5.0);
   });
+
+  test("defaults accountSort to weekly-reset and parses --sort with aliases", () => {
+    expect(parseMonitorCliConfig([], {}).accountSort).toBe("weekly-reset");
+    expect(parseMonitorCliConfig(["--sort=weekly-usage"], {}).accountSort).toBe("weekly-usage");
+    expect(parseMonitorCliConfig(["--sort=usage"], {}).accountSort).toBe("weekly-usage");
+    expect(parseMonitorCliConfig(["--sort=reset"], {}).accountSort).toBe("weekly-reset");
+    expect(parseMonitorCliConfig(["--sort=bogus"], {}).accountSort).toBe("weekly-reset");
+  });
+
+  test("reads accountSort from OMP_ACCOUNT_SORT and flags it as a known argument", () => {
+    expect(parseMonitorCliConfig([], { OMP_ACCOUNT_SORT: "weekly-usage" }).accountSort).toBe(
+      "weekly-usage",
+    );
+    expect(parseMonitorCliConfig(["--sort=weekly-usage"], {}).unknown).toEqual([]);
+  });
 });
 
 describe("parseThreshold", () => {

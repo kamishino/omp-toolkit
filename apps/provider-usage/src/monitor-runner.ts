@@ -72,6 +72,7 @@ export class MonitorRunner {
     const dashboard = DashboardEngine.compile(reports, snapshot, {
       showHealth: config.health,
       balanceAlert: config.balanceAlert,
+      accountSort: config.accountSort,
     });
     if (config.json) {
       const payload = jsonPayload(dashboard, {

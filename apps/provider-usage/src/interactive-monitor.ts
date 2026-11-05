@@ -157,6 +157,7 @@ export class InteractiveMonitor {
           now,
           showHealth: this.config.health,
           balanceAlert: this.config.balanceAlert,
+          accountSort: this.config.accountSort,
         });
         drawProviderUsage(frame, dashboard, {
           interval: this.config.interval,
