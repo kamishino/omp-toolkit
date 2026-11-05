@@ -228,4 +228,53 @@ describe("renderer panel", () => {
     const empty = findByClass(panel, "empty-message");
     expect(empty?.textContent).toContain("No providers");
   });
+
+  test("header renders interactive summary metric chips for active dashboard", async () => {
+    mockDoc();
+    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
+    const { buildPanel } = await import("./renderer");
+    const panel = buildPanel({
+      status: "ready",
+      data: dashboardWith({
+        providers: [
+          {
+            id: "google-antigravity",
+            name: "GOOGLE ANTIGRAVITY",
+            suffix: "",
+            accounts: 2,
+            columns: [],
+            rows: [
+              {
+                account: "a@x.com",
+                displayAccount: "a",
+                health: "ok",
+                maxUsed: 0.1,
+                level: "ok",
+                route: { text: "OK", level: "ok" },
+                limits: [],
+              },
+              {
+                account: "b@x.com",
+                displayAccount: "b",
+                health: "hang",
+                maxUsed: 0.9,
+                level: "hot",
+                route: { text: "HANG", level: "danger" },
+                limits: [],
+              },
+            ],
+          },
+        ],
+      }),
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+    } as never) as unknown as MockNode;
+
+    const chips = findByClass(panel, "summary-chips");
+    expect(chips).toBeDefined();
+    expect(chips?.attributes.role).toBe("toolbar");
+    const metricChips = chips?.children.filter((c) => c.className?.includes("metric-chip")) ?? [];
+    expect(metricChips.length).toBe(4);
+  });
 });

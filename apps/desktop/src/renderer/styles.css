@@ -1028,3 +1028,233 @@ progress::-webkit-progress-value {
     animation: none;
   }
 }
+
+/* ── Interactive Metric Filter Chips ─────────────────────────────── */
+.summary-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  padding-top: var(--space-xs);
+}
+
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 3px var(--space-sm);
+  border: var(--size-border) solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+  user-select: none;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 120ms ease;
+}
+
+.metric-chip:hover {
+  border-color: var(--color-accent);
+}
+
+.metric-chip.active {
+  background-color: var(--color-surface-raised);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.chip-dot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+
+.chip-dot.dot-all {
+  background-color: var(--color-muted);
+}
+
+.chip-dot.dot-ok {
+  background-color: var(--color-ok);
+}
+
+.chip-dot.dot-warn {
+  background-color: var(--color-warn);
+}
+
+.chip-dot.dot-danger {
+  background-color: var(--color-danger);
+}
+
+.chip-count {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  opacity: 0.85;
+}
+
+/* ── Collapsible Provider Cards ──────────────────────────────────── */
+.card-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  flex: none;
+  border-radius: var(--radius-sm);
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.card-toggle-btn:hover {
+  color: var(--color-text);
+  background-color: var(--color-surface-raised);
+}
+
+.card-toggle-btn svg {
+  inline-size: 16px;
+  block-size: 16px;
+  fill: currentColor;
+  transition: transform 160ms ease;
+}
+
+.card-collapsed .table,
+.card-collapsed .provider-action {
+  display: none;
+}
+
+.collapsed-preview {
+  display: none;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-inline-start: auto;
+}
+
+.card-collapsed .collapsed-preview {
+  display: inline-flex;
+}
+
+.collapsed-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: 1px var(--space-xs);
+  border-radius: var(--radius-pill);
+  border: var(--size-border) solid var(--color-border);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.collapsed-badge.badge-ok {
+  color: var(--color-ok);
+  border-color: var(--color-ok);
+}
+
+.collapsed-badge.badge-warn {
+  color: var(--color-warn);
+  border-color: var(--color-warn);
+}
+
+.collapsed-badge.badge-hot {
+  color: var(--color-hot);
+  border-color: var(--color-hot);
+}
+
+.collapsed-badge.badge-danger {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* ── Interactive Account Micro-Actions ────────────────────────────── */
+.account.account-clickable {
+  cursor: pointer;
+  transition: color 140ms ease;
+  position: relative;
+  user-select: none;
+}
+
+.account.account-clickable:hover {
+  color: var(--color-accent);
+}
+
+.account-copy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 14px;
+  block-size: 14px;
+  margin-inline-start: var(--space-xs);
+  opacity: 0;
+  vertical-align: middle;
+  transition: opacity 140ms ease;
+}
+
+.account.account-clickable:hover .account-copy-icon {
+  opacity: 0.6;
+}
+
+.account-copy-icon svg {
+  inline-size: 12px;
+  block-size: 12px;
+  fill: currentColor;
+}
+
+.account-copied-tag {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-ok);
+  margin-inline-start: var(--space-xs);
+}
+
+.route.route-clickable {
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.route.route-clickable:hover {
+  transform: scale(1.05);
+  outline: var(--size-border) solid var(--color-accent);
+}
+
+.route.route-probing {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ── Empty Filter State ───────────────────────────────────────────── */
+.empty-filter-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+  background-color: var(--color-surface);
+  border: var(--size-border) dashed var(--color-border);
+  border-radius: var(--radius-md);
+  gap: var(--space-sm);
+}
+
+.empty-filter-title {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-muted);
+}

@@ -1,9 +1,9 @@
 import { mdiClose, mdiCog, mdiRefresh, mdiWindowMinimize } from "@mdi/js";
-import { formatAge, summaryText } from "@omp-toolkit/core";
+import { type DashboardRow, formatAge } from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
 import { UNKNOWN_GATEWAY_PANEL_VIEW } from "../ipc";
 import { DEFAULT_DESKTOP_SETTINGS, type DesktopSettings } from "../settings";
-import { renderProviderCard } from "./card";
+import { type FilterScope, renderProviderCard } from "./card";
 import { icon } from "./icon";
 import { renderSettingsView, type SettingsViewController } from "./settings-view";
 import { themeManager } from "./tokens";
@@ -11,6 +11,7 @@ import { themeManager } from "./tokens";
 themeManager.init();
 
 let activeTab: "dashboard" | "settings" = "dashboard";
+let activeFilter: FilterScope = "all";
 let activeSettingsController: SettingsViewController | null = null;
 let toastMessage: string | null = null;
 let toastTimer: number | null = null;
@@ -133,6 +134,63 @@ export function buildGatewayStrip(state: PanelState): HTMLElement {
   return strip;
 }
 
+function renderSummaryChips(
+  allRows: readonly DashboardRow[],
+  active: FilterScope,
+  onSelect: (scope: FilterScope) => void,
+): HTMLElement {
+  const total = allRows.length;
+  const okCount = allRows.filter(
+    (r) => (r.health === null || r.health === "ok") && r.level === "ok",
+  ).length;
+  const hotCount = allRows.filter(
+    (r) => r.maxUsed >= 0.8 || r.level === "hot" || r.level === "critical",
+  ).length;
+  const issuesCount = allRows.filter((r) => r.health !== null && r.health !== "ok").length;
+
+  const container = document.createElement("div");
+  container.className = "summary-chips";
+  container.setAttribute("role", "toolbar");
+  container.setAttribute("aria-label", "Filter accounts by status");
+
+  const chips: Array<{ id: FilterScope; label: string; count: number; dotClass: string }> = [
+    { id: "all", label: "All", count: total, dotClass: "dot-all" },
+    { id: "ok", label: "Healthy", count: okCount, dotClass: "dot-ok" },
+    { id: "hot", label: "≥80%", count: hotCount, dotClass: "dot-warn" },
+    { id: "issues", label: "Issues", count: issuesCount, dotClass: "dot-danger" },
+  ];
+
+  for (const chip of chips) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = chip.id === active ? "metric-chip active" : "metric-chip";
+    btn.setAttribute("aria-pressed", chip.id === active ? "true" : "false");
+    btn.title = `Filter accounts: ${chip.label} (${chip.count} accounts)`;
+
+    const dot = document.createElement("span");
+    dot.className = `chip-dot ${chip.dotClass}`;
+    btn.appendChild(dot);
+
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "chip-label";
+    labelSpan.textContent = chip.label;
+    btn.appendChild(labelSpan);
+
+    const countSpan = document.createElement("span");
+    countSpan.className = "chip-count";
+    countSpan.textContent = `(${chip.count})`;
+    btn.appendChild(countSpan);
+
+    btn.addEventListener("click", () => {
+      onSelect(chip.id === active && chip.id !== "all" ? "all" : chip.id);
+    });
+
+    container.appendChild(btn);
+  }
+
+  return container;
+}
+
 export function buildPanel(state: PanelState): HTMLElement {
   if (activeSettingsController) {
     activeSettingsController.destroy();
@@ -241,15 +299,20 @@ export function buildPanel(state: PanelState): HTMLElement {
   } else {
     panel.appendChild(buildGatewayStrip(state));
 
-    // Summary
-    const summaryP = document.createElement("p");
-    summaryP.className = "summary";
     if (state.data) {
-      summaryP.textContent = summaryText(state.data.summary);
+      const allRows = state.data.providers.flatMap((p) => p.rows);
+      panel.appendChild(
+        renderSummaryChips(allRows, activeFilter, (nextScope) => {
+          activeFilter = nextScope;
+          render();
+        }),
+      );
     } else {
+      const summaryP = document.createElement("p");
+      summaryP.className = "summary";
       summaryP.textContent = "No usage data";
+      panel.appendChild(summaryP);
     }
-    panel.appendChild(summaryP);
     if (state.warmup.message) {
       const warmupP = document.createElement("p");
       warmupP.className = "warmup-message";
@@ -305,8 +368,34 @@ export function buildPanel(state: PanelState): HTMLElement {
       const hasAnyRoute = state.data.providers.some((p) => p.rows.some((r) => r.health !== null));
 
       let idx = 0;
+      let renderedCount = 0;
       for (const provider of state.data.providers) {
-        content.appendChild(renderProviderCard(provider, hasAnyRoute, idx++, state));
+        const card = renderProviderCard(provider, hasAnyRoute, idx++, state, activeFilter);
+        if (card) {
+          content.appendChild(card);
+          renderedCount++;
+        }
+      }
+
+      if (renderedCount === 0 && activeFilter !== "all") {
+        const emptyFilter = document.createElement("div");
+        emptyFilter.className = "empty-filter-view";
+
+        const title = document.createElement("p");
+        title.className = "empty-filter-title";
+        title.textContent = `No accounts matching filter "${activeFilter}".`;
+        emptyFilter.appendChild(title);
+
+        const resetBtn = document.createElement("button");
+        resetBtn.type = "button";
+        resetBtn.className = "button button-secondary";
+        resetBtn.textContent = "Show All Accounts";
+        resetBtn.addEventListener("click", () => {
+          activeFilter = "all";
+          render();
+        });
+        emptyFilter.appendChild(resetBtn);
+        content.appendChild(emptyFilter);
       }
     }
 
