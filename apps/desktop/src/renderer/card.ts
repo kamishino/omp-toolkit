@@ -1,10 +1,55 @@
-import { mdiFlash, mdiStethoscope } from "@mdi/js";
-import { type DashboardProvider, supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
+import {
+  mdiCheck,
+  mdiChevronDown,
+  mdiChevronRight,
+  mdiContentCopy,
+  mdiFlash,
+  mdiStethoscope,
+} from "@mdi/js";
+import {
+  type DashboardProvider,
+  formatPercent,
+  supportsWarmUp,
+  warmUpEligibility,
+} from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
 import { icon } from "./icon";
 import { renderLimitCell } from "./limit-cell";
 import { providerLogo } from "./provider-logos";
 
+export type FilterScope = "all" | "ok" | "hot" | "issues";
+
+const COLLAPSED_STORAGE_KEY = "omp.collapsedProviders";
+
+export function isProviderCollapsed(providerId: string): boolean {
+  try {
+    const raw =
+      typeof localStorage !== "undefined" ? localStorage.getItem(COLLAPSED_STORAGE_KEY) : null;
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) return list.includes(providerId);
+    }
+  } catch {
+    // headless or corrupted storage fallback
+  }
+  return false;
+}
+
+export function setProviderCollapsed(providerId: string, collapsed: boolean): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    const set = new Set<string>(raw ? JSON.parse(raw) : []);
+    if (collapsed) {
+      set.add(providerId);
+    } else {
+      set.delete(providerId);
+    }
+    localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify([...set]));
+  } catch {
+    // headless fallback
+  }
+}
 const ROUTE_TITLES: Record<string, string> = {
   OK: "Route healthy",
   HANG: "Route stalled — no response from this route; use Check to probe it",
@@ -19,12 +64,43 @@ export function renderProviderCard(
   hasAnyRoute: boolean,
   providerIndex: number,
   state: PanelState,
-): HTMLElement {
+  filterScope: FilterScope = "all",
+): HTMLElement | null {
+  const matchingRows = provider.rows.filter((row) => {
+    if (filterScope === "all") return true;
+    if (filterScope === "ok") {
+      return (row.health === null || row.health === "ok") && row.level === "ok";
+    }
+    if (filterScope === "hot") {
+      return row.maxUsed >= 0.8 || row.level === "hot" || row.level === "critical";
+    }
+    if (filterScope === "issues") {
+      return row.health !== null && row.health !== "ok";
+    }
+    return true;
+  });
+
+  if (filterScope !== "all" && matchingRows.length === 0) {
+    return null;
+  }
+
+  let isCollapsed = isProviderCollapsed(provider.id);
   const hasWarmUp = supportsWarmUp(provider.id);
   const card = document.createElement("section");
-  card.className = "provider-card";
+  card.className = isCollapsed ? "provider-card card-collapsed" : "provider-card";
   const headerDiv = document.createElement("div");
   headerDiv.className = "provider-header";
+
+  const toggleBtn = document.createElement("button");
+  toggleBtn.type = "button";
+  toggleBtn.className = "card-toggle-btn";
+  toggleBtn.setAttribute(
+    "aria-label",
+    isCollapsed ? `Expand ${provider.name}` : `Collapse ${provider.name}`,
+  );
+  toggleBtn.title = isCollapsed ? "Expand card" : "Collapse card";
+  toggleBtn.appendChild(icon(isCollapsed ? mdiChevronRight : mdiChevronDown));
+  headerDiv.appendChild(toggleBtn);
 
   const logoSlot = document.createElement("span");
   logoSlot.className = "provider-logo";
@@ -60,8 +136,57 @@ export function renderProviderCard(
   const h2 = document.createElement("h2");
   h2.id = titleId;
   h2.className = "provider-title";
-  h2.textContent = `${provider.name}${provider.suffix} · ${provider.accounts} ${provider.accounts === 1 ? "account" : "accounts"}`;
+  h2.textContent = `${provider.name}${provider.suffix} · ${matchingRows.length} ${matchingRows.length === 1 ? "account" : "accounts"}`;
+  h2.style.cursor = "pointer";
   headerDiv.appendChild(h2);
+
+  // Collapsed summary preview
+  const previewDiv = document.createElement("div");
+  previewDiv.className = "collapsed-preview";
+
+  const countBadge = document.createElement("span");
+  countBadge.className = "collapsed-badge";
+  countBadge.textContent = `${matchingRows.length} ${matchingRows.length === 1 ? "acct" : "accts"}`;
+  previewDiv.appendChild(countBadge);
+
+  if (hasAnyRoute) {
+    const worstRoute =
+      matchingRows.find((r) => r.route.text === "HANG" || r.route.text === "ERR") ??
+      matchingRows.find((r) => r.route.text === "AUTH" || r.route.text === "MODEL") ??
+      matchingRows[0];
+    if (worstRoute) {
+      const routeBadge = document.createElement("span");
+      routeBadge.className = `collapsed-badge badge-${worstRoute.route.level === "ok" ? "ok" : "danger"}`;
+      routeBadge.textContent = worstRoute.route.text;
+      previewDiv.appendChild(routeBadge);
+    }
+  }
+
+  const maxUsed = Math.max(0, ...matchingRows.map((r) => r.maxUsed));
+  if (maxUsed > 0) {
+    const maxBadge = document.createElement("span");
+    const level =
+      maxUsed >= 0.85 ? "danger" : maxUsed >= 0.7 ? "hot" : maxUsed >= 0.4 ? "warn" : "ok";
+    maxBadge.className = `collapsed-badge badge-${level}`;
+    maxBadge.textContent = `${formatPercent(maxUsed)} max`;
+    previewDiv.appendChild(maxBadge);
+  }
+  headerDiv.appendChild(previewDiv);
+
+  const toggleCollapse = () => {
+    isCollapsed = !isCollapsed;
+    setProviderCollapsed(provider.id, isCollapsed);
+    card.className = isCollapsed ? "provider-card card-collapsed" : "provider-card";
+    toggleBtn.setAttribute(
+      "aria-label",
+      isCollapsed ? `Expand ${provider.name}` : `Collapse ${provider.name}`,
+    );
+    toggleBtn.title = isCollapsed ? "Expand card" : "Collapse card";
+    toggleBtn.replaceChildren(icon(isCollapsed ? mdiChevronRight : mdiChevronDown));
+  };
+
+  toggleBtn.addEventListener("click", toggleCollapse);
+  h2.addEventListener("click", toggleCollapse);
 
   if (provider.timeWindow) {
     const badge = document.createElement("span");
@@ -74,10 +199,10 @@ export function renderProviderCard(
   }
 
   if (hasWarmUp) {
-    const eligibleCount = provider.rows.filter(
+    const eligibleCount = matchingRows.filter(
       (r) => warmUpEligibility(provider.id, r.health) === "warm",
     ).length;
-    const skippedCount = provider.rows.length - eligibleCount;
+    const skippedCount = matchingRows.length - eligibleCount;
     const warmupAllBtn = document.createElement("button");
     warmupAllBtn.type = "button";
     warmupAllBtn.className = "provider-action";
@@ -135,16 +260,34 @@ export function renderProviderCard(
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
-  for (const row of provider.rows) {
+  for (const row of matchingRows) {
     const tr = document.createElement("tr");
 
     const thAcc = document.createElement("th");
     thAcc.scope = "row";
-    thAcc.className = `account col-account level-${row.level}`;
+    thAcc.className = `account col-account level-${row.level} account-clickable`;
     thAcc.textContent = row.displayAccount;
-    if (row.account !== row.displayAccount) {
-      thAcc.title = row.account;
-    }
+    thAcc.title = `Click to copy ${row.account}`;
+
+    const copyIconSpan = document.createElement("span");
+    copyIconSpan.className = "account-copy-icon";
+    copyIconSpan.appendChild(icon(mdiContentCopy));
+    thAcc.appendChild(copyIconSpan);
+
+    thAcc.addEventListener("click", () => {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(row.account);
+        copyIconSpan.replaceChildren(icon(mdiCheck));
+        const copiedTag = document.createElement("span");
+        copiedTag.className = "account-copied-tag";
+        copiedTag.textContent = "Copied!";
+        thAcc.appendChild(copiedTag);
+        setTimeout(() => {
+          copyIconSpan.replaceChildren(icon(mdiContentCopy));
+          copiedTag.remove();
+        }, 1500);
+      }
+    });
     tr.appendChild(thAcc);
 
     if (hasAnyRoute) {
@@ -153,8 +296,25 @@ export function renderProviderCard(
       const routeSpan = document.createElement("span");
       routeSpan.className = `route level-${row.route.level}`;
       routeSpan.textContent = row.route.text;
-      routeSpan.title = ROUTE_TITLES[row.route.text] ?? row.route.text;
-      routeSpan.setAttribute("aria-label", ROUTE_TITLES[row.route.text] ?? row.route.text);
+      const isClickable = row.route.text !== "OK" && row.route.text !== "—";
+      if (isClickable) {
+        routeSpan.className += " route-clickable";
+        routeSpan.title = `${ROUTE_TITLES[row.route.text]} — Click to probe now`;
+        routeSpan.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (state.warmup.running) return;
+          routeSpan.className += " route-probing";
+          routeSpan.textContent = "...";
+          window.omp.warmup({
+            provider: provider.id,
+            action: "check",
+            account: row.account,
+          });
+        });
+      } else {
+        routeSpan.title = ROUTE_TITLES[row.route.text] ?? row.route.text;
+      }
+      routeSpan.setAttribute("aria-label", routeSpan.title);
       tdRoute.appendChild(routeSpan);
       tr.appendChild(tdRoute);
     }

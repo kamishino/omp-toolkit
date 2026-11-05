@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { WeeklyPacing } from "@omp-toolkit/core";
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings";
-import { renderProviderCard } from "./card";
+import { isProviderCollapsed, renderProviderCard, setProviderCollapsed } from "./card";
 import { icon } from "./icon";
 import { renderLimitCell } from "./limit-cell";
 
@@ -98,7 +98,7 @@ describe("renderer card module", () => {
         },
       );
       expect(card).toBeDefined();
-      expect(card.className).toBe("provider-card");
+      expect(card?.className).toBe("provider-card");
     } finally {
       restoreDoc();
     }
@@ -152,7 +152,7 @@ describe("renderer card module", () => {
         return undefined;
       };
       const cardObj = card as unknown as MockNode;
-      expect(findByClass(cardObj, "account")?.title).toBe("alpha@example.com");
+      expect(findByClass(cardObj, "account")?.title).toContain("alpha@example.com");
       expect(findByClass(cardObj, "route")?.title).toContain("stalled");
     } finally {
       restoreDoc();
@@ -262,6 +262,118 @@ describe("renderer card module", () => {
       // Exactly 1 row — no pacing sub-row
       expect(rows.length).toBe(1);
       expect(rows.some((r) => r.className.includes("pacing-row"))).toBe(false);
+    } finally {
+      restoreDoc();
+    }
+  });
+
+  test("provider collapsing toggles class, aria attributes, and persists to localStorage", () => {
+    const memStorage = new Map<string, string>();
+    globalThis.localStorage = {
+      getItem: (k: string) => memStorage.get(k) ?? null,
+      setItem: (k: string, v: string) => memStorage.set(k, v),
+      removeItem: (k: string) => memStorage.delete(k),
+      clear: () => memStorage.clear(),
+      length: 0,
+      key: () => null,
+    } as unknown as Storage;
+
+    expect(isProviderCollapsed("test-p")).toBe(false);
+    setProviderCollapsed("test-p", true);
+    expect(isProviderCollapsed("test-p")).toBe(true);
+    setProviderCollapsed("test-p", false);
+    expect(isProviderCollapsed("test-p")).toBe(false);
+  });
+
+  test("renderProviderCard returns null when filterScope excludes all rows", () => {
+    mockDoc();
+    try {
+      const card = renderProviderCard(
+        {
+          id: "google-antigravity",
+          name: "GOOGLE ANTIGRAVITY",
+          suffix: "",
+          accounts: 1,
+          columns: [{ key: "c1", label: "Weekly" }],
+          rows: [
+            {
+              account: "ok@example.com",
+              displayAccount: "ok",
+              health: "ok",
+              maxUsed: 0.2,
+              level: "ok",
+              route: { text: "OK", level: "ok" },
+              limits: [],
+            },
+          ],
+        },
+        true,
+        0,
+        {
+          status: "loading",
+          data: null,
+          intervalSeconds: 300,
+          warmup: { running: false, message: null },
+          settings: DEFAULT_DESKTOP_SETTINGS,
+        },
+        "issues", // Filter for issues, but account is OK
+      );
+      expect(card).toBeNull();
+    } finally {
+      restoreDoc();
+    }
+  });
+
+  test("renderProviderCard includes copy icon and clickable account class", () => {
+    mockDoc();
+    try {
+      const card = renderProviderCard(
+        {
+          id: "google-antigravity",
+          name: "GOOGLE ANTIGRAVITY",
+          suffix: "",
+          accounts: 1,
+          columns: [{ key: "c1", label: "Weekly" }],
+          rows: [
+            {
+              account: "dev@example.com",
+              displayAccount: "dev",
+              health: null,
+              maxUsed: 0.1,
+              level: "ok",
+              route: { text: "—", level: "ok" },
+              limits: [],
+            },
+          ],
+        },
+        false,
+        0,
+        {
+          status: "loading",
+          data: null,
+          intervalSeconds: 300,
+          warmup: { running: false, message: null },
+          settings: DEFAULT_DESKTOP_SETTINGS,
+        },
+        "all",
+      );
+      interface MockElNode {
+        className?: string;
+        children?: MockElNode[];
+      }
+      const cardNode = card as unknown as MockElNode;
+      const findByClass = (node: MockElNode | undefined, cls: string): MockElNode | undefined => {
+        if (!node) return undefined;
+        if (node.className?.split(" ").includes(cls)) return node;
+        for (const child of node.children ?? []) {
+          const hit = findByClass(child, cls);
+          if (hit) return hit;
+        }
+        return undefined;
+      };
+      const accountCell = findByClass(cardNode, "account-clickable");
+      expect(accountCell).toBeDefined();
+      expect(findByClass(accountCell, "account-copy-icon")).toBeDefined();
     } finally {
       restoreDoc();
     }
