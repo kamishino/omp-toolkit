@@ -224,3 +224,27 @@ visibility, and policy writes. It carries no model traffic.
 The OMP gateway request path that carries model traffic between gateway
 clients and providers. The toolkit does not implement a data plane
 (ADR-0010).
+
+## Collapsible provider card
+
+An expandable container for a provider section. When collapsed, the card folds
+its accounts table and displays summary badges (account count, worst route
+health, and maximum quota used) in its header. Collapsed states persist across
+reloads in local storage.
+
+## Status metric chip
+
+An interactive filter pill in the desktop header displaying aggregate account
+counts by operational state (`All`, `OK`, `≥80%`, `Issues`). Activating a chip
+filters the visible provider rows and hides empty provider cards.
+
+## Account micro-action
+
+A row-level shortcut triggered directly on a table element: clicking an account
+identifier copies it to the clipboard, and clicking a degraded route badge
+(`HANG`, `ERR`) triggers an unhang check probe.
+
+## Filter scope
+
+The active subset of provider rows rendered in the panel based on selected
+status metric chips.

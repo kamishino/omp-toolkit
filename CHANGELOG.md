@@ -4,6 +4,9 @@
 
 - Add account ordering per provider section: `weekly-reset` (default, soonest weekly reset first) and `weekly-usage`, selectable in Desktop Settings and via `--sort` / `OMP_ACCOUNT_SORT`.
 - Hide provider sections with no local OMP credential on this machine, so secondary PCs no longer show cached usage from accounts they are not signed in to; API-key providers such as DeepSeek stay visible.
+- Add collapsible provider cards with accordion toggle, header status preview badges (account count, worst route, peak quota %), and `localStorage` layout persistence.
+- Add interactive status metric filter chips (`All`, `Healthy`, `≥80%`, `Issues`) in the desktop panel header with one-click filtering and clean zero-match card hiding.
+- Add account row micro-actions: click-to-copy email with inline checkmark feedback, and click-to-probe degraded route badges (`HANG`, `ERR`, `AUTH`, `MODEL`) triggering instant unhang checks with in-flight spinner.
 
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 
