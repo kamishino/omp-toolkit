@@ -1,5 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  type AccountSortOrder,
+  DEFAULT_ACCOUNT_SORT_ORDER,
+  isAccountSortOrder,
+} from "@omp-toolkit/core";
 import { writeFileAtomic } from "./fs-util";
 
 export type DesktopTheme = "system" | "dark" | "light";
@@ -12,6 +17,7 @@ export interface DesktopSettings {
   };
   theme: DesktopTheme;
   openAtLogin: boolean;
+  accountSort: AccountSortOrder;
 }
 
 export const DEFAULT_INTERVAL_SECONDS = 300;
@@ -49,6 +55,7 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   },
   theme: "system",
   openAtLogin: false,
+  accountSort: DEFAULT_ACCOUNT_SORT_ORDER,
 };
 
 const VALID_THEMES: Record<string, true> = {
@@ -103,6 +110,10 @@ export function validateDesktopSettings(candidate: unknown): { valid: boolean; e
     errors.push("openAtLogin must be a boolean");
   }
 
+  if (!isAccountSortOrder(s.accountSort)) {
+    errors.push("accountSort must be 'weekly-reset' or 'weekly-usage'");
+  }
+
   return {
     valid: errors.length === 0,
     errors,
@@ -146,6 +157,9 @@ export function loadDesktopSettings(options: {
   if (Number.isFinite(envUsd) && envUsd >= 0) {
     settings.balanceAlert.usd = envUsd;
   }
+  if (isAccountSortOrder(env.OMP_ACCOUNT_SORT)) {
+    settings.accountSort = env.OMP_ACCOUNT_SORT;
+  }
   // 3. Apply settings.json if present and valid
   try {
     if (fs.existsSync(file)) {
@@ -185,6 +199,10 @@ export function loadDesktopSettings(options: {
         if (typeof p.openAtLogin === "boolean") {
           settings.openAtLogin = p.openAtLogin;
         }
+
+        if (isAccountSortOrder(p.accountSort)) {
+          settings.accountSort = p.accountSort;
+        }
       }
     }
   } catch {
@@ -205,6 +223,12 @@ export function loadDesktopSettings(options: {
       MIN_INTERVAL_SECONDS,
       Math.min(MAX_INTERVAL_SECONDS, parsedInterval),
     );
+  }
+
+  const sortArg = argv.find((arg) => arg.startsWith("--sort="));
+  const cliSort = sortArg?.slice("--sort=".length);
+  if (isAccountSortOrder(cliSort)) {
+    settings.accountSort = cliSort;
   }
 
   return settings;

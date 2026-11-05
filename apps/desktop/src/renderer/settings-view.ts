@@ -1,3 +1,4 @@
+import { type AccountSortOrder, isAccountSortOrder } from "@omp-toolkit/core";
 import type { DesktopSettings, DesktopTheme } from "../settings";
 import { MAX_INTERVAL_SECONDS, MIN_INTERVAL_SECONDS, validateDesktopSettings } from "../settings";
 import { applyThemePreference } from "./tokens";
@@ -150,6 +151,7 @@ export function renderSettingsView(
     },
     theme: initialSettings.theme,
     openAtLogin: initialSettings.openAtLogin,
+    accountSort: initialSettings.accountSort,
   };
 
   // ── Section 1: Display & Timing ───────────────────────────────────
@@ -238,6 +240,38 @@ export function renderSettingsView(
 
   themeGroup.appendChild(segmented);
   timingSection.appendChild(themeGroup);
+
+  // Account Ordering
+  const sortGroup = document.createElement("div");
+  sortGroup.className = "form-group";
+  const sortLabel = document.createElement("label");
+  sortLabel.textContent = "Account Ordering";
+  sortLabel.htmlFor = "setting-account-sort";
+
+  const sortSelect = document.createElement("select");
+  sortSelect.id = "setting-account-sort";
+  sortSelect.className = "select-input";
+  const sortOptions: Array<{ value: AccountSortOrder; label: string }> = [
+    { value: "weekly-reset", label: "Weekly Reset Counting (soonest first)" },
+    { value: "weekly-usage", label: "Weekly Quota Usage (highest first)" },
+  ];
+  for (const option of sortOptions) {
+    const optionEl = document.createElement("option");
+    optionEl.value = option.value;
+    optionEl.textContent = option.label;
+    sortSelect.appendChild(optionEl);
+  }
+  sortSelect.value = draft.accountSort;
+
+  const sortHelp = document.createElement("span");
+  sortHelp.className = "form-help";
+  sortHelp.textContent =
+    "Weekly Reset Counting puts accounts that reset soonest on top; Weekly Quota Usage puts the most-used accounts first";
+
+  sortGroup.appendChild(sortLabel);
+  sortGroup.appendChild(sortSelect);
+  sortGroup.appendChild(sortHelp);
+  timingSection.appendChild(sortGroup);
   form.appendChild(timingSection);
 
   const { section: balanceSection, cnyInput, usdInput } = buildBalanceSection(draft);
@@ -294,6 +328,9 @@ export function renderSettingsView(
     draft.balanceAlert.cny = Number(cnyInput.value);
     draft.balanceAlert.usd = Number(usdInput.value);
     draft.openAtLogin = toggleInput.checked;
+    if (isAccountSortOrder(sortSelect.value)) {
+      draft.accountSort = sortSelect.value;
+    }
 
     const res = validateDesktopSettings(draft);
     if (!res.valid) {

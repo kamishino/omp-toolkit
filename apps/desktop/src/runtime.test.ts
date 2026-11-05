@@ -137,11 +137,13 @@ describe("DesktopRuntime deep coordinator", () => {
         balanceAlert: { cny: 15, usd: 20 },
         theme: "dark",
         openAtLogin: true,
+        accountSort: "weekly-usage",
       });
 
       expect(res.valid).toBe(true);
       expect(runtime.getSettings().intervalSeconds).toBe(60);
       expect(runtime.getSettings().theme).toBe("dark");
+      expect(runtime.getSettings().accountSort).toBe("weekly-usage");
       expect(loginEnabled).toBe(true);
 
       const savedFile = path.join(tmpDir, "settings.json");

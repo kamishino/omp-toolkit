@@ -793,6 +793,22 @@ progress::-webkit-progress-value {
   user-select: none;
 }
 
+.select-input {
+  background-color: var(--color-surface);
+  border: var(--size-border) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  padding: var(--space-xs) var(--space-sm);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  outline: none;
+  transition: border-color 140ms ease;
+}
+
+.select-input:focus-visible {
+  border-color: var(--color-accent);
+}
+
 /* Segmented Control */
 .segmented-control {
   display: flex;

@@ -1,7 +1,12 @@
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import { promisify } from "node:util";
-import { DASHBOARD_SCHEMA_VERSION, type Dashboard, isDashboard } from "@omp-toolkit/core";
+import {
+  type AccountSortOrder,
+  DASHBOARD_SCHEMA_VERSION,
+  type Dashboard,
+  isDashboard,
+} from "@omp-toolkit/core";
 
 const execFileAsync = promisify(execFile);
 
@@ -72,6 +77,7 @@ export async function fetchDashboard(
     timeoutMs?: number;
     signal?: AbortSignal;
     balanceAlert?: { cny: number; usd: number };
+    accountSort?: AccountSortOrder;
   },
   deps: { execFn?: MonitorExecFn } = {},
 ): Promise<Dashboard> {
@@ -83,6 +89,9 @@ export async function fetchDashboard(
   if (options?.balanceAlert) {
     env.DEEPSEEK_BALANCE_ALERT_CNY = String(options.balanceAlert.cny);
     env.DEEPSEEK_BALANCE_ALERT_USD = String(options.balanceAlert.usd);
+  }
+  if (options?.accountSort) {
+    env.OMP_ACCOUNT_SORT = options.accountSort;
   }
 
   const exec = deps.execFn ?? defaultMonitorExec;

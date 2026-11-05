@@ -1,4 +1,9 @@
-import type { BalanceAlertThresholds, Dashboard, WarmUpRequest } from "@omp-toolkit/core";
+import type {
+  AccountSortOrder,
+  BalanceAlertThresholds,
+  Dashboard,
+  WarmUpRequest,
+} from "@omp-toolkit/core";
 import { supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
 import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { fetchDashboard } from "./data";
@@ -59,6 +64,7 @@ export interface DesktopRuntimeOptions {
     bun?: string;
     script?: string;
     balanceAlert?: BalanceAlertThresholds;
+    accountSort?: AccountSortOrder;
   }) => Promise<Dashboard>;
   executeWarmUpFn?: (
     source: { bun: string; script: string },
@@ -178,6 +184,7 @@ export class DesktopRuntime {
       if (this.options.fetchDashboardFn) {
         dashboard = await this.options.fetchDashboardFn({
           balanceAlert: this.settings.balanceAlert,
+          accountSort: this.settings.accountSort,
         });
       } else {
         const bun = findBun();
@@ -195,7 +202,7 @@ export class DesktopRuntime {
 
         dashboard = await fetchDashboard(
           { bun, script },
-          { balanceAlert: this.settings.balanceAlert },
+          { balanceAlert: this.settings.balanceAlert, accountSort: this.settings.accountSort },
         );
       }
       this.lastDashboard = dashboard;

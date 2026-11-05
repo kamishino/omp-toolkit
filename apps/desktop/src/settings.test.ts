@@ -37,6 +37,7 @@ describe("desktop settings module", () => {
       balanceAlert: { cny: 15, usd: 10 },
       theme: "dark",
       openAtLogin: true,
+      accountSort: "weekly-usage",
     };
     const res = validateDesktopSettings(valid);
     expect(res.valid).toBe(true);
@@ -60,6 +61,12 @@ describe("desktop settings module", () => {
         theme: "invalid" as unknown as DesktopSettings["theme"],
       }).valid,
     ).toBe(false);
+    expect(
+      validateDesktopSettings({
+        ...DEFAULT_DESKTOP_SETTINGS,
+        accountSort: "invalid" as unknown as DesktopSettings["accountSort"],
+      }).valid,
+    ).toBe(false);
   });
   test("saveDesktopSettings writes settings.json atomically", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "desktop-settings-test-"));
@@ -69,6 +76,7 @@ describe("desktop settings module", () => {
         balanceAlert: { cny: 25, usd: 20 },
         theme: "light",
         openAtLogin: true,
+        accountSort: "weekly-reset",
       };
       saveDesktopSettings(tmpDir, custom);
       const file = settingsFilePath(tmpDir);
@@ -120,6 +128,7 @@ describe("desktop settings module", () => {
         balanceAlert: { cny: 15, usd: 15 },
         theme: "dark",
         openAtLogin: true,
+        accountSort: "weekly-usage",
       };
       saveDesktopSettings(tmpDir, saved);
 
@@ -144,6 +153,7 @@ describe("desktop settings module", () => {
         balanceAlert: { cny: 15, usd: 15 },
         theme: "dark",
         openAtLogin: true,
+        accountSort: "weekly-reset",
       };
       saveDesktopSettings(tmpDir, saved);
 
@@ -155,6 +165,38 @@ describe("desktop settings module", () => {
         },
       });
       expect(settings.intervalSeconds).toBe(60);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("loadDesktopSettings resolves accountSort from env, file, then CLI flag", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "desktop-settings-test-"));
+    try {
+      expect(loadDesktopSettings({ userDataDir: tmpDir, env: {} }).accountSort).toBe(
+        "weekly-reset",
+      );
+      expect(
+        loadDesktopSettings({ userDataDir: tmpDir, env: { OMP_ACCOUNT_SORT: "weekly-usage" } })
+          .accountSort,
+      ).toBe("weekly-usage");
+      expect(
+        loadDesktopSettings({ userDataDir: tmpDir, env: { OMP_ACCOUNT_SORT: "bogus" } })
+          .accountSort,
+      ).toBe("weekly-reset");
+
+      saveDesktopSettings(tmpDir, { ...DEFAULT_DESKTOP_SETTINGS, accountSort: "weekly-usage" });
+      expect(
+        loadDesktopSettings({ userDataDir: tmpDir, env: { OMP_ACCOUNT_SORT: "weekly-reset" } })
+          .accountSort,
+      ).toBe("weekly-usage");
+      expect(
+        loadDesktopSettings({
+          userDataDir: tmpDir,
+          argv: ["--sort=weekly-reset"],
+          env: { OMP_ACCOUNT_SORT: "weekly-usage" },
+        }).accountSort,
+      ).toBe("weekly-reset");
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

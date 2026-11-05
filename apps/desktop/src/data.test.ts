@@ -62,7 +62,7 @@ describe("parseMonitorPayload", () => {
 
     const dashboard = await fetchDashboard(
       { bun: "bun", script: import.meta.path },
-      { balanceAlert: { cny: 42, usd: 7 } },
+      { balanceAlert: { cny: 42, usd: 7 }, accountSort: "weekly-usage" },
       { execFn },
     );
 
@@ -71,6 +71,7 @@ describe("parseMonitorPayload", () => {
     expect(calls[0].args).toEqual([import.meta.path, "--json", "--health"]);
     expect(calls[0].env?.DEEPSEEK_BALANCE_ALERT_CNY).toBe("42");
     expect(calls[0].env?.DEEPSEEK_BALANCE_ALERT_USD).toBe("7");
+    expect(calls[0].env?.OMP_ACCOUNT_SORT).toBe("weekly-usage");
   });
 
   test("single data seam: refuses without bun and monitor script", async () => {
