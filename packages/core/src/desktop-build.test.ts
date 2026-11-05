@@ -10,6 +10,11 @@ describe("desktop build freshness knowledge", () => {
     expect(DESKTOP_WATCH_SOURCES).not.toContain("scripts/build.ts");
   });
 
+  test("provider-usage sources invalidate the widget build", () => {
+    const paths = desktopWatchPaths("/repo");
+    expect(paths).toContain(path.join("/repo", "apps", "provider-usage", "src"));
+  });
+
   test("watch paths join under the checkout root", () => {
     const paths = desktopWatchPaths("/repo");
     expect(paths).toHaveLength(DESKTOP_WATCH_SOURCES.length);

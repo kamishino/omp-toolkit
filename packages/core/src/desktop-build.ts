@@ -8,6 +8,7 @@ import path from "node:path";
  */
 export const DESKTOP_WATCH_SOURCES: readonly string[] = [
   "apps/desktop/src",
+  "apps/provider-usage/src",
   "packages/core/src",
   "design/tokens.json",
   "scripts/build/build.ts",

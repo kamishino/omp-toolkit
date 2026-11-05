@@ -5,14 +5,28 @@ import path from "node:path";
 import { newestMtime } from "../../apps/desktop/src/freshness";
 import { recordLaunchFailure } from "../../apps/desktop/src/launch-failure";
 import { DESKTOP_DIST_ARTIFACTS, desktopWatchPaths } from "../../packages/core/src/desktop-build";
-import { resolveAgentDir } from "../../packages/core/src/environment";
-import { buildDesktop } from "../build/build";
+import { resolveAgentDir, resolveInstalledScript } from "../../packages/core/src/environment";
+import { buildDesktop, buildTargets } from "../build/build";
 
 const root = path.resolve(import.meta.dir, "../..");
 const appDir = path.join(root, "apps", "desktop");
 const distDir = path.join(appDir, "dist");
 const distMain = path.join(distDir, "main.cjs");
 const requiredArtifacts = DESKTOP_DIST_ARTIFACTS.map((file) => path.join(distDir, file));
+
+/**
+ * The widget's data seam is the installed monitor bundle, not the checkout:
+ * a rebuilt widget must never read a stale `omp-provider-usage.js`.
+ */
+function refreshInstalledMonitor(): void {
+  const source = path.join(root, "apps", "provider-usage", "dist", "index.js");
+  if (!fs.existsSync(source)) return;
+  const destination = resolveInstalledScript("omp-provider-usage.js");
+  const scriptsDir = path.dirname(destination);
+  // No installed toolkit => resolveMonitorScript falls back to the checkout dist.
+  if (!fs.existsSync(scriptsDir)) return;
+  fs.copyFileSync(source, destination);
+}
 
 export async function buildIfNeeded(): Promise<void> {
   const watchPaths = desktopWatchPaths(root);
@@ -24,9 +38,11 @@ export async function buildIfNeeded(): Promise<void> {
   }
 
   const allArtifactsExist = requiredArtifacts.every((file) => fs.existsSync(file));
-  if (!allArtifactsExist || fs.statSync(distMain).mtimeMs < newest) {
-    await buildDesktop();
-  }
+  if (allArtifactsExist && fs.statSync(distMain).mtimeMs >= newest) return;
+
+  await buildTargets();
+  await buildDesktop();
+  refreshInstalledMonitor();
 }
 
 export function findElectron(): string {
