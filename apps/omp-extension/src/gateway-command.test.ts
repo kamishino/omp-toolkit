@@ -20,6 +20,10 @@ describe("handleGatewayCommand", () => {
         return { stdout: `client "${args[0]}" added`, exitCode: 0 };
       }
       if (action === "recipe") return { stdout: "ANTHROPIC_BASE_URL curl snippet", exitCode: 0 };
+      if (action === "connect") {
+        return { stdout: `export ANTHROPIC_BASE_URL=... token=omp_gw_${args[0]}`, exitCode: 0 };
+      }
+      if (action === "drain") return { stdout: "account 1 drained", exitCode: 0 };
       return { stdout: "", exitCode: 0 };
     },
     ...overrides,
@@ -51,6 +55,22 @@ describe("handleGatewayCommand", () => {
   test("recipe delegates to gateway:ctl recipe", async () => {
     const result = await handleGatewayCommand(["recipe", "curl"], createMockDeps());
     expect(result).toContain("ANTHROPIC_BASE_URL");
+  });
+  test("connect delegates to gateway:ctl connect and formats markdown", async () => {
+    const result = await handleGatewayCommand(["connect", "claude-code"], createMockDeps());
+    expect(result).toContain("### 🔌 Gateway Client Setup");
+    expect(result).toContain("ANTHROPIC_BASE_URL");
+  });
+
+  test("drain passes through to gateway:ctl", async () => {
+    const result = await handleGatewayCommand(["drain", "1"], createMockDeps());
+    expect(result).toContain("account 1 drained");
+  });
+
+  test("status outputs formatted markdown card", async () => {
+    const result = await handleGatewayCommand(["status"], createMockDeps());
+    expect(result).toContain("### 🌐 Gateway Status");
+    expect(result).toContain("🟢 Active");
   });
 
   test("unknown action returns help message without throwing", async () => {

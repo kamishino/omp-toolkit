@@ -72,8 +72,68 @@ const PASSTHROUGH: Record<string, string> = {
   clients: "clients",
   pool: "pool",
   "client-revoke": "clients-revoke",
+  drain: "drain",
+  undrain: "undrain",
+  "drain-all": "drain-all",
+  "unblock-all": "unblock-all",
+  block: "block",
+  unblock: "unblock",
+  policy: "policy",
+  "remote-pack": "remote-pack",
+  "remote-pair": "remote-pair",
+  "autostart-install": "autostart-install",
+  "autostart-remove": "autostart-remove",
+  "autostart-status": "autostart-status",
 };
 
+export function formatGatewayOutput(action: string, res: GatewayCtlResult): string {
+  const text = (res.stdout || res.stderr || "").trim();
+  if (!text) {
+    return res.exitCode === 0
+      ? `✅ Gateway ${action} succeeded.`
+      : `❌ Gateway ${action} failed (code ${res.exitCode}).`;
+  }
+
+  if (action === "status") {
+    const isUp = text.includes("running");
+    return [
+      `### 🌐 Gateway Status`,
+      ``,
+      isUp
+        ? `> **State:** 🟢 Active (services running)`
+        : `> **State:** 🔴 Inactive / Partially Down`,
+      ``,
+      "```",
+      text,
+      "```",
+    ].join("\n");
+  }
+
+  if (action === "doctor") {
+    const isPass = text.includes("doctor: PASS");
+    return [
+      `### 🩺 Gateway Compatibility Doctor`,
+      ``,
+      isPass
+        ? `> **Result:** ✅ PASS — System ready for gateway operation.`
+        : `> **Result:** ❌ FAIL — Some checks require attention.`,
+      ``,
+      "```",
+      text,
+      "```",
+    ].join("\n");
+  }
+
+  if (action === "connect" || action === "recipe" || action === "remote-pair") {
+    return [`### 🔌 Gateway Client Setup`, ``, "```bash", text, "```"].join("\n");
+  }
+
+  if (action === "accounts" || action === "clients" || action === "pool") {
+    return [`### 📋 Gateway ${action.toUpperCase()}`, ``, "```", text, "```"].join("\n");
+  }
+
+  return text;
+}
 export async function handleGatewayCommand(
   rawArgs: string[],
   deps: GatewayCommandDependencies = {},
@@ -82,25 +142,31 @@ export async function handleGatewayCommand(
   const action = (rawArgs[0] || "status").toLowerCase();
   const subArgs = rawArgs.slice(1);
 
+  if (action === "connect") {
+    const platform = (subArgs[0] || "claude-code").toLowerCase();
+    const res = await run("connect", subArgs.length > 0 ? subArgs : [platform]);
+    return formatGatewayOutput("connect", res);
+  }
+
   if (action === "client-add") {
     const clientName = subArgs[0]?.trim();
     if (!clientName) {
       return "Usage: /gateway client-add <name> [--models=<provider/*,...>] [--account-id=<id>]";
     }
     const res = await run("clients-add", subArgs);
-    return res.stdout || res.stderr || `Client '${clientName}' configuration generated.`;
+    return formatGatewayOutput("client-add", res);
   }
 
   if (action === "recipe") {
     const platform = (subArgs[0] || "claude-code").toLowerCase();
     const res = await run("recipe", [platform]);
-    return res.stdout || res.stderr || "No recipe output from gateway:ctl.";
+    return formatGatewayOutput("recipe", res);
   }
 
   const mapped = PASSTHROUGH[action];
   if (mapped) {
     const res = await run(mapped, subArgs);
-    return res.stdout || res.stderr || `gateway:ctl ${mapped} finished with exit ${res.exitCode}.`;
+    return formatGatewayOutput(action, res);
   }
 
   return [
@@ -110,11 +176,17 @@ export async function handleGatewayCommand(
     "  /gateway status                 Broker/gateway lifecycle state",
     "  /gateway doctor                 Fail-closed compatibility checks",
     "  /gateway start|stop|restart     Manage broker + gateway (managed pids only)",
+    "  /gateway connect <tool> [name]  1-step onboarding (Claude Code, Cursor, Cline, ...)",
+    "  /gateway remote-pair <tool>     1-click secondary PC setup script",
     "  /gateway accounts               Antigravity accounts, blocks, policies (masked)",
     "  /gateway pool                   Pool availability + pin distribution",
     "  /gateway clients                Scoped client tokens (fingerprints only)",
     "  /gateway client-add <name>      Issue a scoped client token (shown once)",
     "  /gateway client-revoke <name>   Revoke a scoped client token",
-    "  /gateway recipe [platform]      Loopback setup snippet (claude-code, opencode, curl, ...)",
+    "  /gateway drain <account-id>     Set reservePct=100 policy",
+    "  /gateway undrain <account-id>   Restore pre-drain policy",
+    "  /gateway block <id> [--sec=900] Block account cooling period",
+    "  /gateway unblock <id>           Clear operator block",
+    "  /gateway recipe [platform]      Loopback setup snippet (claude-code, opencode, ...)",
   ].join("\n");
 }
