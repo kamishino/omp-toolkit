@@ -284,3 +284,10 @@ exhausts.
 A self-contained 1-line deployment script (PowerShell or Bash) configuring
 Cloudflare Access credentials, gateway bearer token, and connectivity
 verification on a secondary workstation.
+
+## Remote client doctor
+
+A client-side diagnostic probe (`gateway:ctl doctor --remote`) that tests base URL
+configuration, Cloudflare Access token headers, public tunnel reachability, and
+gateway bearer authentication from secondary workstations with actionable repair
+hints.
