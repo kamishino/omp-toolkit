@@ -16,6 +16,7 @@
 - Add 1-click remote pairing command `gateway:ctl remote-pair <platform> [name]` (and `/gateway remote-pair`) outputting self-contained PowerShell and Bash setup one-liners for secondary PCs.
 - Add Remote Client Doctor in Gateway (`gateway:ctl doctor --remote` and `/gateway doctor --remote`), diagnosing remote base URL, Cloudflare Access headers, public tunnel reachability, and gateway bearer auth in 1 command with actionable repair hints.
 - Add Nerd Font Downloader and Installer (`bun run font:install [family]` and `/font-install [family]`), downloading patched release archives from GitHub, installing font variants into the non-elevated user font store, broadcasting live font table updates on Windows without reboot, and atomically configuring Windows Terminal default font face.
+- Publish research report on Unified Gateways and round-robin Gemini load balancers on GitHub (`docs/research/gemini-unified-gateways-round-robin.md`), analyzing open-source archetypes (CLIProxyAPI, LiteLLM, One-API, OMP), comparison matrices, and the prompt cache invalidation penalty.
 
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 

@@ -314,3 +314,17 @@ filesystem monitoring on macOS, `fc-cache` on Linux).
 An automated configuration change that updates a developer terminal profile
 (e.g. Windows Terminal `profiles.defaults.font.face`) to use an installed font
 family.
+
+## Prompt cache invalidation penalty
+
+The cost inflation ($4\times\text{--}10\times$) and time-to-first-token latency
+penalty incurred when literal per-request round-robin scatters sequential
+conversational turns across distinct accounts, destroying upstream prefix
+KV-cache reuse (resulting in a 0% cache hit rate).
+
+## Session-sticky failover pooling
+
+A gateway routing architecture that pins consecutive requests in a coding
+session to one provider account to preserve prompt-cache warmth, rotating to
+sibling accounts only upon quota exhaustion (`429`), cooldown blocks, or route
+errors.
