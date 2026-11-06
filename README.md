@@ -85,6 +85,7 @@ Run `monitor` and `desktop` commands from the checkout (`~/.omp/omp-toolkit` aft
 | Headless check | `bun run desktop:once` |
 | Desktop shortcut | `bun run desktop:shortcut` |
 | Orca floating tab | `bun run monitor:orca` (`Ctrl+Alt+A` / `Cmd+Alt+A`) |
+| Install Nerd Font | `bun run font:install [family]` |
 
 `--no-health` hides the route column; `--no-alt-screen` keeps output in the scrollback; `--sort=weekly-reset|weekly-usage` picks the account order (soonest weekly reset by default); in watch mode `Tab` switches between usage and schedule.
 
@@ -98,6 +99,7 @@ Inside OMP:
 | Warm one account (60 s cooldown) | `/gemini-warmup <account>` |
 | Re-check one account | `/gemini-check <account>` |
 | Full command list | [OMP Extension Guide](apps/omp-extension/README.md) |
+| Install Nerd Font | `/font-install [family]` |
 
 ## Configuration
 

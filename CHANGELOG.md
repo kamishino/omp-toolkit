@@ -15,6 +15,7 @@
 - Add proactive Desktop OS Notifications (`evaluateQuotaAlerts`) alerting the operator on $\ge 90\%$ quota warning thresholds and quota rollover resets with 15-minute debouncing.
 - Add 1-click remote pairing command `gateway:ctl remote-pair <platform> [name]` (and `/gateway remote-pair`) outputting self-contained PowerShell and Bash setup one-liners for secondary PCs.
 - Add Remote Client Doctor in Gateway (`gateway:ctl doctor --remote` and `/gateway doctor --remote`), diagnosing remote base URL, Cloudflare Access headers, public tunnel reachability, and gateway bearer auth in 1 command with actionable repair hints.
+- Add Nerd Font Downloader and Installer (`bun run font:install [family]` and `/font-install [family]`), downloading patched release archives from GitHub, installing font variants into the non-elevated user font store, broadcasting live font table updates on Windows without reboot, and atomically configuring Windows Terminal default font face.
 
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 

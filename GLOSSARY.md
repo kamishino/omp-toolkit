@@ -291,3 +291,26 @@ A client-side diagnostic probe (`gateway:ctl doctor --remote`) that tests base U
 configuration, Cloudflare Access token headers, public tunnel reachability, and
 gateway bearer authentication from secondary workstations with actionable repair
 hints.
+
+## Nerd font family
+
+A release archive of patched developer fonts published by upstream Nerd Fonts
+(e.g. `JetBrainsMono`, `CascadiaCode`, `FiraCode`, `Meslo`, `Hack`, `GeistMono`).
+
+## User font store
+
+The per-user operating system directory where fonts are installed without
+administrator elevation (`%LOCALAPPDATA%\Microsoft\Windows\Fonts`,
+`~/Library/Fonts`, or `~/.local/share/fonts/NerdFonts`).
+
+## Font registration
+
+The operating system mechanism that activates installed font files for all
+running desktop applications (registry entries and `WM_FONTCHANGE` on Windows,
+filesystem monitoring on macOS, `fc-cache` on Linux).
+
+## Terminal font binding
+
+An automated configuration change that updates a developer terminal profile
+(e.g. Windows Terminal `profiles.defaults.font.face`) to use an installed font
+family.
