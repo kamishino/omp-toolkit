@@ -72,6 +72,18 @@ describe("handleGatewayCommand", () => {
     expect(result).toContain("### 🌐 Gateway Status");
     expect(result).toContain("🟢 Active");
   });
+  test("doctor --remote formats markdown report", async () => {
+    const mockDeps = createMockDeps({
+      runCtl: async (_action, _args) => ({
+        stdout:
+          "PASS remote-base-url: https://gw.example.com\nPASS remote-tunnel: tunnel reachable\ndoctor: PASS",
+        exitCode: 0,
+      }),
+    });
+    const result = await handleGatewayCommand(["doctor", "--remote"], mockDeps);
+    expect(result).toContain("### 🩺 Gateway Compatibility Doctor");
+    expect(result).toContain("✅ PASS");
+  });
 
   test("unknown action returns help message without throwing", async () => {
     const result = await handleGatewayCommand(["foobar"], createMockDeps());
