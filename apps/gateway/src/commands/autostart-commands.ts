@@ -4,7 +4,7 @@ import { print } from "./output";
 
 export async function runAutostartCommand(ctx: CommandContext): Promise<void> {
   const { config } = ctx;
-  const autostart = createAutostart();
+  const autostart = createAutostart({ withTunnel: config.withTunnel });
   const result =
     config.command === "autostart-install"
       ? await autostart.install()

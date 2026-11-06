@@ -7,6 +7,11 @@ describe("autostart", () => {
     expect(vbs).toContain('shell.Run """C:/bun/bun.exe"" ""C:/ctl/index.js"" start", 0, False');
   });
 
+  test("launcher includes --with-tunnel flag when requested", () => {
+    const vbs = buildWindowsLauncher("C:/bun/bun.exe", "C:/ctl/index.js", true);
+    expect(vbs).toContain("start --with-tunnel");
+  });
+
   test("install/status/remove round-trip through file ops", async () => {
     const store = new Map<string, string>();
     const auto = createAutostart({

@@ -20,6 +20,7 @@ export const SUPPORTED_RECIPE_PLATFORMS: ClientRecipePlatform[] = [
   "python-openai",
   "python-anthropic",
   "vscode-continue",
+  "omp",
 ];
 export async function runRecipeCommand(ctx: CommandContext): Promise<void> {
   const { config } = ctx;

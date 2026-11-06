@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { bindToBaseUrl, parseGatewayCtlConfig, portOfBind } from "./config";
 
 const HOME = "C:/home/tester";
@@ -121,5 +124,28 @@ describe("parseGatewayCtlConfig", () => {
     expect(config.cfClientId).toBe("cf-id");
     expect(config.cfClientSecret).toBe("cf-secret");
     expect(config.unknown).toEqual([]);
+  });
+  test("falls back to ~/.omp/cf-access.json when flags and env are omitted", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cf-access-test-"));
+    try {
+      const ompDir = path.join(tmpDir, ".omp");
+      fs.mkdirSync(ompDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(ompDir, "cf-access.json"),
+        JSON.stringify({
+          clientId: "disk-cf-id",
+          clientSecret: "disk-cf-secret",
+          domain: "disk-gw.example.com",
+        }),
+      );
+      const config = parseGatewayCtlConfig(["recipe", "omp"], {}, tmpDir);
+      expect(config.command).toBe("recipe");
+      expect(config.target).toBe("omp");
+      expect(config.cfClientId).toBe("disk-cf-id");
+      expect(config.cfClientSecret).toBe("disk-cf-secret");
+      expect(config.baseUrl).toBe("https://disk-gw.example.com");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

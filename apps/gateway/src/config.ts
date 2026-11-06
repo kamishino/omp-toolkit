@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -145,6 +146,18 @@ export function parseGatewayCtlConfig(
       ? (rawCommand as GatewayCommand)
       : "help";
   const ompDir = env.OMP_CTL_HOME ?? path.join(home, ".omp");
+  const cfAccessFile = path.join(ompDir, "cf-access.json");
+  let cfDisk: { clientId?: string; clientSecret?: string; domain?: string } | null = null;
+  try {
+    if (fs.existsSync(cfAccessFile)) {
+      const raw = fs.readFileSync(cfAccessFile, "utf-8");
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        cfDisk = parsed as { clientId?: string; clientSecret?: string; domain?: string };
+      }
+    }
+  } catch {}
+
   const knownPrefixes = [
     "--broker-bind=",
     "--gateway-bind=",
@@ -229,14 +242,19 @@ export function parseGatewayCtlConfig(
       env.OMP_GATEWAY_URL ??
       env.ANTHROPIC_BASE_URL ??
       env.OPENAI_BASE_URL ??
-      null,
+      (cfDisk?.domain ? `https://${cfDisk.domain}` : null),
     recipeModel: flagValue(argv, "model") ?? null,
     cfClientId:
-      flagValue(argv, "cf-client-id") ?? env.OMP_CF_CLIENT_ID ?? env.CF_ACCESS_CLIENT_ID ?? null,
+      flagValue(argv, "cf-client-id") ??
+      env.OMP_CF_CLIENT_ID ??
+      env.CF_ACCESS_CLIENT_ID ??
+      cfDisk?.clientId ??
+      null,
     cfClientSecret:
       flagValue(argv, "cf-client-secret") ??
       env.OMP_CF_CLIENT_SECRET ??
       env.CF_ACCESS_CLIENT_SECRET ??
+      cfDisk?.clientSecret ??
       null,
     gatewayToken:
       flagValue(argv, "gateway-token") ??

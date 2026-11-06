@@ -30,6 +30,7 @@ export interface AutostartDependencies {
   startupDir: string;
   bunPath: string;
   ctlScriptPath: string;
+  withTunnel?: boolean;
   files: AutostartFileOps;
 }
 
@@ -44,8 +45,13 @@ export function windowsStartupDir(env: NodeJS.ProcessEnv = process.env): string 
 }
 
 /** VBS that launches gateway:ctl start with no visible window. */
-export function buildWindowsLauncher(bunPath: string, ctlScriptPath: string): string {
-  const command = `""${bunPath}"" ""${ctlScriptPath}"" start`;
+export function buildWindowsLauncher(
+  bunPath: string,
+  ctlScriptPath: string,
+  withTunnel = false,
+): string {
+  const tunnelFlag = withTunnel ? " --with-tunnel" : "";
+  const command = `""${bunPath}"" ""${ctlScriptPath}"" start${tunnelFlag}`;
   return [
     "' OMP Toolkit Gateway autostart (managed by gateway:ctl autostart-*)",
     'Set shell = CreateObject("WScript.Shell")',
@@ -72,7 +78,10 @@ export function createAutostart(deps: Partial<AutostartDependencies> = {}) {
     entryPath,
     async install(): Promise<AutostartResult> {
       if (platform !== "win32") return unsupported();
-      files.write(entryPath, buildWindowsLauncher(bunPath, ctlScriptPath));
+      files.write(
+        entryPath,
+        buildWindowsLauncher(bunPath, ctlScriptPath, deps.withTunnel ?? false),
+      );
       return {
         ok: true,
         lines: [`startup entry installed: ${entryPath} (runs gateway:ctl start at sign-in)`],
