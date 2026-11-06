@@ -4,6 +4,7 @@
 export * from "./account-views";
 export * from "./blocks";
 export * from "./clients-file";
+export * from "./cooldown";
 export * from "./doctor";
 export * from "./identities";
 export * from "./policies";

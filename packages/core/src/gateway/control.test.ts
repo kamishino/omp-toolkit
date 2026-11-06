@@ -6,6 +6,7 @@ import {
   type DoctorFacts,
   earliestResetMs,
   evaluateDoctorChecks,
+  evaluateQuotaCooldowns,
   maskIdentityKey,
   parseClientsFile,
   parseOmpVersion,
@@ -310,5 +311,106 @@ describe("summarizeSticky", () => {
       { credentialId: 8, sessions: 1 },
     ]);
     expect(JSON.stringify(summary)).not.toContain("secret-session");
+  });
+});
+
+describe("evaluateQuotaCooldowns", () => {
+  test("enforces the surviving account invariant when all accounts are depleted", () => {
+    const nowMs = 1_800_000_000_000;
+    const accounts = Array.from({ length: 7 }, (_, i) => ({
+      id: i + 1,
+      provider: "google-antigravity",
+      identityMasked: `user${i}@example.com`,
+      ok: true,
+      blocked: false,
+      blocks: [],
+      limits: [
+        {
+          label: "Weekly",
+          windowLabel: "Weekly",
+          status: "ok",
+          remainingFraction: 0,
+          resetsAtMs: nowMs + (i + 1) * 3600_000,
+        },
+      ],
+      earliestResetMs: nowMs + (i + 1) * 3600_000,
+      policy: null,
+    }));
+
+    const evaluation = evaluateQuotaCooldowns(accounts, nowMs);
+    // Exactly 6 accounts blocked, 1 surviving account preserved
+    expect(evaluation.toBlock).toHaveLength(6);
+    expect(evaluation.skippedLastSurviving).toBe(7);
+    expect(evaluation.activeAccountsCount).toBe(1);
+
+    // Dynamic duration matches reset target
+    expect(evaluation.toBlock[0]?.durationSeconds).toBe(3600);
+  });
+
+  test("ignores already blocked or drained accounts", () => {
+    const nowMs = 1_800_000_000_000;
+    const accounts = [
+      {
+        id: 1,
+        provider: "google-antigravity",
+        identityMasked: "a@ex.com",
+        ok: true,
+        blocked: true,
+        blocks: [{ scope: "", blockedUntilMs: nowMs + 60_000 }],
+        limits: [
+          {
+            label: "Weekly",
+            windowLabel: "Weekly",
+            status: "ok",
+            remainingFraction: 0,
+            resetsAtMs: nowMs + 60_000,
+          },
+        ],
+        earliestResetMs: nowMs + 60_000,
+        policy: null,
+      },
+      {
+        id: 2,
+        provider: "google-antigravity",
+        identityMasked: "b@ex.com",
+        ok: true,
+        blocked: false,
+        blocks: [],
+        limits: [
+          {
+            label: "Weekly",
+            windowLabel: "Weekly",
+            status: "ok",
+            remainingFraction: 0,
+            resetsAtMs: nowMs + 120_000,
+          },
+        ],
+        earliestResetMs: nowMs + 120_000,
+        policy: { priority: null, reservePct: 100, drained: true },
+      },
+      {
+        id: 3,
+        provider: "google-antigravity",
+        identityMasked: "c@ex.com",
+        ok: true,
+        blocked: false,
+        blocks: [],
+        limits: [
+          {
+            label: "Weekly",
+            windowLabel: "Weekly",
+            status: "ok",
+            remainingFraction: 0.5,
+            resetsAtMs: nowMs + 120_000,
+          },
+        ],
+        earliestResetMs: null,
+        policy: null,
+      },
+    ];
+
+    const evaluation = evaluateQuotaCooldowns(accounts, nowMs);
+    expect(evaluation.toBlock).toHaveLength(0);
+    expect(evaluation.activeAccountsCount).toBe(1);
   });
 });
