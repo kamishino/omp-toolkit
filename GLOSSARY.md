@@ -248,3 +248,39 @@ identifier copies it to the clipboard, and clicking a degraded route badge
 
 The active subset of provider rows rendered in the panel based on selected
 status metric chips.
+
+## Gateway control drawer
+
+An expandable container beneath the desktop Gateway strip exposing 1-click
+daemon lifecycle controls (Start, Stop, Restart, Doctor), endpoint clipboard
+copying, and a quick harness recipe selector.
+
+## Harness connect flow
+
+A unified 1-step onboarding command (`gateway:ctl connect <platform>` or
+`/gateway connect <platform>`) that provisions a scoped client token and outputs
+the exact configuration snippet for external tools (Claude Code, Cursor, Cline,
+OpenCode, Aider).
+
+## Autonomous quota cooldown
+
+A temporary credential block automatically applied to an account that reaches
+$\ge 99\%$ quota on any limit window, expiring dynamically at `resetsAt`.
+
+## Surviving account invariant
+
+The safety constraint ensuring the control plane will never block the last
+remaining unblocked account in a provider pool, preventing complete routing
+paralysis.
+
+## Quota transition notification
+
+A debounced desktop notification triggered when an account crosses the $\ge 90\%$
+warning threshold, when an account quota resets, or when total pool capacity
+exhausts.
+
+## Remote pairing payload
+
+A self-contained 1-line deployment script (PowerShell or Bash) configuring
+Cloudflare Access credentials, gateway bearer token, and connectivity
+verification on a secondary workstation.

@@ -121,6 +121,10 @@ them.
 
 ### 5.4 Policy writes
 
+- **Connect (1-step onboarding):** `gateway:ctl connect <platform> [name]`
+  mints a client token, registers it in the clients file, and outputs the exact
+  copy-pasteable setup snippet (Claude Code, Cursor, OpenCode, Cline, Aider) in
+  one step.
 - **Clients:** mint `omp_gw_…` tokens, store SHA-256 digest + model globs +
   optional account allowlist in the clients file (hot-reloaded by OMP);
   revoke by name. Plaintext is shown once at creation.

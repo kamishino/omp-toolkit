@@ -7,6 +7,13 @@
 - Add collapsible provider cards with accordion toggle, header status preview badges (account count, worst route, peak quota %), and `localStorage` layout persistence.
 - Add interactive status metric filter chips (`All`, `Healthy`, `≥80%`, `Issues`) in the desktop panel header with one-click filtering and clean zero-match card hiding.
 - Add account row micro-actions: click-to-copy email with inline checkmark feedback, and click-to-probe degraded route badges (`HANG`, `ERR`, `AUTH`, `MODEL`) triggering instant unhang checks with in-flight spinner.
+- Add Desktop Gateway interactive controls (1-click Start, Stop, Restart, Doctor) and an expandable Gateway Drawer with endpoint copying and quick harness recipe selector (Claude Code, OpenCode, Cline, Cursor, Aider, curl).
+- Add unified 1-step `gateway:ctl connect <platform> [name]` command provisioning client tokens and generating ready-to-run setup snippets in one command.
+- Upgrade in-OMP `/gateway` slash command to rich Markdown status cards and tables with full command parity (connect, drain, undrain, block, unblock, policy).
+- Fix `gateway:ctl --help` and `-h` flag handling to exit code 0, and provide actionable repair suggestions on doctor check failures.
+- Add Autonomous Quota Cooldown in Gateway (`evaluateQuotaCooldowns` and `autoCooldownSweep`), dynamically applying cooldown blocks to accounts reaching $\ge 99\%$ quota until their reset timestamp while preserving the Surviving Account Invariant.
+- Add proactive Desktop OS Notifications (`evaluateQuotaAlerts`) alerting the operator on $\ge 90\%$ quota warning thresholds and quota rollover resets with 15-minute debouncing.
+- Add 1-click remote pairing command `gateway:ctl remote-pair <platform> [name]` (and `/gateway remote-pair`) outputting self-contained PowerShell and Bash setup one-liners for secondary PCs.
 
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 
