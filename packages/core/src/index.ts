@@ -3,6 +3,7 @@ export * from "./data-source";
 export * from "./deepseek";
 export * from "./desktop-build";
 export * from "./environment";
+export * from "./fonts";
 export * from "./format";
 export * from "./gateway";
 export * from "./health";
