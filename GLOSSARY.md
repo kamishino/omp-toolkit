@@ -328,3 +328,19 @@ A gateway routing architecture that pins consecutive requests in a coding
 session to one provider account to preserve prompt-cache warmth, rotating to
 sibling accounts only upon quota exhaustion (`429`), cooldown blocks, or route
 errors.
+
+## SSOT gateway host
+
+The single primary workstation holding all upstream OAuth credentials in its
+vault, running the gateway proxy, cooldown engine, and Cloudflare tunnel.
+
+## Thin client workstation
+
+A secondary workstation (PC2, PC3) holding zero upstream provider credentials,
+routing all agent requests to the SSOT gateway host through the tunnel.
+
+## Universal custom provider pattern
+
+The standardized 3-tuple configuration (`Base URL`, `API Key`, `Model ID`)
+allowing any developer AI tool with custom endpoint support to reuse pooled
+accounts without local OAuth authorization.

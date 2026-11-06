@@ -58,7 +58,8 @@ Status key: **Verified** = run end-to-end on this machine (tool turn, exit 0).
 | Cursor | OpenAI API key + base URL override | Settings -> Models; add the model id manually | universal rule above | Documented; some Cursor cloud features bypass custom endpoints |
 | Zed | `openai_compatible` language model | `settings.json` | universal rule above | Documented |
 | Any SDK agent (OpenAI / Anthropic / Vercel AI / LangGraph) | either | `baseURL` client option | `recipe python-openai` / `python-anthropic` | Verified at protocol level |
-| OMP / Oh My Pi itself | native | already uses the broker; nothing to do | — | Native |
+| OMP on PC1 (Primary) | native | uses local broker & vault directly | — | Native |
+| OMP on PC2/PC3 (Thin Client) | OpenAI Chat | `~/.omp/agent/models.yml` | `recipe omp` | Documented |
 
 ### Tools that cannot use this gateway
 
@@ -71,6 +72,52 @@ Status key: **Verified** = run end-to-end on this machine (tool turn, exit 0).
   no gateway can interpose. Check for "OpenAI Compatible", "Custom
   endpoint", or "BYOK" in its settings — that field is the whole test.
 
+
+## The Universal Custom Provider Pattern
+
+Any agent tool that allows configuring a "Custom Provider" or "OpenAI/Anthropic Compatible endpoint" can consume the gateway without OAuth authorization:
+
+1. **Base URL:**
+   - Local (PC1): `http://127.0.0.1:4000/v1` (OpenAI format) or `http://127.0.0.1:4000` (Anthropic format)
+   - Remote (PC2/PC3): `https://<tunnel-host>/v1` or `https://<tunnel-host>`
+2. **API Key / Token:** `omp_gw_<token>` (minted via `gateway:ctl connect <platform> [name]`)
+3. **Model ID:** `google-antigravity/gemini-3.8-flash`
+4. **Cloudflare Access Headers (for remote PC2/PC3):**
+   - `CF-Access-Client-Id: <client-id>`
+   - `CF-Access-Client-Secret: <client-secret>`
+
+## OMP Thin Client on Secondary PCs (PC2, PC3, ...)
+
+To prevent multi-machine configuration drift, secondary PCs should **never** hold Google OAuth logins or run `omp login`. Instead, configure OMP as a thin client:
+
+1. On the primary host (PC1), generate the recipe:
+   ```bash
+   bun run gateway:ctl recipe omp
+   # Or for remote PC2 with a dedicated token:
+   bun run gateway:ctl connect omp pc2 --base-url=https://<your-tunnel-host>
+   ```
+2. On PC2, add the output to `~/.omp/agent/models.yml`:
+   ```yaml
+   providers:
+     omp-gateway:
+       baseUrl: https://<your-tunnel-host>/v1
+       apiKey: omp_gw_<token>
+       api: openai-completions
+       headers:
+         CF-Access-Client-Id: <cf-client-id>
+         CF-Access-Client-Secret: <cf-client-secret>
+       models:
+         - id: google-antigravity/gemini-3.8-flash
+           name: Gemini 3.8 Flash (Gateway)
+           contextWindow: 1048576
+           maxTokens: 65536
+   ```
+3. Set the default in `~/.omp/agent/config.yml`:
+   ```yaml
+   modelRoles:
+     default: omp-gateway/google-antigravity/gemini-3.8-flash
+     plan: omp-gateway/google-antigravity/gemini-3.8-flash:high
+   ```
 ## Daily-driver setup
 
 - Gateways are managed by the Bun control plane:

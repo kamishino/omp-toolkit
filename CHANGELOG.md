@@ -17,6 +17,9 @@
 - Add Remote Client Doctor in Gateway (`gateway:ctl doctor --remote` and `/gateway doctor --remote`), diagnosing remote base URL, Cloudflare Access headers, public tunnel reachability, and gateway bearer auth in 1 command with actionable repair hints.
 - Add Nerd Font Downloader and Installer (`bun run font:install [family]` and `/font-install [family]`), downloading patched release archives from GitHub, installing font variants into the non-elevated user font store, broadcasting live font table updates on Windows without reboot, and atomically configuring Windows Terminal default font face.
 - Publish research report on Unified Gateways and round-robin Gemini load balancers on GitHub (`docs/research/gemini-unified-gateways-round-robin.md`), analyzing open-source archetypes (CLIProxyAPI, LiteLLM, One-API, OMP), comparison matrices, and the prompt cache invalidation penalty.
+- Add OMP Thin-Client platform recipe (`gateway:ctl recipe omp` and `connect omp`), generating ready-to-paste `models.yml` configurations for secondary workstations to consume the primary PC1 gateway without local OAuth authorization.
+- Add automatic Cloudflare credentials fallback (`~/.omp/cf-access.json`) and `--with-tunnel` support to Windows headless autostart (`gateway:ctl autostart-install --with-tunnel`).
+- Publish architectural strategy and research on Always-On Gateway operations and Thin-Client topology (`docs/research/always-on-gateway-architecture-pc1.md`).
 
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 
