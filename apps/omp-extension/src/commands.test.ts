@@ -187,7 +187,7 @@ describe("registerCommandsAndTools", () => {
     };
   }
 
-  test("registers all 8 slash commands and the gemini_health tool", () => {
+  test("registers all slash commands and the gemini_health tool", () => {
     const { commands, tools } = createTestHarness();
 
     const expectedCommands = [
@@ -199,6 +199,8 @@ describe("registerCommandsAndTools", () => {
       "gemini-restore",
       "gemini-enable",
       "gemini-auto-restore",
+      "gateway",
+      "font-install",
     ];
 
     for (const cmd of expectedCommands) {
@@ -357,5 +359,11 @@ describe("registerCommandsAndTools", () => {
       mockCtx,
     );
     expect(resHeal.details.action).toBeDefined();
+  });
+
+  test("font-install command is registered with description", () => {
+    const { commands } = createTestHarness();
+    expect(commands["font-install"]).toBeDefined();
+    expect(commands["font-install"].description).toContain("Nerd Fonts");
   });
 });

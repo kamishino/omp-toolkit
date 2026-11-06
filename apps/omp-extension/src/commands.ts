@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import type { AutoHealCoordinator } from "./auto-heal";
@@ -500,6 +501,36 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         );
       } catch (error) {
         ctx.ui.notify(`Gateway command failed: ${short(error)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand("font-install", {
+    description:
+      "Download and install Nerd Fonts for your terminal: /font-install [family] [--list] [--dry-run]",
+    handler: async (args, ctx) => {
+      try {
+        const rawArgs = args.trim().split(/\s+/).filter(Boolean);
+        const { execFile } = await import("node:child_process");
+        const { promisify } = await import("node:util");
+        const execFileAsync = promisify(execFile);
+        const scriptPath = path.resolve(__dirname, "../../../scripts/install/install-nerd-font.ts");
+        const { stdout, stderr } = await execFileAsync("bun", [scriptPath, ...rawArgs], {
+          timeout: 180_000,
+          windowsHide: true,
+        });
+        const output = String(stdout || stderr || "").trim();
+        pi.sendMessage(
+          {
+            customType: "font-install",
+            content: ["### 🔤 Nerd Font Installer", "", "```", output, "```"].join("\n"),
+            display: true,
+            attribution: "agent",
+          },
+          { triggerTurn: false },
+        );
+      } catch (error) {
+        ctx.ui.notify(`Font install failed: ${short(error)}`, "error");
       }
     },
   });
