@@ -369,3 +369,32 @@ immediately without conversational preambles or setup phrases ("I will now...",
 An RFC 2119 constraint formulation that pairs every negative prohibition
 (`MUST NOT touch X`) with an explicit positive operational target
 (`MUST touch ONLY Y`), eliminating scope drift and initiative hallucinations.
+
+## Tier 1 standing context
+
+The immutable, byte-stable prompt layer (`AGENTS.md`, system prompt) loaded on
+every agent turn (<100–150 lines), containing non-negotiable safety invariants,
+verified repository commands, and pushy context pointers to specialized skills.
+
+## Tier 2 disclosed skill
+
+An on-demand procedural document (`SKILL.md`) loaded into the conversation
+history only when triggered by matching task intent, containing multi-step
+algorithms, runbooks, and domain edge cases without bloating standing context.
+
+## Context load
+
+The operational cost of always-loaded tokens permanently occupying the agent's
+context window, consuming token budget and diluting positional attention
+regardless of whether the rules apply to the active turn.
+
+## Cognitive load
+
+The indexing overhead placed on the human or the prompt router to determine
+which skill or rule document exists and when it should be invoked.
+
+## Pushy context pointer
+
+An intent-rich reference in standing context that describes an on-demand skill
+using proactive, imperative triggers rather than passive descriptions,
+preventing the agent from under-triggering required workflows.

@@ -21,6 +21,8 @@
 - Add automatic Cloudflare credentials fallback (`~/.omp/cf-access.json`) and `--with-tunnel` support to Windows headless autostart (`gateway:ctl autostart-install --with-tunnel`).
 - Publish architectural strategy and research on Always-On Gateway operations and Thin-Client topology (`docs/research/always-on-gateway-architecture-pc1.md`).
 - Add Gemini-3.8-Flash Agent Harness prompt templates (`gemini-tdd`, `gemini-diagnose`, `gemini-speed`), incorporating Inverted Context Layout, Anti-Suppression Procedural Stance, Pre-Tool Chatter Redirection, and Paired Negative Bounding, switchable live via `/template apply <name>`.
+- Publish architectural research on Agent Skills vs. `AGENTS.md` and progressive disclosure in modern agent harnesses (`docs/research/agent-skills-vs-agents-md-analysis.md`), detailing Context Load vs. Cognitive Load, positional attention decay, and KV prompt cache stability.
+- Streamline OMP prompt templates (`templates/gemini-tdd`, `templates/gemini-diagnose`) to adopt 3-tier progressive disclosure, eliminating procedural duplication by delegating to specialized agent skills (`skill://tdd`, `skill://diagnosing-bugs`) via pushy context pointers.
 
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 

@@ -98,3 +98,18 @@ Inspect the differences before applying:
 ```bash
 /template show gemini-tdd
 ```
+
+### Architecture: 3-Tier Progressive Disclosure
+
+Prompt templates in OMP adhere to a **3-tier Information Hierarchy** to prevent "Lost in the Middle" attention degradation and preserve upstream provider KV prompt caching:
+
+1. **Tier 1: Standing Context (`AGENTS.md` / `RULES.md`)**
+   - Always in context (<100 lines).
+   - Houses immutable invariants, repo verification commands (`bun run check`), model role calibrations, and pushy skill pointers.
+2. **Tier 2: Disclosed Procedural Workflows (`skill://<name>`)**
+   - Loaded into conversation history on-demand only when a task matches the trigger (e.g. `skill://tdd`, `skill://diagnosing-bugs`).
+   - Houses multi-step procedural runbooks, edge-case trees, and algorithmic patterns.
+3. **Tier 3: Externalized Resources (`docs/`, `scripts/`, `assets/`)**
+   - Executable helpers and reference documentation inspected just-in-time via tools.
+
+For in-depth theoretical analysis, empirical attention dynamics benchmarks, and KV cache impact studies, see [`docs/research/agent-skills-vs-agents-md-analysis.md`](../docs/research/agent-skills-vs-agents-md-analysis.md).
