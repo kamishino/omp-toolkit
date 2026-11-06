@@ -83,10 +83,16 @@ OMP_PROVIDER_USAGE_WINDOWS_TRAY.md
 **/*.skill.md
 **/*.transcript.md
 
-# Local prompt templates (tracked plan-exec-handoff example remains public)
+# Local prompt templates (tracked official templates remain public)
 templates/*/AGENTS.template.md
 !templates/plan-exec-handoff/AGENTS.template.md
+!templates/gemini-tdd/AGENTS.template.md
+!templates/gemini-diagnose/AGENTS.template.md
+!templates/gemini-speed/AGENTS.template.md
 templates/*/RULES.template.md
+!templates/gemini-tdd/RULES.template.md
+!templates/gemini-diagnose/RULES.template.md
+!templates/gemini-speed/RULES.template.md
 
 # Internal research notes
 docs/research/
