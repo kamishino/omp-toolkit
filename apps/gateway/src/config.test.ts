@@ -27,6 +27,27 @@ describe("parseGatewayCtlConfig", () => {
     expect(config.command).toBe("help");
     expect(config.unknown).toEqual(["--wat"]);
   });
+  test("help flags set command to help without unknown warnings", () => {
+    const config1 = parseGatewayCtlConfig(["--help"], {}, HOME);
+    expect(config1.command).toBe("help");
+    expect(config1.unknown).toEqual([]);
+
+    const config2 = parseGatewayCtlConfig(["-h"], {}, HOME);
+    expect(config2.command).toBe("help");
+    expect(config2.unknown).toEqual([]);
+  });
+  test("connect command parses platform and client name", () => {
+    const config = parseGatewayCtlConfig(
+      ["connect", "claude-code", "my-client", "--force"],
+      {},
+      HOME,
+    );
+    expect(config.command).toBe("connect");
+    expect(config.target).toBe("claude-code");
+    expect(config.positionals).toEqual(["claude-code", "my-client"]);
+    expect(config.force).toBe(true);
+    expect(config.unknown).toEqual([]);
+  });
   test("tunnel and remote-recipe flags have loopback-safe defaults", () => {
     const config = parseGatewayCtlConfig(["start"], {}, HOME);
     expect(config.withTunnel).toBe(false);
@@ -79,6 +100,20 @@ describe("parseGatewayCtlConfig", () => {
     expect(config.packGatewayToken).toBe("omp_gw_x");
     expect(config.cfClientId).toBe("id");
     expect(config.cfClientSecret).toBe("s");
+    expect(config.unknown).toEqual([]);
+  });
+  test("remote-pair parses platform and client name", () => {
+    const config = parseGatewayCtlConfig(
+      ["remote-pair", "claude-code", "pc2", "--base-url=https://gw.example.com"],
+      { OMP_CF_CLIENT_ID: "cf-id", OMP_CF_CLIENT_SECRET: "cf-secret" },
+      HOME,
+    );
+    expect(config.command).toBe("remote-pair");
+    expect(config.target).toBe("claude-code");
+    expect(config.positionals).toEqual(["claude-code", "pc2"]);
+    expect(config.baseUrl).toBe("https://gw.example.com");
+    expect(config.cfClientId).toBe("cf-id");
+    expect(config.cfClientSecret).toBe("cf-secret");
     expect(config.unknown).toEqual([]);
   });
 });

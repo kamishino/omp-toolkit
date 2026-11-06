@@ -2,8 +2,8 @@ import { runAutostartCommand } from "./commands/autostart-commands";
 import { createCommandContext } from "./commands/context";
 import { runLifecycleCommand } from "./commands/lifecycle-commands";
 import { print } from "./commands/output";
-import { runRecipeCommand } from "./commands/recipe-commands";
-import { runRemotePackCommand } from "./commands/remote-commands";
+import { runConnectCommand, runRecipeCommand } from "./commands/recipe-commands";
+import { runRemotePackCommand, runRemotePairCommand } from "./commands/remote-commands";
 import { runAccountsCommand, runClientsCommand, runModelsCommand } from "./commands/view-commands";
 import { runWriteCommand } from "./commands/write-commands";
 import { GATEWAY_USAGE, parseGatewayCtlConfig } from "./config";
@@ -54,8 +54,16 @@ async function main(): Promise<void> {
       await runRecipeCommand(ctx);
       return;
     }
+    case "connect": {
+      await runConnectCommand(ctx);
+      return;
+    }
     case "remote-pack": {
       await runRemotePackCommand(ctx);
+      return;
+    }
+    case "remote-pair": {
+      await runRemotePairCommand(ctx);
       return;
     }
     case "autostart-install":

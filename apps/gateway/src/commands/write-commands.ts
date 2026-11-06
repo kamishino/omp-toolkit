@@ -6,9 +6,9 @@ import { print, writeTextFileAtomic } from "./output";
 
 const DEFAULT_BLOCK_SECONDS = 900;
 
-export async function runWriteCommand(ctx: CommandContext): Promise<void> {
+export function createGatewayWrites(ctx: CommandContext): GatewayWrites {
   const { config, adapter, client, readPoliciesRaw } = ctx;
-  const writes = new GatewayWrites({
+  return new GatewayWrites({
     client,
     readPoliciesRaw,
     writePolicies: async (policies) => {
@@ -22,6 +22,11 @@ export async function runWriteCommand(ctx: CommandContext): Promise<void> {
     provider: config.provider,
     audit: createHistoryAudit(config.historyDbPath, config.machinePath),
   });
+}
+
+export async function runWriteCommand(ctx: CommandContext): Promise<void> {
+  const { config } = ctx;
+  const writes = createGatewayWrites(ctx);
   const seconds = config.durationSeconds ?? DEFAULT_BLOCK_SECONDS;
   const targetId = config.target !== null ? Number(config.target) : Number.NaN;
   const needId = (): number => {

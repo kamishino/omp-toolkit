@@ -65,4 +65,32 @@ export class GatewayWrites {
   undrain(credentialId: number): Promise<WriteResult> {
     return undrainAccount(this.#ctx, credentialId);
   }
+
+  async autoCooldownSweep(
+    nowMs: number = Date.now(),
+  ): Promise<{ blocked: number[]; skipped: number | null }> {
+    const { buildAccountViews, evaluateQuotaCooldowns } = await import("@omp-toolkit/core");
+    const [snapshot, checks, usage, policiesRaw] = await Promise.all([
+      this.#ctx.client.getSnapshot(),
+      this.#ctx.client.getCredentialCheck(),
+      this.#ctx.client.getUsage(),
+      this.#ctx.readPoliciesRaw(),
+    ]);
+    const policies = JSON.parse(policiesRaw || "[]");
+    const views = buildAccountViews({
+      nowMs,
+      snapshot,
+      checks,
+      usage,
+      policies,
+      provider: this.#ctx.provider,
+    });
+    const evaluation = evaluateQuotaCooldowns(views, nowMs);
+    const blocked: number[] = [];
+    for (const item of evaluation.toBlock) {
+      const res = await this.block(item.id, item.durationSeconds);
+      if (res.ok) blocked.push(item.id);
+    }
+    return { blocked, skipped: evaluation.skippedLastSurviving };
+  }
 }

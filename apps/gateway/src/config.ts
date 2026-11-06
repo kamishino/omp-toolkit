@@ -21,7 +21,9 @@ export type GatewayCommand =
   | "unblock-all"
   | "policy"
   | "recipe"
+  | "connect"
   | "remote-pack"
+  | "remote-pair"
   | "autostart-install"
   | "autostart-remove"
   | "autostart-status"
@@ -47,7 +49,9 @@ const COMMANDS: readonly string[] = [
   "unblock-all",
   "policy",
   "recipe",
+  "connect",
   "remote-pack",
+  "remote-pair",
   "autostart-install",
   "autostart-remove",
   "autostart-status",
@@ -71,6 +75,7 @@ export interface GatewayCtlConfig {
   provider: string;
   /** First positional after the command (client name or credential id). */
   target: string | null;
+  positionals: string[];
   models: string[] | null;
   accountIds: number[];
   durationSeconds: number | null;
@@ -126,10 +131,17 @@ export function parseGatewayCtlConfig(
   env: NodeJS.ProcessEnv = process.env,
   home: string = homedir(),
 ): GatewayCtlConfig {
+  const isHelp =
+    argv.includes("--help") ||
+    argv.includes("-h") ||
+    argv[0] === "help" ||
+    argv.find((a) => !a.startsWith("--")) === "help";
   const rawCommand = argv.find((a) => !a.startsWith("--"));
-  const command: GatewayCommand =
-    rawCommand && COMMANDS.includes(rawCommand) ? (rawCommand as GatewayCommand) : "help";
-
+  const command: GatewayCommand = isHelp
+    ? "help"
+    : rawCommand && COMMANDS.includes(rawCommand)
+      ? (rawCommand as GatewayCommand)
+      : "help";
   const ompDir = env.OMP_CTL_HOME ?? path.join(home, ".omp");
   const knownPrefixes = [
     "--broker-bind=",
@@ -152,14 +164,18 @@ export function parseGatewayCtlConfig(
     "--cf-client-secret=",
     "--gateway-token=",
   ];
-  const unknown = argv.filter(
-    (a) =>
-      a.startsWith("--") &&
-      a !== "--json" &&
-      a !== "--force" &&
-      a !== "--with-tunnel" &&
-      !knownPrefixes.some((p) => a.startsWith(p)),
-  );
+  const unknown = isHelp
+    ? []
+    : argv.filter(
+        (a) =>
+          a.startsWith("--") &&
+          a !== "--json" &&
+          a !== "--force" &&
+          a !== "--with-tunnel" &&
+          a !== "--help" &&
+          a !== "-h" &&
+          !knownPrefixes.some((p) => a.startsWith(p)),
+      );
   const positionals = argv.filter((a) => !a.startsWith("--")).slice(1);
   const seconds = numberFlag(argv, "seconds");
   const minutes = numberFlag(argv, "minutes");
@@ -181,6 +197,7 @@ export function parseGatewayCtlConfig(
     machinePath: path.join(ompDir, "agent", "omp-toolkit-machine.json"),
     provider: "google-antigravity",
     target: positionals[0] ?? null,
+    positionals,
     models: (() => {
       const raw = flagValue(argv, "models");
       return raw === undefined
@@ -245,7 +262,12 @@ Read commands:
   autostart-install|autostart-remove|autostart-status
             Windows Startup-folder entry that runs start at sign-in
 
-Write commands (audited to History; blocks always expire):
+Write & Onboarding commands (audited to History; blocks always expire):
+  connect <platform> [name] [--force]
+            1-step onboarding: registers client token and prints the exact
+            copy-pasteable setup snippet (claude-code, opencode, cline, ...)
+  remote-pair <platform> [name] [--base-url=<url>]
+            1-click secondary PC setup script (PowerShell & Bash 1-liners)
   clients-add <name> [--models=p/*,...] [--account-id=<id> ...] [--force]
   clients-revoke <name>
   block <account-id> [--seconds=900]
