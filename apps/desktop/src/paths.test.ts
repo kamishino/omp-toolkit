@@ -7,6 +7,7 @@ import {
   findBun,
   panelPaths,
   resolveCheckout,
+  resolveGatewayScript,
   resolveHealthScript,
   resolveMonitorScript,
 } from "./paths";
@@ -172,6 +173,19 @@ describe("paths helpers", () => {
         tmpDir,
       ),
     ).toBeNull();
+  });
+  test("resolveGatewayScript resolves installed, dist, or src", () => {
+    const agentScripts = path.join(tmpDir, ".omp", "agent", "scripts");
+    fs.mkdirSync(agentScripts, { recursive: true });
+    const installed = path.join(agentScripts, "omp-gateway-ctl.js");
+    fs.writeFileSync(installed, "// installed\n");
+
+    const res = resolveGatewayScript(
+      { PI_CODING_AGENT_DIR: path.join(tmpDir, ".omp", "agent") },
+      tmpDir,
+      tmpDir,
+    );
+    expect(res).toBe(installed);
   });
 
   test("resolveCheckout respects precedence and requires scripts/monitor/orca-monitor.ts or legacy scripts/orca-monitor.ts", () => {

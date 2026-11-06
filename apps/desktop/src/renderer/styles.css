@@ -129,14 +129,25 @@ body {
 }
 
 /* Gateway signal strip: infrastructure liveness above the usage summary. */
+.gateway-container {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface-raised);
+  border: var(--size-border) solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 140ms ease;
+}
+
+.gateway-container:focus-within {
+  border-color: var(--color-accent);
+}
+
 .gateway-strip {
   display: flex;
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-sm) var(--space-md);
-  background-color: var(--color-surface-raised);
-  border: var(--size-border) solid var(--color-border);
-  border-radius: var(--radius-md);
 }
 
 .gw-dot {
@@ -241,6 +252,177 @@ body {
 
 .gw-pool-warn {
   color: var(--color-warn);
+}
+
+/* ── Gateway Controls & Interactive Drawer ────────────────────────── */
+.gw-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: none;
+}
+
+.gw-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  border: var(--size-border) solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease,
+    transform 120ms ease;
+}
+
+.gw-action-btn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.gw-action-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.gw-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.gw-action-btn svg {
+  inline-size: 14px;
+  block-size: 14px;
+  fill: currentColor;
+}
+
+.gw-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  flex: none;
+  border-radius: var(--radius-sm);
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.gw-toggle-btn:hover {
+  color: var(--color-text);
+  background-color: var(--color-surface);
+}
+
+.gw-toggle-btn svg {
+  inline-size: 16px;
+  block-size: 16px;
+  fill: currentColor;
+}
+
+.gw-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md) var(--space-md);
+  border-top: var(--size-border) solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.gw-drawer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  flex-wrap: wrap;
+}
+
+.gw-endpoint-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  cursor: pointer;
+  padding: 3px var(--space-sm);
+  border-radius: var(--radius-sm);
+  border: var(--size-border) solid var(--color-border);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  transition: border-color 140ms ease;
+  user-select: none;
+}
+
+.gw-endpoint-copy:hover {
+  border-color: var(--color-accent);
+}
+
+.gw-endpoint-copy svg {
+  inline-size: 12px;
+  block-size: 12px;
+  fill: currentColor;
+}
+
+.gw-recipe-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding-top: var(--space-xs);
+}
+
+.gw-recipe-label {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.gw-recipe-select {
+  padding: 2px var(--space-sm);
+  font-size: var(--font-size-xs);
+}
+
+.gw-recipe-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 3px var(--space-sm);
+  font-size: var(--font-size-xs);
+  border-radius: var(--radius-sm);
+  border: var(--size-border) solid var(--color-border);
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.gw-recipe-copy-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.gw-recipe-copy-btn svg {
+  inline-size: 12px;
+  block-size: 12px;
+  fill: currentColor;
 }
 .warmup-message {
   margin: 0;

@@ -307,4 +307,55 @@ describe("DesktopRuntime deep coordinator", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  test("refresh triggers proactive notifications when accounts hit warning threshold", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      const dashboard = dummyDashboard();
+      dashboard.providers = [
+        {
+          id: "google-antigravity",
+          name: "GOOGLE ANTIGRAVITY",
+          suffix: "",
+          accounts: 1,
+          columns: [],
+          rows: [
+            {
+              account: "hot@example.com",
+              displayAccount: "hot",
+              health: "ok",
+              maxUsed: 0.95,
+              level: "critical",
+              route: { text: "OK", level: "ok" },
+              limits: [
+                {
+                  label: "Weekly",
+                  usedFraction: 0.95,
+                  low: false,
+                  level: "critical",
+                },
+              ],
+            },
+          ],
+        },
+      ];
+
+      const notifications: Array<{ title: string; body: string }> = [];
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        fetchDashboardFn: async () => dashboard,
+        onNotification: (title, body) => {
+          notifications.push({ title, body });
+        },
+      });
+
+      await runtime.refresh();
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].title).toContain("≥90%");
+      expect(notifications[0].body).toContain("hot@example.com");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

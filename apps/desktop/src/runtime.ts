@@ -2,9 +2,11 @@ import type {
   AccountSortOrder,
   BalanceAlertThresholds,
   Dashboard,
+  QuotaAlertHistory,
+  UsageReport,
   WarmUpRequest,
 } from "@omp-toolkit/core";
-import { supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
+import { evaluateQuotaAlerts, supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
 import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { fetchDashboard } from "./data";
 import type { GatewayPanelView, PanelState } from "./ipc";
@@ -74,6 +76,8 @@ export interface DesktopRuntimeOptions {
   argv?: string[];
   env?: NodeJS.ProcessEnv;
   home?: string;
+  onNotification?: (title: string, body: string) => void;
+  now?: () => number;
 }
 
 export type RuntimeListener = (state: PanelState) => void;
@@ -100,6 +104,7 @@ export class DesktopRuntime {
   private refreshTimer: NodeJS.Timeout | null = null;
   private readonly dialogHost: DialogHost;
   private readonly listeners = new Set<RuntimeListener>();
+  private quotaAlertHistory: QuotaAlertHistory = {};
 
   constructor(private readonly options: DesktopRuntimeOptions) {
     this.dialogHost = options.dialogHost ?? defaultDialogHost;
@@ -204,6 +209,29 @@ export class DesktopRuntime {
           { bun, script },
           { balanceAlert: this.settings.balanceAlert, accountSort: this.settings.accountSort },
         );
+      }
+      if (dashboard) {
+        const now = this.options.now ? this.options.now() : Date.now();
+        const reports: UsageReport[] = dashboard.providers.flatMap((p) =>
+          p.rows.map((r) => ({
+            provider: p.id,
+            metadata: { email: r.account },
+            limits: r.limits.map((l) => ({
+              label: l.label,
+              amount: { usedFraction: l.usedFraction },
+              window: { resetsAt: l.resetsAt },
+            })),
+          })),
+        );
+        const { alerts, updatedHistory } = evaluateQuotaAlerts(
+          reports,
+          this.quotaAlertHistory,
+          now,
+        );
+        this.quotaAlertHistory = updatedHistory;
+        for (const alert of alerts) {
+          this.options.onNotification?.(alert.title, alert.message);
+        }
       }
       this.lastDashboard = dashboard;
       this.lastError = null;

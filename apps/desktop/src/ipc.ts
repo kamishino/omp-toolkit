@@ -12,6 +12,8 @@ export const IPC = {
   saveSettings: "omp:save-settings",
   resize: "omp:resize",
   openSettings: "omp:open-settings",
+  gatewayAction: "omp:gateway-action",
+  gatewayConnect: "omp:gateway-connect",
 } as const;
 
 export interface RendererToMainEvents {
@@ -33,6 +35,23 @@ export interface MainToRendererEvents {
 export interface WarmUpState {
   running: boolean;
   message: string | null;
+}
+
+export interface GatewayActionResult {
+  success: boolean;
+  message: string;
+}
+
+export interface GatewayConnectResult {
+  success: boolean;
+  clientName?: string;
+  token?: string;
+  recipe?: {
+    platform: string;
+    title: string;
+    snippet: string;
+  };
+  message?: string;
 }
 
 export type GatewayPanelStateKind = "active" | "off" | "error" | "unknown";
@@ -95,6 +114,8 @@ export interface OmpApi {
   saveSettings(settings: DesktopSettings): void;
   resize(height: number): void;
   onOpenSettings(callback: () => void): () => void;
+  gatewayAction(action: "start" | "stop" | "restart" | "doctor"): Promise<GatewayActionResult>;
+  gatewayConnect(platform: string, name?: string): Promise<GatewayConnectResult>;
 }
 
 declare global {

@@ -52,6 +52,12 @@ const api: OmpApi = {
       ipcRenderer.removeListener(IPC.openSettings, listener);
     };
   },
+  gatewayAction(action) {
+    return ipcRenderer.invoke(IPC.gatewayAction, action);
+  },
+  gatewayConnect(platform, name) {
+    return ipcRenderer.invoke(IPC.gatewayConnect, platform, name);
+  },
 };
 
 contextBridge.exposeInMainWorld("omp", api);

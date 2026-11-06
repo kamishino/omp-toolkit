@@ -1,7 +1,9 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app, dialog, ipcMain, Menu, nativeTheme, powerMonitor } from "electron";
+import { promisify } from "node:util";
+import { app, dialog, ipcMain, Menu, Notification, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { desktopSourcePaths, findStaleDist } from "./freshness";
 import { GatewayStatusProbe } from "./gateway-status";
@@ -10,7 +12,7 @@ import { consumeLaunchFailure } from "./launch-failure";
 import { logError } from "./logger";
 import { createLoginItem, type LoginItem } from "./login-item";
 import { DesktopPanel } from "./panel";
-import { agentDir, panelPaths } from "./paths";
+import { agentDir, findBun, panelPaths, resolveGatewayScript } from "./paths";
 import { DesktopRuntime } from "./runtime";
 import { DesktopTray } from "./tray";
 
@@ -95,6 +97,11 @@ void app.whenReady().then(async () => {
     loginItem,
     argv: process.argv,
     env: process.env,
+    onNotification: (title, body) => {
+      if (Notification.isSupported()) {
+        new Notification({ title, body }).show();
+      }
+    },
   });
 
   const priorLaunchFailure = consumeLaunchFailure(agentDir());
@@ -302,6 +309,57 @@ void app.whenReady().then(async () => {
   });
   onIpc(IPC.resize, (_event, height: number) => {
     panel?.setHeight(height);
+  });
+  ipcMain.handle(IPC.gatewayAction, async (_event, action: string) => {
+    try {
+      const ctlScript = resolveGatewayScript(process.env, checkoutRoot);
+      if (!ctlScript) throw new Error("Gateway control script not found");
+      const bun = findBun(process.env, process.platform);
+      if (!bun) throw new Error("Bun not found");
+      const execFileAsync = promisify(execFile);
+      const { stdout, stderr } = await execFileAsync(bun, [ctlScript, action], {
+        timeout: 60_000,
+        windowsHide: true,
+      });
+      syncTrayWithGateway();
+      return { success: true, message: String(stdout || stderr || "").trim() };
+    } catch (err) {
+      syncTrayWithGateway();
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
+  });
+  ipcMain.handle(IPC.gatewayConnect, async (_event, platform: string, name?: string) => {
+    try {
+      const ctlScript = resolveGatewayScript(process.env, checkoutRoot);
+      if (!ctlScript) throw new Error("Gateway control script not found");
+      const bun = findBun(process.env, process.platform);
+      if (!bun) throw new Error("Bun not found");
+      const execFileAsync = promisify(execFile);
+      const args = ["connect", platform];
+      if (name) args.push(name);
+      args.push("--json");
+      const { stdout } = await execFileAsync(bun, [ctlScript, ...args], {
+        timeout: 60_000,
+        windowsHide: true,
+      });
+      const parsed = JSON.parse(String(stdout));
+      syncTrayWithGateway();
+      return {
+        success: parsed.ok === true,
+        token: parsed.token,
+        clientName: parsed.clientName,
+        recipe: parsed.recipe,
+        message: parsed.error,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        message: err instanceof Error ? err.message : String(err),
+      };
+    }
   });
   panel.window.webContents.on("did-finish-load", () => {
     if (runtime) {

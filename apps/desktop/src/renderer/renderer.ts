@@ -1,4 +1,17 @@
-import { mdiClose, mdiCog, mdiRefresh, mdiWindowMinimize } from "@mdi/js";
+import {
+  mdiCheck,
+  mdiChevronDown,
+  mdiChevronRight,
+  mdiClose,
+  mdiCog,
+  mdiContentCopy,
+  mdiPlay,
+  mdiRefresh,
+  mdiRestart,
+  mdiStethoscope,
+  mdiStop,
+  mdiWindowMinimize,
+} from "@mdi/js";
 import { type DashboardRow, formatAge } from "@omp-toolkit/core";
 import type { PanelState } from "../ipc";
 import { UNKNOWN_GATEWAY_PANEL_VIEW } from "../ipc";
@@ -65,11 +78,38 @@ function el(tag: string, className: string, text?: string): HTMLElement {
  * Pool figures derive from the dashboard's Antigravity section so the strip
  * never needs its own credential-bearing fetch beyond the main probe.
  */
+const GATEWAY_DRAWER_STORAGE_KEY = "omp.gatewayDrawerOpen";
+
+export function isGatewayDrawerOpen(): boolean {
+  try {
+    return (
+      typeof localStorage !== "undefined" &&
+      localStorage.getItem(GATEWAY_DRAWER_STORAGE_KEY) === "true"
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function setGatewayDrawerOpen(open: boolean): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(GATEWAY_DRAWER_STORAGE_KEY, String(open));
+    }
+  } catch {
+    // headless fallback
+  }
+}
+
 export function buildGatewayStrip(state: PanelState): HTMLElement {
   const gateway = state.gateway ?? UNKNOWN_GATEWAY_PANEL_VIEW;
-  const strip = el("section", "gateway-strip");
-  strip.setAttribute("data-state", gateway.state);
-  strip.setAttribute("aria-label", gateway.label);
+  let drawerOpen = isGatewayDrawerOpen();
+
+  const container = el("section", "gateway-container");
+  container.setAttribute("data-state", gateway.state);
+  container.setAttribute("aria-label", gateway.label);
+
+  const strip = el("div", "gateway-strip");
 
   const dot = el("span", "gw-dot");
   dot.setAttribute("aria-hidden", "true");
@@ -131,7 +171,181 @@ export function buildGatewayStrip(state: PanelState): HTMLElement {
     strip.appendChild(pool);
   }
 
-  return strip;
+  // Action controls
+  const controls = el("div", "gw-controls");
+
+  const runAction = (action: "start" | "stop" | "restart" | "doctor", btn: HTMLButtonElement) => {
+    btn.disabled = true;
+    showToast(`Gateway ${action} in progress...`);
+    if (typeof window !== "undefined" && window.omp?.gatewayAction) {
+      void window.omp.gatewayAction(action).then((res) => {
+        btn.disabled = false;
+        showToast(
+          res.success ? `Gateway ${action} completed` : `Gateway ${action} failed: ${res.message}`,
+        );
+      });
+    }
+  };
+
+  if (gateway.state === "off" || gateway.state === "error") {
+    const startBtn = el("button", "gw-action-btn") as HTMLButtonElement;
+    startBtn.type = "button";
+    startBtn.title = "Start Gateway";
+    startBtn.setAttribute("aria-label", "Start Gateway");
+    startBtn.appendChild(icon(mdiPlay));
+    startBtn.addEventListener("click", () => runAction("start", startBtn));
+    controls.appendChild(startBtn);
+
+    const docBtn = el("button", "gw-action-btn") as HTMLButtonElement;
+    docBtn.type = "button";
+    docBtn.title = "Run Gateway Doctor";
+    docBtn.setAttribute("aria-label", "Run Gateway Doctor");
+    docBtn.appendChild(icon(mdiStethoscope));
+    docBtn.addEventListener("click", () => runAction("doctor", docBtn));
+    controls.appendChild(docBtn);
+  } else if (gateway.state === "active") {
+    const restartBtn = el("button", "gw-action-btn") as HTMLButtonElement;
+    restartBtn.type = "button";
+    restartBtn.title = "Restart Gateway";
+    restartBtn.setAttribute("aria-label", "Restart Gateway");
+    restartBtn.appendChild(icon(mdiRestart));
+    restartBtn.addEventListener("click", () => runAction("restart", restartBtn));
+    controls.appendChild(restartBtn);
+
+    const stopBtn = el("button", "gw-action-btn") as HTMLButtonElement;
+    stopBtn.type = "button";
+    stopBtn.title = "Stop Gateway";
+    stopBtn.setAttribute("aria-label", "Stop Gateway");
+    stopBtn.appendChild(icon(mdiStop));
+    stopBtn.addEventListener("click", () => runAction("stop", stopBtn));
+    controls.appendChild(stopBtn);
+
+    const docBtn = el("button", "gw-action-btn") as HTMLButtonElement;
+    docBtn.type = "button";
+    docBtn.title = "Run Gateway Doctor";
+    docBtn.setAttribute("aria-label", "Run Gateway Doctor");
+    docBtn.appendChild(icon(mdiStethoscope));
+    docBtn.addEventListener("click", () => runAction("doctor", docBtn));
+    controls.appendChild(docBtn);
+  }
+
+  const toggleBtn = el("button", "gw-toggle-btn") as HTMLButtonElement;
+  toggleBtn.type = "button";
+  toggleBtn.title = drawerOpen ? "Collapse gateway details" : "Expand gateway details";
+  toggleBtn.setAttribute(
+    "aria-label",
+    drawerOpen ? "Collapse gateway details" : "Expand gateway details",
+  );
+  toggleBtn.appendChild(icon(drawerOpen ? mdiChevronDown : mdiChevronRight));
+  controls.appendChild(toggleBtn);
+
+  strip.appendChild(controls);
+  container.appendChild(strip);
+
+  // Drawer
+  let drawer: HTMLElement | null = null;
+  const renderDrawer = () => {
+    if (!drawerOpen) {
+      if (drawer) {
+        drawer.remove();
+        drawer = null;
+      }
+      return;
+    }
+    if (drawer) return;
+
+    drawer = el("div", "gw-drawer");
+
+    // Row 1: Endpoint & Quick Copy
+    const row1 = el("div", "gw-drawer-row");
+    const epLabel = el("span", "", `Endpoint: http://${gateway.endpoint}`);
+    const copyEp = el("button", "gw-endpoint-copy") as HTMLButtonElement;
+    copyEp.type = "button";
+    copyEp.appendChild(icon(mdiContentCopy));
+    copyEp.appendChild(document.createTextNode("Copy URL"));
+    copyEp.addEventListener("click", () => {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(`http://${gateway.endpoint}`);
+        copyEp.replaceChildren(icon(mdiCheck), document.createTextNode("Copied!"));
+        setTimeout(() => {
+          copyEp.replaceChildren(icon(mdiContentCopy), document.createTextNode("Copy URL"));
+        }, 1500);
+      }
+    });
+    row1.appendChild(epLabel);
+    row1.appendChild(copyEp);
+    drawer.appendChild(row1);
+
+    // Row 2: Recipe Bar
+    const recipeBar = el("div", "gw-recipe-bar");
+    recipeBar.appendChild(el("span", "gw-recipe-label", "Connect Tool:"));
+
+    const recipeSelect = document.createElement("select");
+    recipeSelect.className = "select-input gw-recipe-select";
+    const platforms = [
+      { id: "claude-code", label: "Claude Code" },
+      { id: "opencode", label: "OpenCode" },
+      { id: "cline", label: "Cline" },
+      { id: "cursor", label: "Cursor" },
+      { id: "aider", label: "Aider" },
+      { id: "curl", label: "curl" },
+    ];
+    for (const p of platforms) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.label;
+      recipeSelect.appendChild(opt);
+    }
+    recipeBar.appendChild(recipeSelect);
+
+    const copyRecipeBtn = el("button", "gw-recipe-copy-btn") as HTMLButtonElement;
+    copyRecipeBtn.type = "button";
+    copyRecipeBtn.appendChild(icon(mdiContentCopy));
+    copyRecipeBtn.appendChild(document.createTextNode("Copy Setup Snippet"));
+    copyRecipeBtn.addEventListener("click", () => {
+      copyRecipeBtn.disabled = true;
+      if (typeof window !== "undefined" && window.omp?.gatewayConnect) {
+        void window.omp.gatewayConnect(recipeSelect.value).then((res) => {
+          copyRecipeBtn.disabled = false;
+          if (res.success && res.recipe?.snippet) {
+            if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+              void navigator.clipboard.writeText(res.recipe.snippet);
+            }
+            showToast(`Copied ${res.recipe.title} setup snippet!`);
+            copyRecipeBtn.replaceChildren(icon(mdiCheck), document.createTextNode("Copied!"));
+            setTimeout(() => {
+              copyRecipeBtn.replaceChildren(
+                icon(mdiContentCopy),
+                document.createTextNode("Copy Setup Snippet"),
+              );
+            }, 1500);
+          } else {
+            showToast(res.message || "Failed to generate recipe");
+          }
+        });
+      }
+    });
+    recipeBar.appendChild(copyRecipeBtn);
+    drawer.appendChild(recipeBar);
+
+    container.appendChild(drawer);
+  };
+
+  toggleBtn.addEventListener("click", () => {
+    drawerOpen = !drawerOpen;
+    setGatewayDrawerOpen(drawerOpen);
+    toggleBtn.title = drawerOpen ? "Collapse gateway details" : "Expand gateway details";
+    toggleBtn.setAttribute(
+      "aria-label",
+      drawerOpen ? "Collapse gateway details" : "Expand gateway details",
+    );
+    toggleBtn.replaceChildren(icon(drawerOpen ? mdiChevronDown : mdiChevronRight));
+    renderDrawer();
+  });
+
+  renderDrawer();
+
+  return container;
 }
 
 function renderSummaryChips(

@@ -81,6 +81,23 @@ export function resolveHealthScript(
   return resolveHealthScriptCandidates(checkoutRoot, env, home).find(isRegularFile) ?? null;
 }
 
+export function resolveGatewayScript(
+  env = process.env,
+  checkoutRoot?: string,
+  home = os.homedir(),
+): string | null {
+  const dir = resolveAgentDir(env, home);
+  const installed = path.join(dir, "scripts", "omp-gateway-ctl.js");
+  if (isRegularFile(installed)) return installed;
+  if (checkoutRoot) {
+    const dist = path.join(checkoutRoot, "apps", "gateway", "dist", "index.js");
+    if (isRegularFile(dist)) return dist;
+    const src = path.join(checkoutRoot, "apps", "gateway", "src", "index.ts");
+    if (isRegularFile(src)) return src;
+  }
+  return null;
+}
+
 export function resolveCheckout(
   env = process.env,
   checkoutRoot: string,

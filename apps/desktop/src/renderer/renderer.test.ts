@@ -277,4 +277,49 @@ describe("renderer panel", () => {
     const metricChips = chips?.children.filter((c) => c.className?.includes("metric-chip")) ?? [];
     expect(metricChips.length).toBe(4);
   });
+
+  test("gateway strip renders action controls and supports drawer persistence", async () => {
+    mockDoc();
+    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
+    const { buildGatewayStrip, isGatewayDrawerOpen, setGatewayDrawerOpen } = await import(
+      "./renderer"
+    );
+
+    const memStorage = new Map<string, string>();
+    globalThis.localStorage = {
+      getItem: (k: string) => memStorage.get(k) ?? null,
+      setItem: (k: string, v: string) => memStorage.set(k, v),
+      removeItem: (k: string) => memStorage.delete(k),
+      clear: () => memStorage.clear(),
+      length: 0,
+      key: () => null,
+    } as unknown as Storage;
+
+    expect(isGatewayDrawerOpen()).toBe(false);
+    setGatewayDrawerOpen(true);
+    expect(isGatewayDrawerOpen()).toBe(true);
+    setGatewayDrawerOpen(false);
+
+    const strip = buildGatewayStrip({
+      status: "ready",
+      data: dashboardWith({}),
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+      gateway: {
+        state: "off",
+        label: "Gateway: Off",
+        endpoint: "127.0.0.1:4000",
+        modelCount: null,
+        antigravityModelCount: null,
+        clientCount: null,
+        checkedAt: 1,
+      },
+    } as never) as unknown as MockNode;
+
+    const controls = findByClass(strip, "gw-controls");
+    expect(controls).toBeDefined();
+    expect(findByClass(controls as MockNode, "gw-action-btn")).toBeDefined();
+    expect(findByClass(controls as MockNode, "gw-toggle-btn")).toBeDefined();
+  });
 });
