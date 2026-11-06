@@ -44,6 +44,8 @@
     "format": "biome format --write .",
     "check": "biome check . && tsc --noEmit && tsc -p apps/desktop/tsconfig.json --noEmit && bun test && bun scripts/tokens/check-tokens.ts",
     "widget": "bun scripts/desktop/widget.ts",
+    "font": "bun scripts/install/install-nerd-font.ts",
+    "font:install": "bun scripts/install/install-nerd-font.ts",
     "install:omp": "bun scripts/build/build.ts --no-desktop && bun scripts/install/install.ts",
     "monitor": "bun scripts/monitor/monitor.ts",
     "monitor:orca": "bun scripts/monitor/orca-monitor.ts",
