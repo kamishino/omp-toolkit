@@ -167,4 +167,16 @@ describe("generateClientRecipe", () => {
     });
     expect(recipe.snippet).toContain("http://127.0.0.1:4000/v1/chat/completions");
   });
+
+  test("generates OMP thin-client recipe with models.yml and config.yml snippets", () => {
+    const recipe = generateClientRecipe("omp", optionsWithCf);
+    expect(recipe.platform).toBe("omp");
+    expect(recipe.snippet).toContain("providers:");
+    expect(recipe.snippet).toContain("omp-gateway:");
+    expect(recipe.snippet).toContain("https://gateway.example.com/v1");
+    expect(recipe.snippet).toContain("CF-Access-Client-Id: test-client-id.access");
+    expect(recipe.snippet).toContain("CF-Access-Client-Secret: test-client-secret");
+    expect(recipe.snippet).toContain("google-antigravity/gemini-3.8-flash");
+    expect(recipe.snippet).toContain("modelRoles:");
+  });
 });

@@ -19,8 +19,8 @@ export type ClientRecipePlatform =
   | "crush"
   | "qwen-code"
   | "hermes"
-  | "dsh";
-
+  | "dsh"
+  | "omp";
 export interface ClientRecipe {
   platform: ClientRecipePlatform;
   title: string;

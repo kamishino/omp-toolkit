@@ -7,6 +7,7 @@ import { buildCurlRecipe } from "./recipes/platforms/curl";
 import { buildDshRecipe } from "./recipes/platforms/dsh";
 import { buildGooseRecipe } from "./recipes/platforms/goose";
 import { buildHermesRecipe } from "./recipes/platforms/hermes";
+import { buildOmpRecipe } from "./recipes/platforms/omp";
 import { buildOpencodeRecipe } from "./recipes/platforms/opencode";
 import { buildPiRecipe } from "./recipes/platforms/pi";
 import { buildPythonAnthropicRecipe } from "./recipes/platforms/python-anthropic";
@@ -35,6 +36,7 @@ const BUILDERS: Record<ClientRecipePlatform, RecipeBuilder> = {
   "qwen-code": buildQwenCodeRecipe,
   hermes: buildHermesRecipe,
   dsh: buildDshRecipe,
+  omp: buildOmpRecipe,
 };
 
 export function generateClientRecipe(
