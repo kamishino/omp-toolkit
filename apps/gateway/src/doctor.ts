@@ -4,6 +4,8 @@ import {
   type DoctorFacts,
   doctorPassed,
   evaluateDoctorChecks,
+  evaluateRemoteDoctorChecks,
+  type RemoteDoctorFacts,
 } from "@omp-toolkit/core";
 import type { BrokerClient } from "./broker-client";
 import type { GatewayCtlConfig } from "./config";
@@ -85,6 +87,96 @@ export async function runDoctorChecks(
   return { checks, passed, exitCode: passed ? 0 : 1 };
 }
 
+export async function gatherRemoteDoctorFacts(
+  config: GatewayCtlConfig,
+  fetchFn: typeof fetch = fetch,
+): Promise<RemoteDoctorFacts> {
+  const baseUrl = config.baseUrl?.replace(/\/$/, "") ?? null;
+  const cfClientId = config.cfClientId;
+  const cfClientSecret = config.cfClientSecret;
+  const gatewayToken = config.gatewayToken;
+
+  if (!baseUrl) {
+    return {
+      baseUrl: null,
+      cfClientId,
+      cfClientSecret,
+      gatewayToken,
+      cfProbeStatus: null,
+      cfProbeError: "No base URL configured",
+      authProbeStatus: null,
+      authProbeError: "No base URL configured",
+      models: null,
+    };
+  }
+
+  const cfHeaders: Record<string, string> = {};
+  if (cfClientId) cfHeaders["CF-Access-Client-Id"] = cfClientId;
+  if (cfClientSecret) cfHeaders["CF-Access-Client-Secret"] = cfClientSecret;
+
+  let cfProbeStatus: number | null = null;
+  let cfProbeError: string | null = null;
+  try {
+    const res = await fetchFn(`${baseUrl}/v1/models`, {
+      method: "GET",
+      headers: cfHeaders,
+      signal: AbortSignal.timeout(10_000),
+    });
+    cfProbeStatus = res.status;
+  } catch (err) {
+    cfProbeError = err instanceof Error ? err.message : String(err);
+  }
+
+  let authProbeStatus: number | null = null;
+  let authProbeError: string | null = null;
+  let models: string[] | null = null;
+
+  if (gatewayToken) {
+    try {
+      const authHeaders: Record<string, string> = {
+        ...cfHeaders,
+        Authorization: `Bearer ${gatewayToken}`,
+      };
+      const res = await fetchFn(`${baseUrl}/v1/models`, {
+        method: "GET",
+        headers: authHeaders,
+        signal: AbortSignal.timeout(10_000),
+      });
+      authProbeStatus = res.status;
+      if (res.ok) {
+        const data = (await res.json()) as { data?: Array<{ id?: string }> };
+        if (Array.isArray(data?.data)) {
+          models = data.data.map((m) => m.id).filter((id): id is string => typeof id === "string");
+        }
+      }
+    } catch (err) {
+      authProbeError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  return {
+    baseUrl,
+    cfClientId,
+    cfClientSecret,
+    gatewayToken,
+    cfProbeStatus,
+    cfProbeError,
+    authProbeStatus,
+    authProbeError,
+    models,
+  };
+}
+
+export async function runRemoteDoctorChecks(
+  deps: DoctorDependencies,
+  fetchFn: typeof fetch = fetch,
+): Promise<DoctorReport> {
+  const facts = await gatherRemoteDoctorFacts(deps.config, fetchFn);
+  const checks = evaluateRemoteDoctorChecks(facts);
+  const passed = doctorPassed(checks);
+  return { checks, passed, exitCode: passed ? 0 : 1 };
+}
+
 export function doctorFixHint(checkId: string): string | null {
   switch (checkId) {
     case "omp-binary":
@@ -103,6 +195,16 @@ export function doctorFixHint(checkId: string): string | null {
       return "Running gateway argv drifted. Run: bun run gateway:ctl restart";
     case "tunnel":
       return "Check tunnel config at ~/.omp/cloudflared/config.yml or start without --with-tunnel";
+    case "remote-base-url":
+      return "Pass --base-url=https://<tunnel-domain> or set ANTHROPIC_BASE_URL.";
+    case "remote-cf-credentials":
+      return "Set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET or run gateway:ctl remote-pair on the host.";
+    case "remote-tunnel":
+      return "Verify cloudflared tunnel is active on host and DNS hostname resolves.";
+    case "remote-auth":
+      return "Provide a valid gateway client token via ANTHROPIC_API_KEY or --gateway-token=<token>.";
+    case "remote-models":
+      return "Verify client token has access to google-antigravity/* in gateway-clients.json.";
     default:
       return null;
   }

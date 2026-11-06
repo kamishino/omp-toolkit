@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { BrokerClient } from "./broker-client";
 import { parseGatewayCtlConfig } from "./config";
-import { runDoctorChecks } from "./doctor";
+import { runDoctorChecks, runRemoteDoctorChecks } from "./doctor";
 import type { OmpAdapter } from "./omp-adapter";
 
 function adapter(over: Partial<Record<string, string | null>> = {}): OmpAdapter {
@@ -71,5 +71,39 @@ describe("runDoctorChecks", () => {
     );
     expect(missing.passed).toBe(false);
     expect(missing.checks.find((c) => c.id === "tunnel-binary")?.status).toBe("fail");
+  });
+});
+
+describe("runRemoteDoctorChecks", () => {
+  test("probes remote endpoint with mocked fetch and returns report", async () => {
+    const remoteConfig = parseGatewayCtlConfig(
+      [
+        "doctor",
+        "--remote",
+        "--base-url=https://gw.example.com",
+        "--cf-client-id=id",
+        "--cf-client-secret=sec",
+        "--gateway-token=tok",
+      ],
+      {},
+      "C:/home/tester",
+    );
+
+    const mockFetch = async () =>
+      new Response(JSON.stringify({ data: [{ id: "google-antigravity/gemini-3.8-flash" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+
+    const report = await runRemoteDoctorChecks(
+      { adapter: adapter(), client: client(), config: remoteConfig },
+      mockFetch as unknown as typeof fetch,
+    );
+
+    expect(report.passed).toBe(true);
+    expect(report.exitCode).toBe(0);
+    expect(report.checks.find((c) => c.id === "remote-tunnel")?.status).toBe("pass");
+    expect(report.checks.find((c) => c.id === "remote-auth")?.status).toBe("pass");
+    expect(report.checks.find((c) => c.id === "remote-models")?.status).toBe("pass");
   });
 });

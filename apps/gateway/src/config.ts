@@ -94,6 +94,8 @@ export interface GatewayCtlConfig {
   cfClientSecret: string | null;
   /** Client token rendered into remote packs (flag or OMP_GATEWAY_TOKEN env). */
   packGatewayToken: string | null;
+  gatewayToken: string | null;
+  remote: boolean;
   unknown: string[];
 }
 
@@ -172,6 +174,7 @@ export function parseGatewayCtlConfig(
           a !== "--json" &&
           a !== "--force" &&
           a !== "--with-tunnel" &&
+          a !== "--remote" &&
           a !== "--help" &&
           a !== "-h" &&
           !knownPrefixes.some((p) => a.startsWith(p)),
@@ -221,11 +224,28 @@ export function parseGatewayCtlConfig(
       env.OMP_TUNNEL_CONFIG ??
       path.join(ompDir, "cloudflared", "config.yml"),
     tunnelMetricsBind: flagValue(argv, "tunnel-metrics-bind") ?? "127.0.0.1:48333",
-    baseUrl: flagValue(argv, "base-url") ?? null,
+    baseUrl:
+      flagValue(argv, "base-url") ??
+      env.OMP_GATEWAY_URL ??
+      env.ANTHROPIC_BASE_URL ??
+      env.OPENAI_BASE_URL ??
+      null,
     recipeModel: flagValue(argv, "model") ?? null,
-    cfClientId: flagValue(argv, "cf-client-id") ?? env.OMP_CF_CLIENT_ID ?? null,
-    cfClientSecret: flagValue(argv, "cf-client-secret") ?? env.OMP_CF_CLIENT_SECRET ?? null,
+    cfClientId:
+      flagValue(argv, "cf-client-id") ?? env.OMP_CF_CLIENT_ID ?? env.CF_ACCESS_CLIENT_ID ?? null,
+    cfClientSecret:
+      flagValue(argv, "cf-client-secret") ??
+      env.OMP_CF_CLIENT_SECRET ??
+      env.CF_ACCESS_CLIENT_SECRET ??
+      null,
+    gatewayToken:
+      flagValue(argv, "gateway-token") ??
+      env.OMP_GATEWAY_TOKEN ??
+      env.ANTHROPIC_API_KEY ??
+      env.OPENAI_API_KEY ??
+      null,
     packGatewayToken: flagValue(argv, "gateway-token") ?? env.OMP_GATEWAY_TOKEN ?? null,
+    remote: argv.includes("--remote"),
     unknown,
   };
 }

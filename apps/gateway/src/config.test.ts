@@ -36,6 +36,12 @@ describe("parseGatewayCtlConfig", () => {
     expect(config2.command).toBe("help");
     expect(config2.unknown).toEqual([]);
   });
+  test("doctor --remote parses remote flag without unknown warnings", () => {
+    const config = parseGatewayCtlConfig(["doctor", "--remote"], {}, HOME);
+    expect(config.command).toBe("doctor");
+    expect(config.remote).toBe(true);
+    expect(config.unknown).toEqual([]);
+  });
   test("connect command parses platform and client name", () => {
     const config = parseGatewayCtlConfig(
       ["connect", "claude-code", "my-client", "--force"],

@@ -7,7 +7,7 @@ import { runRemotePackCommand, runRemotePairCommand } from "./commands/remote-co
 import { runAccountsCommand, runClientsCommand, runModelsCommand } from "./commands/view-commands";
 import { runWriteCommand } from "./commands/write-commands";
 import { GATEWAY_USAGE, parseGatewayCtlConfig } from "./config";
-import { renderDoctorText, runDoctorChecks } from "./doctor";
+import { renderDoctorText, runDoctorChecks, runRemoteDoctorChecks } from "./doctor";
 
 async function main(): Promise<void> {
   const config = parseGatewayCtlConfig();
@@ -25,7 +25,9 @@ async function main(): Promise<void> {
       return;
     }
     case "doctor": {
-      const report = await runDoctorChecks(ctx.doctorDeps, true);
+      const report = config.remote
+        ? await runRemoteDoctorChecks(ctx.doctorDeps)
+        : await runDoctorChecks(ctx.doctorDeps, true);
       print(config, { passed: report.passed, checks: report.checks }, renderDoctorText(report));
       process.exit(report.exitCode);
       return;
