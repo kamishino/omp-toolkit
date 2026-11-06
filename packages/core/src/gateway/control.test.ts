@@ -7,9 +7,11 @@ import {
   earliestResetMs,
   evaluateDoctorChecks,
   evaluateQuotaCooldowns,
+  evaluateRemoteDoctorChecks,
   maskIdentityKey,
   parseClientsFile,
   parseOmpVersion,
+  type RemoteDoctorFacts,
   removeAccountPolicy,
   removeClientEntry,
   summarizeSticky,
@@ -106,6 +108,72 @@ describe("evaluateDoctorChecks", () => {
     expect(checks.find((c) => c.id === "tunnel-binary")?.status).toBe("pass");
     expect(checks.find((c) => c.id === "tunnel-config")?.status).toBe("fail");
     expect(checks.find((c) => c.id === "tunnel-health")?.status).toBe("warn");
+  });
+});
+
+describe("evaluateRemoteDoctorChecks", () => {
+  const VALID_REMOTE: RemoteDoctorFacts = {
+    baseUrl: "https://gateway.example.com",
+    cfClientId: "test-client-id.access",
+    cfClientSecret: "test-client-secret-12345",
+    gatewayToken: "omp_gw_testtoken123",
+    cfProbeStatus: 200,
+    cfProbeError: null,
+    authProbeStatus: 200,
+    authProbeError: null,
+    models: ["google-antigravity/gemini-3.8-flash", "openai/gpt-4o"],
+  };
+
+  test("passes all checks on healthy remote deployment", () => {
+    const checks = evaluateRemoteDoctorChecks(VALID_REMOTE);
+    expect(checks.filter((c) => c.status === "fail")).toHaveLength(0);
+    expect(checks.find((c) => c.id === "remote-base-url")?.status).toBe("pass");
+    expect(checks.find((c) => c.id === "remote-cf-credentials")?.status).toBe("pass");
+    expect(checks.find((c) => c.id === "remote-tunnel")?.status).toBe("pass");
+    expect(checks.find((c) => c.id === "remote-auth")?.status).toBe("pass");
+    expect(checks.find((c) => c.id === "remote-models")?.status).toBe("pass");
+  });
+
+  test("missing or non-http base URL fails closed", () => {
+    const missing = evaluateRemoteDoctorChecks({ ...VALID_REMOTE, baseUrl: null });
+    expect(missing.find((c) => c.id === "remote-base-url")?.status).toBe("fail");
+
+    const badProtocol = evaluateRemoteDoctorChecks({
+      ...VALID_REMOTE,
+      baseUrl: "ftp://example.com",
+    });
+    expect(badProtocol.find((c) => c.id === "remote-base-url")?.status).toBe("fail");
+  });
+
+  test("incomplete Cloudflare Access credentials fail", () => {
+    const missingSecret = evaluateRemoteDoctorChecks({ ...VALID_REMOTE, cfClientSecret: null });
+    expect(missingSecret.find((c) => c.id === "remote-cf-credentials")?.status).toBe("fail");
+  });
+
+  test("Cloudflare Access 403 rejection fails tunnel check with actionable detail", () => {
+    const rejected = evaluateRemoteDoctorChecks({ ...VALID_REMOTE, cfProbeStatus: 403 });
+    const tunnelCheck = rejected.find((c) => c.id === "remote-tunnel");
+    expect(tunnelCheck?.status).toBe("fail");
+    expect(tunnelCheck?.detail).toContain("Cloudflare Access rejected");
+  });
+
+  test("Gateway token rejection (401) fails auth check with actionable detail", () => {
+    const unauth = evaluateRemoteDoctorChecks({ ...VALID_REMOTE, authProbeStatus: 401 });
+    const authCheck = unauth.find((c) => c.id === "remote-auth");
+    expect(authCheck?.status).toBe("fail");
+    expect(authCheck?.detail).toContain("gateway rejected client token");
+  });
+
+  test("Gateway upstream error (502) identifies auth-broker issue", () => {
+    const upstreamErr = evaluateRemoteDoctorChecks({ ...VALID_REMOTE, authProbeStatus: 502 });
+    const authCheck = upstreamErr.find((c) => c.id === "remote-auth");
+    expect(authCheck?.status).toBe("fail");
+    expect(authCheck?.detail).toContain("auth-broker daemon");
+  });
+
+  test("missing gemini-3.8-flash emits warning on models", () => {
+    const noGemini = evaluateRemoteDoctorChecks({ ...VALID_REMOTE, models: ["openai/gpt-4o"] });
+    expect(noGemini.find((c) => c.id === "remote-models")?.status).toBe("warn");
   });
 });
 
