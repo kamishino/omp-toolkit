@@ -20,6 +20,7 @@
 - Add OMP Thin-Client platform recipe (`gateway:ctl recipe omp` and `connect omp`), generating ready-to-paste `models.yml` configurations for secondary workstations to consume the primary PC1 gateway without local OAuth authorization.
 - Add automatic Cloudflare credentials fallback (`~/.omp/cf-access.json`) and `--with-tunnel` support to Windows headless autostart (`gateway:ctl autostart-install --with-tunnel`).
 - Publish architectural strategy and research on Always-On Gateway operations and Thin-Client topology (`docs/research/always-on-gateway-architecture-pc1.md`).
+- Add Gemini-3.8-Flash Agent Harness prompt templates (`gemini-tdd`, `gemini-diagnose`, `gemini-speed`), incorporating Inverted Context Layout, Anti-Suppression Procedural Stance, Pre-Tool Chatter Redirection, and Paired Negative Bounding, switchable live via `/template apply <name>`.
 
 ## 0.5.0 — Auth Gateway, prompt templates, pacing, and public-readiness cleanup (2026-11-03)
 

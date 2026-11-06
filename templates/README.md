@@ -73,3 +73,28 @@ To publish a template intentionally, review it for API keys, credentials, privat
 tokens, and confidential instructions, then force-add it:
 `git add -f templates/<name>/AGENTS.template.md`. The tracked
 `templates/plan-exec-handoff/` example stays public.
+
+## Bundled Templates Catalog
+
+The repository ships with four production-ready template bundles:
+
+| Template Slug | Target Persona | Recommended Model Role | Core Architectural Levers |
+| :--- | :--- | :--- | :--- |
+| `gemini-tdd` | Test-Driven Feature Development | `google-antigravity/gemini-3.8-flash:high` | Strict Red-before-Green gate, inverted layout, pre-tool chatter redirection, paired negative bounding. |
+| `gemini-diagnose` | Systematic Bug Isolation | `google-antigravity/gemini-3.8-flash:high` | 6-phase diagnostic discipline, feedback loop first gate, falsifiable hypotheses (`If X, then Y`), secret masking. |
+| `gemini-speed` | High-Velocity Mechanical Work | `google-antigravity/gemini-3.8-flash:low` | Ranged reads (`:20-50`), single-turn batching, deferred verification check, zero conversational commentary. |
+| `plan-exec-handoff` | Planner-to-Executor Handoff | `deepseek/deepseek-flash` (or hybrid) | Inviolable plan-to-execution contract with zero runtime invention and two-strike circuit breaker. |
+
+### Switching Between Templates
+
+Switch templates live in any active OMP session:
+```bash
+/template apply gemini-tdd      # Switch to primary TDD feature development persona
+/template apply gemini-diagnose # Switch to deep root-cause bug investigation persona
+/template apply gemini-speed    # Switch to high-speed mechanical execution persona
+/template apply plan-exec-handoff # Switch to planner-executor handoff contract
+```
+Inspect the differences before applying:
+```bash
+/template show gemini-tdd
+```

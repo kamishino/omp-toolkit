@@ -344,3 +344,28 @@ routing all agent requests to the SSOT gateway host through the tunnel.
 The standardized 3-tuple configuration (`Base URL`, `API Key`, `Model ID`)
 allowing any developer AI tool with custom endpoint support to reuse pooled
 accounts without local OAuth authorization.
+
+## Inverted context layout
+
+A prompt layout pattern that positions bulky reference material, file slices,
+and error logs at the top (`<context>`) and imperative directives and boundaries
+at the bottom (`<task>`, `<invariants>`), exploiting recency attention to
+prevent positional attention decay across 1M+ token context windows.
+
+## Anti-suppression procedural stance
+
+A third-person operational framing that suppresses reflective internal
+monologues under System 2 reasoning, ensuring autonomous agents do not drop or
+suppress self-initiated tool calls.
+
+## Pre-tool chatter redirection
+
+A prompt constraint that compels language models to emit tool call arguments
+immediately without conversational preambles or setup phrases ("I will now...",
+"Let me check...").
+
+## Paired negative bounding
+
+An RFC 2119 constraint formulation that pairs every negative prohibition
+(`MUST NOT touch X`) with an explicit positive operational target
+(`MUST touch ONLY Y`), eliminating scope drift and initiative hallucinations.
