@@ -6,7 +6,7 @@ import {
 } from "@omp-toolkit/core";
 
 export interface MonitorJsonPayload {
-  schemaVersion: 2;
+  schemaVersion: typeof DASHBOARD_SCHEMA_VERSION;
   fetchedAt: number;
   dashboard: Dashboard;
   snapshot?: HealthSnapshot | null;

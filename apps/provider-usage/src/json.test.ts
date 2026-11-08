@@ -19,14 +19,25 @@ describe("jsonPayload contract", () => {
   ];
 
   const snapshot: HealthSnapshot = {
+    schemaVersion: 2,
+    probeModel: "gemini-3.8-flash-high",
+    sweepStartedAt: null,
     checkedAt: 1_700_000_000_000,
     results: [
       {
+        provider: "google-antigravity",
         email: "dev@example.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
         status: "ok",
         ms: 120,
+        startedAt: 1_700_000_000_000 - 120,
+        checkedAt: 1_700_000_000_000,
+        failureKind: null,
+        confirmed: false,
       },
     ],
+    streaks: {},
   };
 
   test("emits schemaVersion 2 with dashboard and snapshot when showHealth is true", () => {
@@ -42,7 +53,7 @@ describe("jsonPayload contract", () => {
       balanceAlert: { cny: 10, usd: 10 },
     });
 
-    expect(payload.schemaVersion).toBe(2);
+    expect(payload.schemaVersion).toBe(3);
     expect(payload.fetchedAt).toBe(fetchedAt);
     expect(payload.dashboard.providers[0].name).toBe("GOOGLE ANTIGRAVITY");
     expect(payload.dashboard.summary.accounts).toBe(1);
@@ -63,7 +74,7 @@ describe("jsonPayload contract", () => {
       balanceAlert: { cny: 10, usd: 10 },
     });
 
-    expect(payload.schemaVersion).toBe(2);
+    expect(payload.schemaVersion).toBe(3);
     expect(payload.fetchedAt).toBe(fetchedAt);
     expect(payload.dashboard.health).toBeNull();
     expect(payload.snapshot).toBeUndefined();

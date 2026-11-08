@@ -13,8 +13,25 @@ describe("MonitorRunner deep execution coordinator", () => {
   ];
 
   const dummySnapshot: HealthSnapshot = {
+    schemaVersion: 2,
+    probeModel: "gemini-3.8-flash-high",
+    sweepStartedAt: null,
     checkedAt: 1_700_000_000_000,
-    results: [{ email: "user@example.com", status: "ok", ms: 40 }],
+    results: [
+      {
+        provider: "google-antigravity",
+        email: "user@example.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 40,
+        startedAt: 1_700_000_000_000 - 40,
+        checkedAt: 1_700_000_000_000,
+        failureKind: null,
+        confirmed: false,
+      },
+    ],
+    streaks: {},
   };
 
   test("executeCycle generates valid JSON payload when json is true", async () => {
@@ -33,7 +50,7 @@ describe("MonitorRunner deep execution coordinator", () => {
     expect(heartbeatCalled).toBe(true);
 
     const parsed = JSON.parse(output);
-    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.schemaVersion).toBe(3);
     expect(parsed.dashboard.providers[0].name).toBe("GOOGLE ANTIGRAVITY");
   });
 
