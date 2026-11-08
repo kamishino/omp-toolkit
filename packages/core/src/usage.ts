@@ -1,4 +1,5 @@
 import type { AccountSortOrder } from "./dashboard/types";
+import { DEFAULT_MODEL_WIRE, routeFreshness, routeKey } from "./health";
 import type {
   HealthResult,
   ProviderRow,
@@ -95,8 +96,11 @@ export function limitFor(report: UsageReport, column: UsageColumn): UsageLimit |
   return (report.limits ?? []).find((limit) => limitKey(limit) === column.key);
 }
 
-function healthRank(row: ProviderRow): number {
-  if (!row.health) return 3;
+function healthRank(row: ProviderRow, now: number): number {
+  if (!row.health) return 2;
+  const freshness = routeFreshness(row.health, now);
+  if (freshness !== "fresh") return 2;
+
   switch (row.health.status) {
     case "hang":
     case "error":
@@ -105,7 +109,7 @@ function healthRank(row: ProviderRow): number {
     case "model-error":
       return 1;
     case "ok":
-      return 2;
+      return 3;
     default:
       return 1;
   }
@@ -114,6 +118,7 @@ function healthRank(row: ProviderRow): number {
 export interface RowSortOptions {
   sortOrder?: AccountSortOrder;
   now?: number;
+  probeModel?: string;
 }
 
 interface SortableRow {
@@ -170,6 +175,7 @@ function rowsFor(
   const weeklyCol = columns.find((c) => c.label.toLowerCase() === "weekly");
   const now = options.now ?? Date.now();
   const sortOrder = options.sortOrder ?? "weekly-reset";
+  const model = options.probeModel ?? DEFAULT_MODEL_WIRE;
 
   const sortable: SortableRow[] = reports.map((report) => {
     const account = accountName(report);
@@ -184,16 +190,36 @@ function rowsFor(
     const primary = weeklyUsed !== undefined ? weeklyUsed : firstUsed;
     const secondary = weeklyUsed !== undefined ? firstUsed : max;
     const resetsAt = weeklyResetAt(report, weeklyCol);
+
+    let healthResult: HealthResult | undefined;
+    if (report.provider === "google-antigravity") {
+      const email = report.metadata?.email;
+      const project = report.metadata?.projectId;
+      if (typeof email === "string" && typeof project === "string") {
+        const k = routeKey({
+          provider: "google-antigravity",
+          email,
+          project,
+          model,
+        });
+        healthResult = health.get(k);
+      }
+      if (!healthResult && typeof email === "string") {
+        healthResult = health.get(email.toLowerCase()) ?? health.get(email);
+      }
+      if (!healthResult) {
+        healthResult = health.get(account.toLowerCase()) ?? health.get(account);
+      }
+    }
+    if (healthResult && (healthResult.checkedAt === undefined || healthResult.checkedAt === null)) {
+      healthResult = { ...healthResult, checkedAt: now };
+    }
     return {
       timeToReset: typeof resetsAt === "number" && resetsAt > now ? resetsAt - now : Infinity,
       row: {
         report,
         account,
-        health:
-          health.get(account) ??
-          (typeof report.metadata?.email === "string"
-            ? health.get(report.metadata.email)
-            : undefined),
+        health: healthResult,
         max,
         primary,
         secondary,
@@ -202,7 +228,7 @@ function rowsFor(
   });
 
   const compare = sortOrder === "weekly-usage" ? compareWeeklyUsage : compareWeeklyReset;
-  sortable.sort((a, b) => healthRank(a.row) - healthRank(b.row) || compare(a, b));
+  sortable.sort((a, b) => healthRank(a.row, now) - healthRank(b.row, now) || compare(a, b));
   return sortable.map((entry) => entry.row);
 }
 

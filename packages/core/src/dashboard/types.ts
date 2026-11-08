@@ -1,7 +1,7 @@
 import type { WeeklyPacing } from "../pacing";
 import type { WindowEvaluation } from "../schedule";
 import type { BalanceAlertThresholds } from "../settings";
-import type { HealthIncident, Status } from "../types";
+import type { EffectiveRouteStatus, HealthIncident, Status } from "../types";
 export type UsageLevel = "ok" | "warn" | "hot" | "critical" | "unknown";
 
 export const ACCOUNT_SORT_ORDERS = ["weekly-reset", "weekly-usage"] as const;
@@ -18,8 +18,8 @@ export function isAccountSortOrder(value: unknown): value is AccountSortOrder {
 }
 
 export const DEFAULT_ACCOUNT_SORT_ORDER: AccountSortOrder = "weekly-reset";
-export type RouteText = "OK" | "HANG" | "AUTH" | "MODEL" | "ERR" | "—";
-export const DASHBOARD_SCHEMA_VERSION = 2 as const;
+export type RouteText = "OK" | "HANG" | "AUTH" | "MODEL" | "ERR" | "STALE" | "—";
+export const DASHBOARD_SCHEMA_VERSION = 3 as const;
 
 export interface DashboardLimit {
   id?: string;
@@ -36,12 +36,16 @@ export interface DashboardLimit {
 export interface DashboardRoute {
   text: RouteText;
   level: UsageLevel;
+  model?: string | null;
+  checkedAt?: number | null;
+  lastStatus?: Status | null;
+  detail?: string | null;
 }
 
 export interface DashboardRow {
   account: string;
   displayAccount: string;
-  health: Status | null;
+  health: EffectiveRouteStatus | null;
   maxUsed: number;
   level: UsageLevel;
   route: DashboardRoute;
@@ -109,7 +113,7 @@ export const DEFAULT_USAGE_THRESHOLDS = {
   above: 0.8,
 } as const;
 
-export const DEFAULT_STALE_MINUTES = 15;
+export { DEFAULT_STALE_MINUTES } from "../health";
 
 export interface AssembleDashboardOptions {
   now?: number;
@@ -119,4 +123,5 @@ export interface AssembleDashboardOptions {
   balanceAlert?: BalanceAlertThresholds;
   userTimeZone?: string;
   accountSort?: AccountSortOrder;
+  probeModel?: string;
 }

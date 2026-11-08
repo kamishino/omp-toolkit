@@ -7,6 +7,7 @@ export const VALID_STATUSES: Record<string, true> = {
   error: true,
   auth: true,
   "model-error": true,
+  stale: true,
 };
 
 export const VALID_LEVELS: Record<string, true> = {
@@ -23,6 +24,7 @@ export const VALID_ROUTES: Record<string, true> = {
   AUTH: true,
   MODEL: true,
   ERR: true,
+  STALE: true,
   "—": true,
 };
 
@@ -118,7 +120,14 @@ export function isDashboardRow(r: unknown, columnsCount: number): boolean {
     health?: unknown;
     maxUsed?: unknown;
     level?: unknown;
-    route?: { text?: unknown; level?: unknown };
+    route?: {
+      text?: unknown;
+      level?: unknown;
+      model?: unknown;
+      checkedAt?: unknown;
+      lastStatus?: unknown;
+      detail?: unknown;
+    };
     limits?: unknown[];
   };
 
@@ -136,6 +145,34 @@ export function isDashboardRow(r: unknown, columnsCount: number): boolean {
     !row.route.level ||
     typeof row.route.level !== "string" ||
     !VALID_LEVELS[row.route.level]
+  ) {
+    return false;
+  }
+  if (
+    row.route.model !== undefined &&
+    row.route.model !== null &&
+    typeof row.route.model !== "string"
+  ) {
+    return false;
+  }
+  if (
+    row.route.checkedAt !== undefined &&
+    row.route.checkedAt !== null &&
+    (typeof row.route.checkedAt !== "number" || !Number.isFinite(row.route.checkedAt))
+  ) {
+    return false;
+  }
+  if (
+    row.route.lastStatus !== undefined &&
+    row.route.lastStatus !== null &&
+    (typeof row.route.lastStatus !== "string" || !VALID_STATUSES[row.route.lastStatus])
+  ) {
+    return false;
+  }
+  if (
+    row.route.detail !== undefined &&
+    row.route.detail !== null &&
+    typeof row.route.detail !== "string"
   ) {
     return false;
   }

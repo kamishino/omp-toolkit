@@ -1,4 +1,5 @@
 import { money } from "../format";
+import { DEFAULT_MODEL_WIRE, routeKey } from "../health";
 import { computeWeeklyPacing } from "../pacing";
 import { scheduleRegistry } from "../schedule";
 import { DEFAULT_BALANCE_ALERT } from "../settings";
@@ -34,14 +35,24 @@ export function assembleDashboard(
 ): Dashboard {
   const now = options.now ?? Date.now();
   const showHealth = options.showHealth ?? (snapshot !== undefined && snapshot !== null);
-  const health = new Map<string, HealthResult>(
-    (snapshot?.results ?? []).map((result) => [result.email, result]),
-  );
+  const selectedModel = options.probeModel ?? snapshot?.probeModel ?? DEFAULT_MODEL_WIRE;
+
+  const health = new Map<string, HealthResult>();
+  for (const result of snapshot?.results ?? []) {
+    const itemModel = result.model ?? DEFAULT_MODEL_WIRE;
+    if (itemModel === selectedModel) {
+      if (result.project) {
+        health.set(routeKey({ ...result, model: itemModel }), result);
+      }
+      health.set(result.email.trim().toLowerCase(), result);
+    }
+  }
+
   const sections = sectionsFor(reports, health, {
     sortOrder: options.accountSort,
     now,
+    probeModel: selectedModel,
   });
-
   return buildDashboard(sections, {
     fetchedAt: now,
     now,
@@ -119,17 +130,26 @@ export function buildDashboard(
           ...(pacing ? { pacing } : {}),
         };
       });
+      const checkedHealth =
+        row.health && (row.health.checkedAt === undefined || row.health.checkedAt === null)
+          ? { ...row.health, checkedAt: options.checkedAt ?? options.now }
+          : row.health;
+      const route = routeFor(checkedHealth, options.now, options.staleMinutes);
+      const effectiveHealth = checkedHealth
+        ? route.text === "STALE"
+          ? ("stale" as const)
+          : checkedHealth.status
+        : null;
       return {
         account: row.account,
         displayAccount: local(row.account),
-        health: row.health?.status ?? null,
+        health: effectiveHealth,
         maxUsed: row.max,
         level: usageLevel(row.max, options.thresholds),
-        route: routeFor(row.health),
+        route,
         limits,
       };
     });
-
     const timeWindow = scheduleRegistry.evaluate(
       section.provider,
       options.now,
@@ -149,12 +169,14 @@ export function buildDashboard(
 
   const allRows = providers.flatMap((provider) => provider.rows);
   const summary = calculateSummary(providers, sections.length, options.thresholds.above);
+  const hasStaleDisplayedRoute = allRows.some((r) => r.route.text === "STALE");
   const health = options.showHealth
     ? buildDashboardHealth(
         options.checkedAt,
         options.now,
         options.staleMinutes,
         options.incident ?? null,
+        hasStaleDisplayedRoute,
       )
     : null;
   const balance = extractDeepSeekBalance(providers);
@@ -177,12 +199,13 @@ export function buildDashboardHealth(
   now: number,
   staleMinutes: number,
   incident: HealthIncident | null = null,
+  hasStaleDisplayedRoute = false,
 ): DashboardHealth {
   const ts = checkedAt ?? 0;
   return {
     checkedAt: ts,
     ageMs: ts > 0 ? Math.max(0, now - ts) : 0,
-    stale: ts > 0 && now - ts > staleMinutes * 60_000,
+    stale: hasStaleDisplayedRoute || (ts > 0 && now - ts > staleMinutes * 60_000),
     incident,
   };
 }

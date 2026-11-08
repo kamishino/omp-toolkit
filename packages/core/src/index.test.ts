@@ -4,10 +4,10 @@ import {
   deepSeekUsageReport,
   excludedEmails,
   type HealthResult,
-  nextStreaks,
   pickDeepSeekBalance,
   providerName,
-  restorableEmails,
+  routeFreshness,
+  routeKey,
   sectionsFor,
   type UsageReport,
   usedPercent,
@@ -85,8 +85,36 @@ describe("usage columns", () => {
 describe("provider sections", () => {
   test("groups providers and sorts a HANG account first", () => {
     const health = new Map<string, HealthResult>([
-      ["hang@example.com", { email: "hang@example.com", status: "hang", ms: 15_000 }],
-      ["alpha@example.com", { email: "alpha@example.com", status: "ok", ms: 2_000 }],
+      [
+        "hang@example.com",
+        {
+          provider: "google-antigravity",
+          email: "hang@example.com",
+          project: "hang",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15_000,
+          startedAt: Date.now() - 15_000,
+          checkedAt: Date.now(),
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      [
+        "alpha@example.com",
+        {
+          provider: "google-antigravity",
+          email: "alpha@example.com",
+          project: "alpha",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 2_000,
+          startedAt: Date.now() - 2_000,
+          checkedAt: Date.now(),
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
     ]);
     const sections = sectionsFor(reports, health);
     expect(sections.map((section) => section.provider)).toEqual([
@@ -189,91 +217,36 @@ describe("provider sections", () => {
 });
 
 describe("health domain", () => {
-  test("records spaced healthy streaks and resets on failure", () => {
-    let streaks = nextStreaks(
-      {},
-      [{ index: 1, email: "a@example.com", project: "a", status: "ok", ms: 1 }],
-      1_000,
-      500,
+  test("routeKey normalizes email while preserving project and model", () => {
+    const key = routeKey({
+      provider: "google-antigravity",
+      email: "  User@Example.com  ",
+      project: "proj-1",
+      model: "gemini-3.8-flash-high",
+    });
+    expect(key).toBe(
+      JSON.stringify(["google-antigravity", "user@example.com", "proj-1", "gemini-3.8-flash-high"]),
     );
-    expect(streaks["a@example.com"]).toEqual({ ok: 1, lastAt: 1_000 });
-
-    streaks = nextStreaks(
-      streaks,
-      [{ index: 1, email: "a@example.com", project: "a", status: "ok", ms: 1 }],
-      1_200,
-      500,
-    );
-    expect(streaks["a@example.com"]?.ok).toBe(1);
-
-    streaks = nextStreaks(
-      streaks,
-      [{ index: 1, email: "a@example.com", project: "a", status: "ok", ms: 1 }],
-      1_600,
-      500,
-    );
-    expect(streaks["a@example.com"]?.ok).toBe(2);
-
-    streaks = nextStreaks(
-      streaks,
-      [{ index: 1, email: "a@example.com", project: "a", status: "hang", ms: 15_000 }],
-      1_700,
-      500,
-    );
-    expect(streaks["a@example.com"]).toEqual({ ok: 0, lastAt: 0 });
   });
 
-  test("managed exclusion restores without opt-in", () => {
-    const state = { excluded: ["a@example.com"] };
-    const streaks = { "a@example.com": { ok: 3, lastAt: 0 } };
-    expect(restorableEmails(state, streaks, 3)).toEqual(["a@example.com"]);
+  test("routeFreshness detects fresh and stale observations", () => {
+    const now = 20_000_000;
+    const observation: HealthResult = {
+      provider: "google-antigravity",
+      email: "u@ex.com",
+      project: "p1",
+      model: "gemini-3.8-flash-high",
+      status: "ok",
+      ms: 100,
+      startedAt: now - 100,
+      checkedAt: now,
+      failureKind: null,
+      confirmed: false,
+    };
+    expect(routeFreshness(observation, now)).toBe("fresh");
+    expect(routeFreshness({ ...observation, checkedAt: now - 20 * 60_000 }, now)).toBe("stale");
+    expect(routeFreshness(undefined, now)).toBe("unknown");
   });
-
-  test("manual exclusion does not restore without opt-in", () => {
-    const state = { excluded: [] };
-    const streaks = { "m@example.com": { ok: 3, lastAt: 0 } };
-    const manual = new Set(["m@example.com"]);
-    expect(restorableEmails(state, streaks, 3, new Set(), manual)).toEqual([]);
-  });
-
-  test("opted-in manual exclusion restores at the threshold", () => {
-    const state = { excluded: [] };
-    const streaks = { "m@example.com": { ok: 3, lastAt: 0 } };
-    const manual = new Set(["m@example.com"]);
-    const optedIn = new Set(["m@example.com"]);
-    expect(restorableEmails(state, streaks, 3, optedIn, manual)).toEqual(["m@example.com"]);
-  });
-
-  test("opted-in manual exclusion below the threshold does not restore", () => {
-    const state = { excluded: [] };
-    const streaks = { "m@example.com": { ok: 2, lastAt: 0 } };
-    const manual = new Set(["m@example.com"]);
-    const optedIn = new Set(["m@example.com"]);
-    expect(restorableEmails(state, streaks, 3, optedIn, manual)).toEqual([]);
-  });
-
-  test("duplicates across managed and manual sets restore once", () => {
-    const state = { excluded: ["both@example.com"] };
-    const streaks = { "both@example.com": { ok: 3, lastAt: 0 } };
-    const manual = new Set(["both@example.com"]);
-    const optedIn = new Set(["both@example.com"]);
-    expect(restorableEmails(state, streaks, 3, optedIn, manual)).toEqual(["both@example.com"]);
-  });
-
-  test("restorableEmails handles case-insensitive emails across state, streaks, and opt-in", () => {
-    const state = { excluded: ["User@Example.com"] };
-    const streaks = { "user@example.com": { ok: 3, lastAt: 0 } };
-    expect(restorableEmails(state, streaks, 3)).toEqual(["User@Example.com"]);
-
-    const manualState = { excluded: [] };
-    const manual = new Set(["MixedCase@Example.com"]);
-    const optedIn = new Set(["mixedcase@example.com"]);
-    const manualStreaks = { "MIXEDCASE@EXAMPLE.COM": { ok: 3, lastAt: 0 } };
-    expect(restorableEmails(manualState, manualStreaks, 3, optedIn, manual)).toEqual([
-      "MixedCase@Example.com",
-    ]);
-  });
-
   test("finds reservePct exclusions only for Antigravity", () => {
     const emails = excludedEmails([
       {
@@ -390,16 +363,30 @@ describe("deepseek balance domain", () => {
     expect(providerName("deepseek")).toBe("DEEPSEEK");
   });
 
-  test("attaches route health to any provider by account email", () => {
+  test("does not attach route health to non-Antigravity providers", () => {
     const report: UsageReport = {
       provider: "openai-codex",
       metadata: { email: "codex@example.com" },
       limits: [{ label: "30 days", amount: { usedFraction: 0.5 } }],
     };
     const health = new Map<string, HealthResult>([
-      ["codex@example.com", { email: "codex@example.com", status: "hang", ms: 15_000 }],
+      [
+        "codex@example.com",
+        {
+          provider: "google-antigravity",
+          email: "codex@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15_000,
+          startedAt: 1000,
+          checkedAt: 2000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
     ]);
     const sections = sectionsFor([report], health);
-    expect(sections[0]?.rows[0]?.health?.status).toBe("hang");
+    expect(sections[0]?.rows[0]?.health).toBeUndefined();
   });
 });

@@ -28,26 +28,109 @@ describe("usageLevel and routeFor", () => {
   });
 
   test("maps route health status to tag and usage level", () => {
-    expect(routeFor(undefined)).toEqual({ text: "—", level: "unknown" });
-    expect(routeFor({ email: "a@x.com", status: "ok", ms: 100 })).toEqual({
+    const now = 20_000_000;
+    const base = {
+      provider: "google-antigravity" as const,
+      project: "p1",
+      model: "gemini-3.8-flash-high",
+      startedAt: now - 100,
+      checkedAt: now,
+      confirmed: false,
+    };
+    expect(routeFor(undefined, now)).toEqual({
+      text: "—",
+      level: "unknown",
+      model: null,
+      checkedAt: null,
+      lastStatus: null,
+      detail: null,
+    });
+    expect(
+      routeFor({ ...base, email: "a@x.com", status: "ok", ms: 100, failureKind: null }, now),
+    ).toEqual({
       text: "OK",
       level: "ok",
+      model: "gemini-3.8-flash-high",
+      checkedAt: now,
+      lastStatus: "ok",
+      detail: null,
     });
-    expect(routeFor({ email: "b@x.com", status: "hang", ms: 15000 })).toEqual({
+    expect(
+      routeFor(
+        {
+          ...base,
+          email: "b@x.com",
+          status: "hang",
+          ms: 15000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+        now,
+      ),
+    ).toEqual({
       text: "HANG",
       level: "critical",
+      model: "gemini-3.8-flash-high",
+      checkedAt: now,
+      lastStatus: "hang",
+      detail: null,
     });
-    expect(routeFor({ email: "c@x.com", status: "error", ms: 200 })).toEqual({
+    expect(
+      routeFor(
+        { ...base, email: "c@x.com", status: "error", ms: 200, failureKind: "transient" },
+        now,
+      ),
+    ).toEqual({
       text: "ERR",
       level: "critical",
+      model: "gemini-3.8-flash-high",
+      checkedAt: now,
+      lastStatus: "error",
+      detail: null,
     });
-    expect(routeFor({ email: "d@x.com", status: "auth", ms: 50 })).toEqual({
+    expect(
+      routeFor({ ...base, email: "d@x.com", status: "auth", ms: 50, failureKind: "auth" }, now),
+    ).toEqual({
       text: "AUTH",
       level: "warn",
+      model: "gemini-3.8-flash-high",
+      checkedAt: now,
+      lastStatus: "auth",
+      detail: null,
     });
-    expect(routeFor({ email: "e@x.com", status: "model-error", ms: 80 })).toEqual({
+    expect(
+      routeFor(
+        { ...base, email: "e@x.com", status: "model-error", ms: 80, failureKind: "model" },
+        now,
+      ),
+    ).toEqual({
       text: "MODEL",
       level: "warn",
+      model: "gemini-3.8-flash-high",
+      checkedAt: now,
+      lastStatus: "model-error",
+      detail: null,
+    });
+    // Stale (> 15 minutes)
+    expect(
+      routeFor(
+        {
+          ...base,
+          email: "s@x.com",
+          status: "ok",
+          ms: 100,
+          checkedAt: now - 20 * 60_000,
+          failureKind: null,
+        },
+        now,
+      ),
+    ).toEqual({
+      text: "STALE",
+      level: "unknown",
+      model: "gemini-3.8-flash-high",
+      checkedAt: now - 20 * 60_000,
+      lastStatus: "ok",
+      detail: null,
     });
   });
 });
@@ -117,7 +200,21 @@ describe("buildDashboard", () => {
   ];
 
   const health = new Map<string, HealthResult>([
-    ["bravo@example.com", { email: "bravo@example.com", status: "hang", ms: 15_000 }],
+    [
+      "bravo@example.com",
+      {
+        provider: "google-antigravity",
+        email: "bravo@example.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "hang",
+        ms: 15_000,
+        startedAt: 1_700_000_000_000 - 15000,
+        checkedAt: 1_700_000_000_000 - 5000,
+        failureKind: "timeout",
+        confirmed: true,
+      },
+    ],
   ]);
 
   test("constructs dashboard with provider suffix, rows, levels, and tooltip", () => {
@@ -127,7 +224,7 @@ describe("buildDashboard", () => {
       fetchedAt: now,
       now,
       showHealth: true,
-      checkedAt: now - 20 * 60_000,
+      checkedAt: now - 5000,
       thresholds,
       staleMinutes: 15,
       balanceAlert: { cny: 10, usd: 10 },
@@ -144,7 +241,8 @@ describe("buildDashboard", () => {
     expect(ag?.rows.length).toBe(2);
 
     const bravoRow = ag?.rows.find((r) => r.displayAccount === "bravo");
-    expect(bravoRow?.route).toEqual({ text: "HANG", level: "critical" });
+    expect(bravoRow?.route.text).toBe("HANG");
+    expect(bravoRow?.route.level).toBe("critical");
     expect(bravoRow?.health).toBe("hang");
 
     const alphaRow = ag?.rows.find((r) => r.displayAccount === "alpha");
@@ -170,9 +268,9 @@ describe("buildDashboard", () => {
     });
 
     expect(dashboard.health).toEqual({
-      checkedAt: now - 20 * 60_000,
-      ageMs: 20 * 60_000,
-      stale: true,
+      checkedAt: now - 5000,
+      ageMs: 5000,
+      stale: false,
       incident: null,
     });
 
@@ -232,8 +330,25 @@ describe("assembleDashboard high-leverage entry point", () => {
       },
     ];
     const snapshot: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: Date.now() - 5000,
-      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 80,
+          startedAt: Date.now() - 5080,
+          checkedAt: Date.now() - 5000,
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
+      streaks: {},
     };
 
     const dashboard = assembleDashboard(reports, snapshot);
@@ -254,8 +369,25 @@ describe("assembleDashboard high-leverage entry point", () => {
       },
     ];
     const snapshotWithIncident: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: 1_700_000_000_000,
-      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 12000,
+          startedAt: 1_700_000_000_000 - 12000,
+          checkedAt: 1_700_000_000_000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      streaks: {},
       incident: {
         id: "inc-99",
         at: 1_700_000_000_000,
@@ -269,8 +401,25 @@ describe("assembleDashboard high-leverage entry point", () => {
     expect(isDashboard(withInc)).toBe(true);
 
     const snapshotWithout: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: 1_700_000_000_000,
-      results: [{ email: "user@example.com", status: "ok", ms: 50 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 50,
+          startedAt: 1_700_000_000_000 - 50,
+          checkedAt: 1_700_000_000_000,
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
+      streaks: {},
     };
     const withoutInc = assembleDashboard(reports, snapshotWithout);
     expect(withoutInc.health?.incident).toBeNull();
@@ -288,8 +437,25 @@ describe("DashboardEngine unified domain engine", () => {
       },
     ];
     const snapshot: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: 1_700_000_000_000,
-      results: [{ email: "alice@example.com", status: "ok", ms: 50 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "alice@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 50,
+          startedAt: 1_700_000_000_000 - 50,
+          checkedAt: 1_700_000_000_000,
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
+      streaks: {},
     };
 
     const dashboard = DashboardEngine.compile(reports, snapshot, {
@@ -506,12 +672,49 @@ describe("account sort ordering", () => {
   });
 
   test("unhealthy routes stay first under both sort orders", () => {
+    function agReport(email: string, resetsAt: number, usedFraction: number): UsageReport {
+      return {
+        provider: "google-antigravity",
+        metadata: { email, projectId: "p1" },
+        limits: [
+          {
+            label: "Weekly",
+            window: { label: "Weekly", resetsAt },
+            amount: { usedFraction },
+          },
+        ],
+      };
+    }
+    const agReports: UsageReport[] = [
+      agReport("far@example.com", now + 4 * day, 0.1),
+      agReport("soon@example.com", now + 2 * hour, 0.2),
+      agReport("mid@example.com", now + 1 * day, 0.9),
+      agReport("expired@example.com", now - hour, 0.5),
+    ];
+
     const snapshot: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: now,
-      results: [{ email: "far@example.com", status: "hang", ms: 15_000 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "far@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15_000,
+          startedAt: now - 15000,
+          checkedAt: now,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      streaks: {},
     };
     for (const accountSort of ["weekly-reset", "weekly-usage"] as const) {
-      const dashboard = DashboardEngine.compile(reports, snapshot, {
+      const dashboard = DashboardEngine.compile(agReports, snapshot, {
         now,
         accountSort,
         showHealth: true,
