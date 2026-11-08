@@ -14,17 +14,17 @@ import { readJsonFile, short, writeFileAtomic } from "./fs-util";
 import { withLock } from "./lock";
 export interface WarmUpAdapter {
   readonly provider: string;
+  readonly model: string;
   loadAccounts(): Promise<Account[]>;
   probe(account: Account): Promise<ProbeResult>;
 }
-
 export interface WarmUpDependencies {
   agentDir: string;
   adapters: ReadonlyMap<string, WarmUpAdapter>;
   readSnapshot(): HealthSnapshot | null;
   recordHealth(
     results: ProbeResult[],
-    options?: { merge?: boolean; source?: "warmup" | "check" },
+    options?: { scope?: "full" | "partial"; source?: "warmup" | "check" },
   ): Promise<void> | void;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -147,18 +147,24 @@ export async function runWarmUp(
       try {
         probeResult = await adapter.probe(target);
       } catch (error) {
+        const errNow = getTime();
         probeResult = {
           ...target,
+          provider: "google-antigravity",
+          model: adapter.model,
           status: "error",
           ms: 0,
+          startedAt: errNow,
+          checkedAt: errNow,
+          failureKind: "protocol",
+          confirmed: false,
           detail: short(error),
         };
       }
 
       const source = request.action === "warm" ? "warmup" : "check";
-      await deps.recordHealth([probeResult], { merge: true, source });
+      await deps.recordHealth([probeResult], { scope: "partial", source });
       results.push(probeResult);
-
       if (request.action === "warm") {
         lastWarmupAt[target.email.toLowerCase()] = getTime();
         writeWarmUpCooldowns(deps.agentDir, { lastWarmupAt });
@@ -172,9 +178,10 @@ export async function runWarmUp(
     const finalNow = getTime();
     const warmUpResults: WarmUpResult[] = results.map((r) => ({
       account: r.email,
+      model: r.model,
       status: r.status,
       ms: r.ms,
-      checkedAt: finalNow,
+      checkedAt: r.checkedAt,
       ...(r.detail !== undefined ? { detail: r.detail } : {}),
     }));
 

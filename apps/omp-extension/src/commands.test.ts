@@ -38,10 +38,16 @@ describe("registerCommandsAndTools", () => {
     healthManager.checkAll = async () => [
       {
         index: 0,
+        provider: "google-antigravity",
         email: "alpha@example.com",
         project: "test-proj",
+        model: "gemini-3.8-flash-high",
         status: "ok",
         ms: 120,
+        startedAt: 1000,
+        checkedAt: 1120,
+        failureKind: null,
+        confirmed: false,
       },
     ];
     healthManager.restoreManaged = async () => ["alpha@example.com"];
@@ -130,10 +136,16 @@ describe("registerCommandsAndTools", () => {
         const results: ProbeResult[] = [
           {
             index: 0,
+            provider: "google-antigravity",
             email: "alpha@example.com",
             project: "test-proj",
+            model: "gemini-3.8-flash-high",
             status: "ok",
             ms: 120,
+            startedAt: 1000,
+            checkedAt: 1120,
+            failureKind: null,
+            confirmed: false,
           },
         ];
         const restored: string[] = [];
@@ -153,10 +165,21 @@ describe("registerCommandsAndTools", () => {
           "google-antigravity",
           {
             provider: "google-antigravity",
+            model: "gemini-3.8-flash-high",
             loadAccounts: async () => [
               { index: 0, email: "alpha@example.com", project: "test-proj" },
             ],
-            probe: async (a: Account) => ({ ...a, status: "ok" as const, ms: 50 }),
+            probe: async (a: Account) => ({
+              ...a,
+              provider: "google-antigravity" as const,
+              model: "gemini-3.8-flash-high",
+              status: "ok" as const,
+              ms: 50,
+              startedAt: 1000,
+              checkedAt: 1050,
+              failureKind: null,
+              confirmed: false,
+            }),
           },
         ],
       ]),

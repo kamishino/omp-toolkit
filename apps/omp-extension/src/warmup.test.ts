@@ -34,13 +34,20 @@ describe("warm-up orchestrator", () => {
   function makeAdapter(probeImpl?: (account: Account) => Promise<ProbeResult>): WarmUpAdapter {
     return {
       provider: "google-antigravity",
+      model: "gemini-3.8-flash-high",
       loadAccounts: async () => accounts,
       probe:
         probeImpl ??
         (async (account: Account) => ({
           ...account,
+          provider: "google-antigravity",
+          model: "gemini-3.8-flash-high",
           status: "ok",
           ms: 100,
+          startedAt: 1000,
+          checkedAt: 1100,
+          failureKind: null,
+          confirmed: false,
         })),
     };
   }
@@ -49,19 +56,54 @@ describe("warm-up orchestrator", () => {
     const probed: string[] = [];
     const adapter = makeAdapter(async (account) => {
       probed.push(account.email);
-      return { ...account, status: "ok", ms: 50 };
+      return {
+        ...account,
+        provider: "google-antigravity",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 50,
+        startedAt: 1000,
+        checkedAt: 1050,
+        failureKind: null,
+        confirmed: false,
+      };
     });
 
     const recorded: ProbeResult[][] = [];
     const snapshot: HealthSnapshot = {
-      checkedAt: 1000,
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: 1000,
+      checkedAt: 1050,
       results: [
-        { email: "alpha@example.com", status: "ok", ms: 50 },
-        { email: "bravo@example.com", status: "hang", ms: 15000 },
+        {
+          provider: "google-antigravity",
+          email: "alpha@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 50,
+          startedAt: 1000,
+          checkedAt: 1050,
+          failureKind: null,
+          confirmed: false,
+        },
+        {
+          provider: "google-antigravity",
+          email: "bravo@example.com",
+          project: "p2",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15000,
+          startedAt: 1000,
+          checkedAt: 16000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
         // charlie is absent -> unknown -> eligible
       ],
+      streaks: {},
     };
-
     const deps: WarmUpDependencies = {
       agentDir: tmpDir,
       adapters: new Map([[adapter.provider, adapter]]),
@@ -91,7 +133,14 @@ describe("warm-up orchestrator", () => {
     const deps: WarmUpDependencies = {
       agentDir: tmpDir,
       adapters: new Map([[adapter.provider, adapter]]),
-      readSnapshot: () => ({ checkedAt: 1000, results: [] }),
+      readSnapshot: () => ({
+        schemaVersion: 2,
+        probeModel: "gemini-3.8-flash-high",
+        sweepStartedAt: null,
+        checkedAt: 1000,
+        results: [],
+        streaks: {},
+      }),
       recordHealth: () => {},
       sleep: async () => {},
     };
@@ -119,14 +168,40 @@ describe("warm-up orchestrator", () => {
     let probes = 0;
     const adapter = makeAdapter(async (account) => {
       probes++;
-      return { ...account, status: "ok", ms: 80 };
+      return {
+        ...account,
+        provider: "google-antigravity",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 80,
+        startedAt: 1000,
+        checkedAt: 1080,
+        failureKind: null,
+        confirmed: false,
+      };
     });
 
     const snapshot: HealthSnapshot = {
-      checkedAt: 1000,
-      results: [{ email: "bravo@example.com", status: "hang", ms: 15000 }],
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: 1000,
+      checkedAt: 16000,
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "bravo@example.com",
+          project: "p2",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15000,
+          startedAt: 1000,
+          checkedAt: 16000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      streaks: {},
     };
-
     const deps: WarmUpDependencies = {
       agentDir: tmpDir,
       adapters: new Map([[adapter.provider, adapter]]),
@@ -154,13 +229,30 @@ describe("warm-up orchestrator", () => {
       if (account.email === "alpha@example.com") {
         throw new Error("simulated probe network failure");
       }
-      return { ...account, status: "ok", ms: 50 };
+      return {
+        ...account,
+        provider: "google-antigravity",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 50,
+        startedAt: 1000,
+        checkedAt: 1050,
+        failureKind: null,
+        confirmed: false,
+      };
     });
 
     const deps: WarmUpDependencies = {
       agentDir: tmpDir,
       adapters: new Map([[adapter.provider, adapter]]),
-      readSnapshot: () => ({ checkedAt: 1000, results: [] }),
+      readSnapshot: () => ({
+        schemaVersion: 2,
+        probeModel: "gemini-3.8-flash-high",
+        sweepStartedAt: null,
+        checkedAt: 1000,
+        results: [],
+        streaks: {},
+      }),
       recordHealth: () => {},
       sleep: async () => {},
     };
@@ -183,7 +275,14 @@ describe("warm-up orchestrator", () => {
     const deps: WarmUpDependencies = {
       agentDir: tmpDir,
       adapters: new Map([[adapter.provider, adapter]]),
-      readSnapshot: () => ({ checkedAt: 1000, results: [] }),
+      readSnapshot: () => ({
+        schemaVersion: 2,
+        probeModel: "gemini-3.8-flash-high",
+        sweepStartedAt: null,
+        checkedAt: 1000,
+        results: [],
+        streaks: {},
+      }),
       recordHealth: () => {},
       sleep: async () => {},
     };

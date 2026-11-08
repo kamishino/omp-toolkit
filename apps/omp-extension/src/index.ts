@@ -37,6 +37,7 @@ function reloadIfAvailable(ctx: ExtensionContext): Promise<void> | undefined {
 
 const antigravityAdapter: WarmUpAdapter = {
   provider: PROVIDER,
+  model: healthManager.probeClient.modelWire,
   loadAccounts: () => healthManager.loadAccounts(),
   probe: (a) => healthManager.probe(a),
 };
@@ -45,7 +46,7 @@ const warmUpDeps: WarmUpDependencies = {
   agentDir: resolveAgentDir(),
   adapters: warmUpAdapters,
   readSnapshot: () => healthManager.readSnapshot(),
-  recordHealth: (r, o) => healthManager.recordHealth(r, o),
+  recordHealth: (r, o) => healthManager.recordHealth(r, { scope: "partial", source: o?.source }),
 };
 
 export default function geminiHealthExtension(pi: ExtensionAPI) {

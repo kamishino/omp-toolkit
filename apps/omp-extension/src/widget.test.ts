@@ -30,27 +30,70 @@ describe("widget presentation module", () => {
   });
 
   test("summary formats ok and hang counts accurately", () => {
+    const now = Date.now();
     const results: HealthResult[] = [
-      { email: "a@b.com", status: "ok", ms: 100 },
-      { email: "c@d.com", status: "hang", ms: 15000 },
+      {
+        provider: "google-antigravity",
+        email: "a@b.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 100,
+        startedAt: now - 100,
+        checkedAt: now,
+        failureKind: null,
+        confirmed: false,
+      },
+      {
+        provider: "google-antigravity",
+        email: "c@d.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "hang",
+        ms: 15000,
+        startedAt: now - 15000,
+        checkedAt: now,
+        failureKind: "timeout",
+        confirmed: true,
+      },
     ];
     expect(summary(results)).toBe("Gemini 3.8: 1/2 ok · 1 hang");
 
-    const allOk: HealthResult[] = [{ email: "a@b.com", status: "ok", ms: 100 }];
+    const allOk: HealthResult[] = [
+      {
+        provider: "google-antigravity",
+        email: "a@b.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 100,
+        startedAt: now - 100,
+        checkedAt: now,
+        failureKind: null,
+        confirmed: false,
+      },
+    ];
     expect(summary(allOk)).toBe("Gemini 3.8: 1/1 ok");
   });
-
   test("healthLines and table handle empty accounts list", () => {
     expect(healthLines([], [])).toEqual(["Gemini health: no Antigravity accounts found"]);
     expect(table([], [])).toBe("Gemini health: no Antigravity accounts found");
   });
 
   test("healthLines formats excluded accounts and details", () => {
+    const now = Date.now();
     const results: HealthResult[] = [
       {
+        provider: "google-antigravity",
         email: "excluded@example.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
         status: "ok",
         ms: 1200,
+        startedAt: now - 1200,
+        checkedAt: now,
+        failureKind: null,
+        confirmed: false,
         detail: "recovered",
       },
     ];
@@ -95,7 +138,21 @@ describe("widget presentation module", () => {
       },
     };
 
-    const results: HealthResult[] = [{ email: "a@b.com", status: "ok", ms: 250 }];
+    const now = Date.now();
+    const results: HealthResult[] = [
+      {
+        provider: "google-antigravity",
+        email: "a@b.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 250,
+        startedAt: now - 250,
+        checkedAt: now,
+        failureKind: null,
+        confirmed: false,
+      },
+    ];
     publish(ctx, results, []);
 
     expect(statuses.length).toBe(1);
@@ -117,7 +174,7 @@ describe("widget presentation module", () => {
       },
     };
 
-    publish(ctx, [{ email: "a@b.com", status: "ok", ms: 250 }], []);
+    publish(ctx, [], []);
     expect(statuses).toEqual([["gemini-health", undefined]]);
     expect(widgets).toEqual([["gemini-health", undefined]]);
   });

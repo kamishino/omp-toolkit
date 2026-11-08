@@ -89,8 +89,9 @@ export async function runExtensionCli(
   const interval = Math.max(10, Number(intervalArg?.slice("--interval=".length) ?? 60) || 60);
 
   const runOnce = async (): Promise<boolean> => {
-    const results = await healthManager.checkAll(confirm);
-    await healthManager.recordHealth(results);
+    const sweep = await healthManager.checkAllSweep(confirm);
+    await healthManager.recordHealth(sweep.results, { scope: "full", startedAt: sweep.startedAt });
+    const results = sweep.results;
     const restored = await healthManager.maybeRestoreManaged();
     const policies = await healthManager.readPolicies();
     if (json) {

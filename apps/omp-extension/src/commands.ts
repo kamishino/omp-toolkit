@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import type { WarmUpRequest } from "@omp-toolkit/core";
+import { isRetryableRouteFailure, type WarmUpRequest } from "@omp-toolkit/core";
 import type { AutoHealCoordinator } from "./auto-heal";
 import { PROVIDER, RESTORE_STREAK } from "./config";
 import { short } from "./fs-util";
@@ -199,7 +199,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
         try {
           const { results, restored } = await coordinator.probeAndPublish(ctx, true);
           if (dryRun) {
-            healthManager.recordHistory([
+            await healthManager.recordHistory([
               {
                 at: Date.now(),
                 kind: "manual_intervention",
@@ -208,7 +208,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
               },
             ]);
             const bad = results.filter(
-              (result) => result.status === "hang" || result.status === "error",
+              (result) => isRetryableRouteFailure(result) && result.confirmed === true,
             );
             ctx.ui.notify(
               bad.length === 0
@@ -221,7 +221,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           const action = await healthManager.applyHeal(results, "heal");
           const nextPolicies = await healthManager.readPolicies();
           publish(ctx, results, nextPolicies);
-          healthManager.recordHistory([
+          await healthManager.recordHistory([
             {
               at: Date.now(),
               kind: "manual_intervention",
@@ -316,31 +316,26 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
           (policy) =>
             policy?.provider === PROVIDER &&
             typeof policy?.account?.email === "string" &&
-            policy.account.email.toLowerCase() === target.toLowerCase(),
+            policy.account.email.toLowerCase() === target.toLowerCase() &&
+            (policy.reservePct ?? 0) >= 100,
         );
         if (!hasExclusion) {
           ctx.ui.notify(`No exclusion found for ${target}`, "info");
           return;
         }
 
-        const latest = healthManager
-          .readSnapshot()
-          ?.results.find((result) => result.email.toLowerCase() === target.toLowerCase());
-        if (latest && latest.status !== "ok" && !force) {
+        try {
+          await healthManager.removeExclusion(account, { force, detail: "gemini-enable" });
+        } catch (error) {
+          const message = short(error);
           ctx.ui.notify(
-            `Refusing to enable ${latest.email}: latest check is ${latest.status.toUpperCase()}. Run /gemini-health, or use --force.`,
+            message.includes("fresh OK route evidence required")
+              ? `Refusing to enable ${target}: ${message}`
+              : `Gemini enable failed: ${message}`,
             "warning",
           );
           return;
         }
-        if (latest && latest.status !== "ok") {
-          ctx.ui.notify(
-            `Warning: ${latest.email} was ${latest.status.toUpperCase()} in the latest check; enabling anyway.`,
-            "warning",
-          );
-        }
-
-        await healthManager.removeExclusion(target, "gemini-enable");
 
         const message = `Enabled ${target}`;
         ctx.ui.notify(message, "info");
@@ -431,19 +426,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
             return;
           }
 
-          sidecar.enabled = sidecar.enabled.filter(
-            (e) => e.toLowerCase() !== targetEmail.toLowerCase(),
-          );
-          healthManager.writeAutoRestore(sidecar);
-          healthManager.recordHistory([
-            {
-              at: Date.now(),
-              kind: "policy_change",
-              provider: PROVIDER,
-              account: targetEmail,
-              detail: "gemini-auto-restore off",
-            },
-          ]);
+          await healthManager.setAutoRestore(targetEmail, false);
           ctx.ui.notify(`Removed ${targetEmail} from auto-restore`, "info");
           return;
         }
@@ -462,17 +445,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
 
         const email = resolution.account.email;
         if (!sidecar.enabled.some((e) => e.toLowerCase() === email.toLowerCase())) {
-          sidecar.enabled.push(email);
-          healthManager.writeAutoRestore(sidecar);
-          healthManager.recordHistory([
-            {
-              at: Date.now(),
-              kind: "policy_change",
-              provider: PROVIDER,
-              account: email,
-              detail: "gemini-auto-restore",
-            },
-          ]);
+          await healthManager.setAutoRestore(email, true);
           ctx.ui.notify(`Enabled auto-restore for ${email}`, "info");
         } else {
           ctx.ui.notify(`${email} is already opted in to auto-restore`, "info");

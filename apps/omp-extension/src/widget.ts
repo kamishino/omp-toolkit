@@ -3,6 +3,8 @@ import {
   type HealthResult,
   type Policy,
   resolveWidgetStatePath,
+  routeFreshness,
+  routeKey,
 } from "@omp-toolkit/core";
 import { RESTORE_STREAK } from "./config";
 import { readJsonFile, writeFileAtomic } from "./fs-util";
@@ -34,7 +36,9 @@ export function setWidgetEnabled(enabled: boolean): void {
   writeFileAtomic(widgetStatePath(), `${JSON.stringify({ enabled }, null, 2)}\n`);
 }
 
-function statusTag(result: HealthResult): string {
+function statusTag(result: HealthResult, now = Date.now()): string {
+  const freshness = routeFreshness(result, now);
+  if (freshness === "stale") return "STALE";
   switch (result.status) {
     case "ok":
       return "OK  ";
@@ -63,17 +67,19 @@ export function healthLines(
   if (results.length === 0) return ["Gemini health: no Antigravity accounts found"];
   const excluded = excludedEmails(policies);
   const streaks = healthManager.readStreaks();
-  const lines = [`Gemini 3.8 route health · ${new Date().toLocaleTimeString()}`];
+  const now = Date.now();
+  const lines = [`Gemini 3.8 route health · ${new Date(now).toLocaleTimeString()}`];
   for (const result of results) {
     const ms = result.ms > 0 ? `${(result.ms / 1000).toFixed(1)}s` : "-";
     const mark = excluded.has(result.email) ? " [excluded]" : "";
+    const key = routeKey(result);
     const streak =
       excluded.has(result.email) && result.status === "ok"
-        ? ` ↻ ${Math.min(streaks[result.email]?.ok ?? 0, restoreStreak)}/${restoreStreak}`
+        ? ` ↻ ${Math.min(streaks[key]?.ok ?? 0, restoreStreak)}/${restoreStreak}`
         : "";
     const detail = result.detail ? `  ${result.detail.slice(0, 70)}` : "";
     lines.push(
-      `  ${statusTag(result)} ${result.email.padEnd(28)} ${ms.padStart(6)}${mark}${streak}${detail}`,
+      `  ${statusTag(result, now)} ${result.email.padEnd(28)} ${ms.padStart(6)}${mark}${streak}${detail}`,
     );
   }
   return lines;

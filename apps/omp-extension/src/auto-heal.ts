@@ -153,11 +153,19 @@ export const RECOVERY_INTERVAL_MS = Math.max(
   (Number(process.env.GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS ?? 300) || 300) * 1000,
 );
 
+export function isQualifyingStallError(errorMessage: string): boolean {
+  if (!errorMessage) return false;
+  if (/^user\s*(aborted|cancelled)|cancelled\s*by\s*user/i.test(errorMessage.trim())) {
+    return false;
+  }
+  return /abort|timeout|timed out|503|UNAVAILABLE|capacity|closed|reset/i.test(errorMessage);
+}
+
 export interface AutoHealCoordinatorOptions {
   cooldownMs?: number;
   provider?: string;
   recoveryIntervalMs?: number;
-  recordHistoryFn?: (events: HistoryEventInput[]) => void;
+  recordHistoryFn?: (events: HistoryEventInput[]) => void | Promise<void>;
 }
 
 export class AutoHealCoordinator {
@@ -166,7 +174,7 @@ export class AutoHealCoordinator {
   private readonly cooldownMs: number;
   private readonly provider: string;
   private readonly recoveryIntervalMs: number;
-  private readonly recordHistoryFn: (events: HistoryEventInput[]) => void;
+  private readonly recordHistoryFn: (events: HistoryEventInput[]) => void | Promise<void>;
   private recoveryTimer: NodeJS.Timeout | null = null;
   private warnedNoIdle = false;
 
@@ -175,7 +183,7 @@ export class AutoHealCoordinator {
     this.provider = options.provider ?? PROVIDER;
     this.recoveryIntervalMs = options.recoveryIntervalMs ?? RECOVERY_INTERVAL_MS;
     this.recordHistoryFn =
-      options.recordHistoryFn ?? ((events) => healthManager.recordHistory(events));
+      options.recordHistoryFn ?? ((events) => void healthManager.recordHistory(events));
   }
 
   getRecoveryTimer(): NodeJS.Timeout | null {
@@ -201,9 +209,13 @@ export class AutoHealCoordinator {
     }
     const hasExclusions = await healthManager.hasExclusionsToRecover();
     if (!hasExclusions) return;
-
-    await this.runExclusive(ctx, "Recovery tick", () => this.refreshInner(ctx, false));
+    await this.runExclusive(ctx, "Recovery tick", async () => {
+      if (typeof ctx.isIdle === "function" && !ctx.isIdle()) return;
+      if (!(await healthManager.hasExclusionsToRecover())) return;
+      await this.refreshInner(ctx, false);
+    }).catch(() => {});
   }
+
   isRunning(): boolean {
     return this.running;
   }
@@ -229,12 +241,14 @@ export class AutoHealCoordinator {
     ctx: ExtensionContext,
     confirm = false,
   ): Promise<{ results: ProbeResult[]; restored: string[]; policies: Policy[] }> {
-    const results = await healthManager.checkAll(confirm);
-    await healthManager.recordHealth(results);
+    const sweep = await healthManager.checkAllSweep(confirm);
+    await healthManager.recordHealth(sweep.results, { scope: "full", startedAt: sweep.startedAt });
     const restored = await healthManager.maybeRestoreManaged();
     const policies = await healthManager.readPolicies();
-    publish(ctx, results, policies);
-    return { results, restored, policies };
+    const snapshot = healthManager.readSnapshot();
+    const published = snapshot?.results ?? sweep.results;
+    publish(ctx, published, policies);
+    return { results: sweep.results, restored, policies };
   }
 
   private async refreshInner(ctx: ExtensionContext, notify: boolean): Promise<void> {
@@ -265,15 +279,18 @@ export class AutoHealCoordinator {
     if (this.running) return;
     this.running = true;
     try {
-      const results = await healthManager.checkAll(true);
-      await healthManager.recordHealth(results);
+      const sweep = await healthManager.checkAllSweep(true);
+      await healthManager.recordHealth(sweep.results, {
+        scope: "full",
+        startedAt: sweep.startedAt,
+      });
       const restored = await healthManager.maybeRestoreManaged();
-      const policies = await healthManager.readPolicies();
-      publish(ctx, results, policies);
-      const action = await healthManager.applyHeal(results, "auto-heal");
-      const nextPolicies = await healthManager.readPolicies();
-      publish(ctx, results, nextPolicies);
+      const action = await healthManager.applyHeal(sweep.results, "auto-heal");
       const restoredNote = restored.length > 0 ? ` Restored ${restored.join(", ")}.` : "";
+      const nextPolicies = await healthManager.readPolicies();
+      const snapshot = healthManager.readSnapshot();
+      const published = snapshot?.results ?? sweep.results;
+      publish(ctx, published, nextPolicies);
       if (action.changed.length > 0) {
         ctx.ui.notify(
           `Gemini route stall (${trigger.slice(0, 80)}). Temporarily excluded ${action.changed.join(", ")}.${restoredNote} Run /gemini-heal to reload this session, or start /new.`,
@@ -355,12 +372,11 @@ export class AutoHealCoordinator {
       ) {
         return;
       }
-
       const text = String(last.errorMessage ?? last.error ?? "");
-      if (!/abort|timeout|timed out|503|UNAVAILABLE|capacity|closed|reset/i.test(text)) {
+      if (!isQualifyingStallError(text)) {
         return;
       }
-      if (Date.now() - this.lastAutoHeal < this.cooldownMs) return;
+      if (this.running || Date.now() - this.lastAutoHeal < this.cooldownMs) return;
       this.lastAutoHeal = Date.now();
       void this.autoHeal(ctx, text).catch(() => {});
     });
@@ -378,10 +394,10 @@ export class AutoHealCoordinator {
         return;
       }
       const text = String(retryEvent.errorMessage ?? "");
-      if (!/abort|timeout|timed out|503|UNAVAILABLE|capacity|closed|reset/i.test(text)) {
+      if (!isQualifyingStallError(text)) {
         return;
       }
-      if (Date.now() - this.lastAutoHeal < this.cooldownMs) return;
+      if (this.running || Date.now() - this.lastAutoHeal < this.cooldownMs) return;
       this.lastAutoHeal = Date.now();
       void this.autoHeal(ctx, text).catch(() => {});
     });
