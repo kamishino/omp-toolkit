@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OMP Toolkit, explained</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens ───────────────────────────────────────────────────────────────
+       Values are a generated snapshot of design/tokens.json, the project's only
+       color source. Do not hand-edit: re-read the tokens and refresh instead.
+         --surface  ← desktop.color.<mode>.surfaceRaised
+         --fg       ← desktop.color.<mode>.text
+         --muted    ← desktop.color.<mode>.muted
+         --border   ← desktop.color.<mode>.border
+         --accent   ← desktop.color.<mode>.accent
+       ──────────────────────────────────────────────────────────────────────── */
+    :root {
+      color-scheme: light dark;
+      --surface: oklch(0.967 0.001 286.4);
+      --fg:      oklch(0.210 0.006 285.9);
+      --muted:   oklch(0.442 0.015 285.8);
+      --border:  oklch(0.871 0.005 286.3);
+      --accent:  oklch(0.500 0.119 242.7);
+
+      --font-serif: 'Instrument Serif', 'Noto Serif', 'Times New Roman', serif;
+      --font-sans:  'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      --font-mono:  'Geist Mono', ui-monospace, Menlo, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --surface: oklch(0.274 0.005 286.0);
+        --fg:      oklch(0.920 0.004 286.3);
+        --muted:   oklch(0.783 0.000 89.9);
+        --border:  oklch(0.460 0.000 89.9);
+        --accent:  oklch(0.842 0.096 231.2);
+      }
+    }
+
+    body {
+      font-family: var(--font-sans);
+      color: var(--fg);
+      background: transparent;
+      padding: 3rem 2rem 4rem;
+      line-height: 1.6;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; min-width: 0; }
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
+    .header { margin-bottom: 3rem; max-width: 62ch; }
+
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.9rem, 3vw + 1rem, 2.6rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-bottom: 2.75rem;
+    }
+
+    .lede { font-size: 1rem; color: var(--muted); max-width: 58ch; }
+
+    /* ── Figures ──────────────────────────────────────────────────────────── */
+    .figure { margin-bottom: 3.5rem; min-width: 0; max-width: 100%; }
+
+    h2 {
+      font-family: var(--font-sans);
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: -0.005em;
+      margin-bottom: 0.4rem;
+    }
+
+    .caption {
+      font-size: 0.875rem;
+      color: var(--muted);
+      max-width: 62ch;
+      margin-bottom: 1.5rem;
+    }
+
+    .diagram-container {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+    }
+
+    .diagram-container svg { width: 100%; min-width: 960px; display: block; }
+
+    .callout {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 0.95rem;
+      color: var(--muted);
+      max-width: 62ch;
+      margin: 1.25rem 0 0;
+    }
+
+    /* ── Source map ───────────────────────────────────────────────────────── */
+    .readmap { margin-bottom: 2.5rem; min-width: 0; max-width: 100%; }
+
+    table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+
+    caption {
+      caption-side: top;
+      text-align: left;
+      font-size: 0.875rem;
+      color: var(--muted);
+      padding-bottom: 1rem;
+      max-width: 62ch;
+    }
+
+    th, td { text-align: left; padding: 0.6rem 1rem 0.6rem 0; vertical-align: top; }
+
+    thead th {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    tbody tr + tr td { border-top: 1px solid var(--border); }
+
+    td code, footer code {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--fg);
+    }
+
+    td:last-child, th:last-child { padding-right: 0; }
+
+    /* ── Footer ───────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.9;
+      color: var(--muted);
+    }
+
+    footer p + p { margin-top: 0.6rem; }
+
+    /* Paper has no scrollbar: let the sheet scale the figure instead of clipping it. */
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      .diagram-container svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <p class="eyebrow">OMP Toolkit</p>
+    <h1>OMP Toolkit, explained</h1>
+    <p class="lede">OMP pins an agent session to one provider account, so a hung route stalls the
+      session even while sibling accounts stay healthy. This toolkit reads every provider's quota,
+      records per-account route health, and moves a stalled Antigravity account out of the way
+      until it recovers.</p>
+  </header>
+
+  <section class="figure">
+    <h2>Monitoring and route health</h2>
+    <p class="caption">Two inputs meet in one dashboard: quota reports fetched from the OMP CLI,
+      and a saved health snapshot. The dashboard is compiled once and rendered either in a terminal
+      or in the desktop panel; the desktop spawns that same CLI rather than rebuilding the data.</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" role="img" aria-labelledby="omp-toolkit-explained-monitoring-title omp-toolkit-explained-monitoring-desc">
+        <title id="omp-toolkit-explained-monitoring-title">Monitoring and route health</title>
+        <desc id="omp-toolkit-explained-monitoring-desc">OMP runtime events and saved usage data reach the usage CLI, which compiles a dashboard and renders it as a terminal view or desktop widget, while the health extension sends active model probes and writes policy updates.</desc>
+
+        <defs>
+          <marker id="mon-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--muted)"/>
+          </marker>
+          <marker id="mon-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- groups -->
+        <rect x="40" y="64" width="248" height="400" rx="8" fill="none" stroke="var(--border)" stroke-width="0.8" stroke-dasharray="4,3"/>
+        <rect x="56" y="68" width="92" height="12" rx="2" fill="var(--surface)"/>
+        <text x="102" y="77" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.14em">OMP AND EXTENSION</text>
+
+        <rect x="320" y="64" width="248" height="400" rx="8" fill="none" stroke="var(--border)" stroke-width="0.8" stroke-dasharray="4,3"/>
+        <rect x="336" y="68" width="96" height="12" rx="2" fill="var(--surface)"/>
+        <text x="384" y="77" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.14em">DASHBOARD ASSEMBLY</text>
+
+        <rect x="600" y="64" width="320" height="400" rx="8" fill="none" stroke="var(--border)" stroke-width="0.8" stroke-dasharray="4,3"/>
+        <rect x="616" y="68" width="68" height="12" rx="2" fill="var(--surface)"/>
+        <text x="650" y="77" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.14em">PRESENTATION</text>
+
+        <!-- connectors -->
+        <path d="M 116,164 V 240" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#mon-arrow)"/>
+        <path d="M 212,240 V 164" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#mon-arrow)"/>
+        <path d="M 116,304 V 380" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mon-arrow)"/>
+        <path d="M 264,132 H 296 Q 304,132 304,140 V 248 Q 304,256 312,256 H 344" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mon-arrow)"/>
+        <path d="M 264,272 H 312 Q 320,272 320,280 V 404 Q 320,412 328,412 H 344" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mon-arrow)"/>
+        <path d="M 444,380 V 304" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mon-arrow)"/>
+        <path d="M 400,240 V 164" fill="none" stroke="var(--muted)" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#mon-arrow-accent)"/>
+        <path d="M 480,164 V 240" fill="none" stroke="var(--accent)" stroke-width="1.2" marker-end="url(#mon-arrow-accent)"/>
+        <path d="M 544,252 H 632 Q 640,252 640,244 V 180 Q 640,172 648,172 H 676" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mon-arrow)"/>
+        <path d="M 544,272 H 600 Q 608,272 608,280 V 324 Q 608,332 616,332 H 676" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#mon-arrow)"/>
+        <path d="M 676,192 H 668 Q 660,192 660,200 V 332 Q 660,340 652,340 H 528 Q 520,340 520,332 V 304" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#mon-arrow)"/>
+
+        <!-- connector labels -->
+        <rect x="72" y="196" width="36" height="12" rx="2" fill="var(--surface)"/>
+        <text x="90" y="205" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">EVENTS</text>
+
+        <rect x="132" y="196" width="72" height="12" rx="2" fill="var(--surface)"/>
+        <text x="168" y="205" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">POLICY UPDATE</text>
+
+        <rect x="124" y="336" width="68" height="12" rx="2" fill="var(--surface)"/>
+        <text x="158" y="345" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">ACTIVE PROBE</text>
+
+        <rect x="224" y="194" width="72" height="12" rx="2" fill="var(--surface)"/>
+        <text x="260" y="203" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">QUOTA REPORTS</text>
+
+        <rect x="328" y="336" width="32" height="12" rx="2" fill="var(--surface)"/>
+        <text x="344" y="345" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">WRITE</text>
+
+        <rect x="452" y="336" width="28" height="12" rx="2" fill="var(--surface)"/>
+        <text x="466" y="345" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">READ</text>
+
+        <rect x="350" y="196" width="42" height="12" rx="2" fill="var(--surface)"/>
+        <text x="371" y="205" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">COMPILE</text>
+
+        <rect x="420" y="196" width="52" height="12" rx="2" fill="var(--surface)"/>
+        <text x="446" y="205" fill="var(--accent)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">DASHBOARD</text>
+
+        <rect x="561" y="230" width="62" height="12" rx="2" fill="var(--surface)"/>
+        <text x="592" y="239" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">JSON STDOUT</text>
+
+        <rect x="616" y="296" width="36" height="12" rx="2" fill="var(--surface)"/>
+        <text x="634" y="305" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">RENDER</text>
+
+        <rect x="668" y="224" width="52" height="12" rx="2" fill="var(--surface)"/>
+        <text x="694" y="233" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">SPAWN CLI</text>
+
+        <!-- nodes -->
+        <rect x="64" y="100" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="64" y="100" width="200" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="164" y="130" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">OMP runtime</text>
+        <text x="164" y="147" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">omp usage · events · policy</text>
+
+        <rect x="64" y="240" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="64" y="240" width="200" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="164" y="270" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Health extension</text>
+        <text x="164" y="287" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">apps/omp-extension</text>
+
+        <rect x="64" y="380" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="64" y="380" width="200" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="164" y="410" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Antigravity probe target</text>
+        <text x="164" y="427" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">active model request</text>
+
+        <rect x="344" y="100" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="344" y="100" width="200" height="64" rx="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="444" y="130" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Dashboard engine</text>
+        <text x="444" y="147" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">packages/core · in-process</text>
+
+        <rect x="344" y="240" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="344" y="240" width="200" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="444" y="270" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Usage CLI</text>
+        <text x="444" y="287" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">apps/provider-usage</text>
+
+        <rect x="344" y="380" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="344" y="380" width="200" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="444" y="410" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Saved health snapshot</text>
+        <text x="444" y="427" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">gemini-health-latest.json</text>
+
+        <rect x="676" y="140" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="676" y="140" width="200" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="776" y="170" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Desktop widget</text>
+        <text x="776" y="187" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">apps/desktop · Electron</text>
+
+        <rect x="676" y="300" width="200" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="676" y="300" width="200" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="776" y="330" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Terminal view</text>
+        <text x="776" y="347" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">packages/tui · Orca tab</text>
+
+        <!-- legend -->
+        <line x1="40" y1="524" x2="920" y2="524" stroke="var(--border)" stroke-width="0.8"/>
+        <text x="40" y="543" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.14em">LEGEND</text>
+        <line x1="120" y1="540" x2="144" y2="540" stroke="var(--muted)" stroke-width="1.2"/>
+        <text x="152" y="543" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.06em">SOLID  OBSERVED DATA &amp; MODEL TRAFFIC</text>
+        <line x1="470" y1="540" x2="494" y2="540" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="502" y="543" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.06em">DASHED  INVOCATION OR CONTROL</text>
+        <rect x="770" y="536" width="14" height="8" rx="1" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="792" y="543" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.06em">FOCAL</text>
+      </svg>
+    </div>
+
+    <p class="callout">Displaying usage performs no model inference. The health extension's probe does,
+      and quota or balance lookups still call provider APIs — so a route result describes that probed
+      route, not every model on the account.</p>
+  </section>
+
+  <section class="figure">
+    <h2>Gateway: control versus model traffic</h2>
+    <p class="caption">OMP already ships the serving path: a forward proxy in front of a credential
+      vault. The toolkit's gateway app manages those daemons and their policy; it holds no inference
+      proxy of its own, so no model request passes through toolkit code.</p>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 960 600" role="img" aria-labelledby="omp-toolkit-explained-gateway-title omp-toolkit-explained-gateway-desc">
+        <title id="omp-toolkit-explained-gateway-title">Gateway: control versus model traffic</title>
+        <desc id="omp-toolkit-explained-gateway-desc">Agent clients reach the upstream provider through the OMP auth-gateway, optionally via a Cloudflare tunnel, while a separate toolkit control app manages daemon lifecycle and broker policy without sitting on the request path.</desc>
+
+        <defs>
+          <marker id="gw-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--muted)"/>
+          </marker>
+          <marker id="gw-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="var(--accent)"/>
+          </marker>
+        </defs>
+
+        <!-- groups -->
+        <rect x="40" y="64" width="200" height="456" rx="8" fill="none" stroke="var(--border)" stroke-width="0.8" stroke-dasharray="4,3"/>
+        <rect x="56" y="68" width="62" height="12" rx="2" fill="var(--surface)"/>
+        <text x="87" y="77" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.14em">CLIENT SIDE</text>
+
+        <rect x="272" y="64" width="440" height="456" rx="8" fill="none" stroke="var(--border)" stroke-width="0.8" stroke-dasharray="4,3"/>
+        <rect x="288" y="68" width="102" height="12" rx="2" fill="var(--surface)"/>
+        <text x="339" y="77" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.14em">PRIMARY WORKSTATION</text>
+
+        <rect x="736" y="64" width="184" height="456" rx="8" fill="none" stroke="var(--border)" stroke-width="0.8" stroke-dasharray="4,3"/>
+        <rect x="752" y="68" width="92" height="12" rx="2" fill="var(--surface)"/>
+        <text x="798" y="77" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.14em">UPSTREAM PROVIDER</text>
+
+        <!-- connectors -->
+        <path d="M 220,232 H 296" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#gw-arrow)"/>
+        <path d="M 156,200 V 132 Q 156,124 164,124 H 296" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#gw-arrow)"/>
+        <path d="M 372,152 V 200" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#gw-arrow)"/>
+        <path d="M 448,232 H 752" fill="none" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#gw-arrow)"/>
+        <path d="M 372,264 V 296" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#gw-arrow)"/>
+        <path d="M 536,344 H 448" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#gw-arrow)"/>
+        <path d="M 616,328 V 280 Q 616,272 608,272 H 432 Q 424,272 424,264" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#gw-arrow)"/>
+        <path d="M 616,424 V 392" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#gw-arrow-accent)"/>
+        <path d="M 536,456 H 504 Q 496,456 496,448 V 288 Q 496,280 488,280 H 416 Q 408,280 408,272 V 264" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#gw-arrow)"/>
+        <path d="M 664,328 V 240 a 8,8 0 0,0 0,-16 V 168 Q 664,160 656,160 H 432 Q 424,160 424,152" fill="none" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#gw-arrow)"/>
+
+        <!-- connector labels -->
+        <rect x="230" y="210" width="56" height="12" rx="2" fill="var(--surface)"/>
+        <text x="258" y="219" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">LOCAL HTTP</text>
+
+        <rect x="196" y="102" width="68" height="12" rx="2" fill="var(--surface)"/>
+        <text x="230" y="111" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">REMOTE HTTPS</text>
+
+        <rect x="380" y="170" width="42" height="12" rx="2" fill="var(--surface)"/>
+        <text x="401" y="179" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">FORWARD</text>
+
+        <rect x="574" y="210" width="52" height="12" rx="2" fill="var(--surface)"/>
+        <text x="600" y="219" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">INFERENCE</text>
+
+        <rect x="302" y="270" width="62" height="12" rx="2" fill="var(--surface)"/>
+        <text x="333" y="279" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">TOKEN LEASE</text>
+
+        <rect x="456" y="322" width="72" height="12" rx="2" fill="var(--surface)"/>
+        <text x="492" y="331" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">BLOCK / QUERY</text>
+
+        <rect x="624" y="294" width="52" height="12" rx="2" fill="var(--surface)"/>
+        <text x="650" y="303" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">LIFECYCLE</text>
+
+        <rect x="624" y="400" width="56" height="12" rx="2" fill="var(--surface)"/>
+        <text x="652" y="409" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">CLI ACTION</text>
+
+        <rect x="426" y="366" width="62" height="12" rx="2" fill="var(--surface)"/>
+        <text x="457" y="375" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">HEALTH READ</text>
+
+        <rect x="572" y="190" width="76" height="12" rx="2" fill="var(--surface)"/>
+        <text x="610" y="199" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" text-anchor="middle" letter-spacing="0.06em">OPTIONAL START</text>
+
+        <!-- nodes -->
+        <rect x="60" y="200" width="160" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="60" y="200" width="160" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="140" y="230" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Agent clients</text>
+        <text x="140" y="247" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">local or thin client</text>
+
+        <rect x="296" y="96" width="152" height="56" rx="6" fill="var(--surface)"/>
+        <rect x="296" y="96" width="152" height="56" rx="6" fill="none" stroke="var(--border)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="372" y="124" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Cloudflare tunnel</text>
+        <text x="372" y="141" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">optional remote ingress</text>
+
+        <rect x="296" y="200" width="152" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="296" y="200" width="152" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="372" y="230" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">OMP auth-gateway</text>
+        <text x="372" y="247" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">loopback :4000</text>
+
+        <rect x="296" y="296" width="152" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="296" y="296" width="152" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="372" y="326" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">OMP auth-broker</text>
+        <text x="372" y="343" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">credential vault :8765</text>
+
+        <rect x="536" y="328" width="160" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="536" y="328" width="160" height="64" rx="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="616" y="358" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Toolkit control</text>
+        <text x="616" y="375" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">apps/gateway</text>
+
+        <rect x="536" y="424" width="160" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="536" y="424" width="160" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="616" y="454" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Desktop commands</text>
+        <text x="616" y="471" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">panel · /gateway</text>
+
+        <rect x="752" y="200" width="152" height="64" rx="6" fill="var(--surface)"/>
+        <rect x="752" y="200" width="152" height="64" rx="6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <text x="828" y="230" fill="var(--fg)" font-size="12" font-weight="600" font-family="var(--font-sans)" text-anchor="middle">Google Antigravity</text>
+        <text x="828" y="247" fill="var(--muted)" font-size="9" font-family="var(--font-mono)" text-anchor="middle">upstream models</text>
+
+        <!-- legend -->
+        <line x1="40" y1="556" x2="920" y2="556" stroke="var(--border)" stroke-width="0.8"/>
+        <text x="40" y="575" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.14em">LEGEND</text>
+        <line x1="120" y1="572" x2="144" y2="572" stroke="var(--muted)" stroke-width="1.2"/>
+        <text x="152" y="575" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.06em">SOLID  MODEL TRAFFIC</text>
+        <line x1="560" y1="572" x2="584" y2="572" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="592" y="575" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.06em">DASHED  MANAGEMENT &amp; CONTROL</text>
+        <rect x="770" y="568" width="14" height="8" rx="1" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="792" y="575" fill="var(--muted)" font-size="8" font-family="var(--font-mono)" letter-spacing="0.06em">FOCAL</text>
+      </svg>
+    </div>
+
+    <p class="callout">OMP owns serving, the upstream OAuth credentials, refresh, and sticky routing.
+      The toolkit owns lifecycle, compatibility checks, visibility, client setup, and policy or
+      cooldown controls. A thin client holds a scoped gateway token and, for remote access, a tunnel
+      service token — never the host's credential vault.</p>
+  </section>
+
+  <section class="readmap">
+    <h2>Where to start reading</h2>
+    <table>
+      <caption>Seven entry points. Paths are the current source layout; the figure above shows how
+        they relate at run time.</caption>
+      <thead>
+        <tr><th scope="col">Path</th><th scope="col">Start here for</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>apps/omp-extension</code></td><td>OMP hooks, health probes, account policies, and the outbound request normalizer.</td></tr>
+        <tr><td><code>apps/provider-usage</code></td><td>Data acquisition, the refresh loop, and the JSON or terminal output branch.</td></tr>
+        <tr><td><code>packages/core</code></td><td>Dashboard assembly plus the routing, cooldown, and policy calculations. Pure logic; callers supply the I/O.</td></tr>
+        <tr><td><code>packages/tui</code></td><td>Terminal rendering: frames, bars, percentages, and route badges.</td></tr>
+        <tr><td><code>apps/desktop</code></td><td>Electron host, IPC bridge, tray menu, and the renderer that consumes dashboard JSON.</td></tr>
+        <tr><td><code>apps/gateway</code></td><td>Daemon lifecycle and control for the OMP broker, gateway, and optional tunnel.</td></tr>
+        <tr><td><code>design/tokens.json</code></td><td>Colors, spacing, and thresholds shared by the terminal and desktop surfaces.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p>Evidence anchors: <code>apps/provider-usage/src/monitor-runner.ts</code> (single compile, then
+      JSON or TUI) · <code>apps/desktop/src/data.ts</code> (desktop spawns the CLI) ·
+      <code>apps/omp-extension/src/probe-client.ts</code> (active probe) ·
+      <code>apps/gateway/src/daemon-manager.ts</code> (daemon ownership) ·
+      <code>docs/adr/0010-gateway-control-plane-over-omp.md</code> (management versus serving).</p>
+    <p>Colors are a snapshot of <code>design/tokens.json</code>. Refresh that snapshot when the tokens change.</p>
+  </footer>
+
+</div>
+</body>
+</html>
