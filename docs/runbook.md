@@ -25,16 +25,18 @@ bun run doctor
 ```
 Interpretation:
 
-| Route   | Meaning                      | Action                    |
-| ------- | ---------------------------- | ------------------------- |
-| `OK`    | First SSE event within 15 s  | None                      |
-| `HANG`  | No first event within 15 s   | Account is circuit-broken |
-| `ERR`   | HTTP 5xx                     | Account is circuit-broken |
-| `AUTH`  | 401/403; token cache cleared | Re-login the account      |
-| `MODEL` | 404 / wire model mismatch    | Update the probe model id |
+| Route   | Meaning                                                    | Action                                                                 |
+| ------- | ---------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `OK`    | Model emitted text and finished successfully               | None                                                                   |
+| `HANG`  | No completed output within 15 s                            | Confirmed stalls are circuit-broken when a healthy alternative exists  |
+| `ERR`   | Rate limit, transient, network, or malformed stream        | Only transient failures are circuit-broken; others need investigation  |
+| `AUTH`  | 401/403 or in-band `UNAUTHENTICATED`; token cache cleared  | Re-login the account                                                   |
+| `MODEL` | 404 / `NOT_FOUND` for the probe model                      | Update the probe model id                                              |
+| `STALE` | Latest observation is older than 15 minutes                | Run `/gemini-health` or the health CLI; the last result is history     |
 
-`health ... (stale)` means the snapshot is older than 15 minutes. Run
-`/gemini-health` or the health CLI.
+`health ... (stale)` in the footer means at least one displayed route is stale,
+so the snapshot no longer represents current readiness. Run `/gemini-health` or
+the health CLI. Stale evidence never creates or restores an exclusion.
 
 ## Additional workstation setup (optional)
 

@@ -90,20 +90,23 @@ flowchart TD
 ### Route-health lifecycle
 
 1. **Load accounts:** Discovers Antigravity accounts by joining OMP usage metadata (`omp usage --provider google-antigravity --json`) with token list indexes (`omp token google-antigravity --list`).
-2. **Probe accounts:** Issues a minimal streaming request (max 8 output tokens, 15s timeout) to Google Antigravity for each account concurrently.
-3. **Record snapshot:** Persists results into `gemini-health-latest.json`, updates healthy streaks in `gemini-health-streaks.json`, evaluates provider-wide failure states, updates the TUI widget, and logs audit events to SQLite.
-4. **Heal hung accounts:** When healing is triggered (manually or via auto-heal), excludes accounts with status `hang` or `error` by adding `{ provider: "google-antigravity", account: { email }, reservePct: 100 }` to OMP's `auth.accountPolicies`.
-5. **Track managed state:** Excluded accounts are recorded in `gemini-health-state.json`. Existing user policies with `reservePct: 100` are left alone. If an account has a partial exclusion (`reservePct < 100`), healing upgrades it to `100` and tracks it as managed.
-6. **Streak auto-restore:** On subsequent healthy probes, accounts that reach `RESTORE_STREAK` (default 3) consecutive healthy checks spaced at least `RESTORE_GAP_MS` (default 60s) apart are automatically un-excluded. Manual exclusions restore automatically only if opted in via `/gemini-auto-restore`.
+2. **Probe accounts:** Issues a minimal streaming request (max 8 output tokens, 15s attempt deadline) for the designated probe model (`gemini-3.8-flash-high`) to Google Antigravity for each account concurrently. Evidence is recorded per route: provider, account email, project, and model.
+3. **Record snapshot:** Persists results and healthy streaks atomically into `gemini-health-latest.json`, evaluates provider-wide failure states, updates the TUI widget, and logs audit events to SQLite. Earlier observations never overwrite newer ones.
+4. **Heal hung accounts:** When healing is triggered (manually or via auto-heal), a *confirmed* retryable failure (`HANG`/timeout or `ERR`/transient) is excluded only when a different, non-excluded account has a fresh `OK` on the same probe model. The exclusion is the canonical `{ provider: "google-antigravity", account: { email }, reservePct: 100 }` entry.
+5. **Track managed state:** Excluded accounts are recorded in `gemini-health-state.json` with a pending intent written before the policy and promoted after it lands. Existing user policies — including partial `reservePct` — are never edited or claimed.
+6. **Streak auto-restore:** On subsequent healthy probes, accounts that reach `RESTORE_STREAK` (default 3) consecutive healthy checks spaced at least `RESTORE_GAP_MS` (default 60s) apart are automatically un-excluded, provided the streak is still fresh. Manual exclusions restore automatically only if opted in via `/gemini-auto-restore`, and only their exclusion reservation is removed.
 7. **Session reload:** Triggers OMP's session reload API when available. Pinned sessions may require `/new` or a restart for routing changes to take effect.
 
 | Status | Meaning in this extension |
 | :--- | :--- |
-| `OK` | Stream emitted its first `data:` event within the 15-second probe window |
-| `HANG` | Request timed out or aborted before emitting the first SSE event |
-| `ERR` | HTTP, network, or stream failure (including premature stream close; 429/503 are classified here) |
-| `AUTH` | OAuth token acquisition failed or Google endpoint returned HTTP 401/403 |
-| `MODEL` | Google endpoint returned HTTP 404 (model or wire payload unrecognized) |
+| `OK` | The model emitted non-empty text and its candidate reported a successful terminal `finishReason` (`STOP`/`MAX_TOKENS`) |
+| `HANG` | No completed model output within the 15-second attempt deadline after the stream was accepted |
+| `ERR` | Rate limit, transient upstream failure, network failure, or unparseable/blocked stream payload (never an excludable failure except transient) |
+| `AUTH` | OAuth token acquisition failed, or HTTP/in-band 401/403 or `UNAUTHENTICATED`/`PERMISSION_DENIED` |
+| `MODEL` | HTTP/in-band 404 or `NOT_FOUND` for the probe model |
+
+A route whose latest observation is older than 15 minutes is reported as `STALE`; its last status stays visible as detail but is not treated as current evidence. Successful output on the probe model does not establish that other models work.
+
 
 Probes use OMP-issued account OAuth Bearer tokens and a minimal wire request.
 
@@ -359,10 +362,9 @@ All local state files reside under `<agentDir>` (`PI_CODING_AGENT_DIR` or `~/.om
 
 | File | Purpose | Concurrency & Lifecycle |
 | :--- | :--- | :--- |
-| `gemini-health-latest.json` | Stores the latest `HealthSnapshot` (probe results, check timestamp, active incident). | Written atomically via temp file rename under lock; read by monitors and widgets. |
-| `gemini-health-state.json` | Tracks heal-managed exclusions (`{ excluded: string[] }`). | Mutated under `omp-toolkit.lock` during heal and restore operations. |
-| `gemini-health-streaks.json` | Tracks consecutive healthy probe counts per account (`{ [email]: { ok, lastAt } }`). | Updated atomically under `omp-toolkit.lock` on every probe sweep. |
-| `gemini-health-auto-restore.json` | Sidecar listing manually excluded accounts opted into streak auto-restore. | Mutated by `/gemini-auto-restore`; read during auto-restore evaluation. |
+| `gemini-health-latest.json` | Stores the latest `HealthSnapshot` (schema 2: probe model, per-route observations, streaks, sweep watermark, active incident). | Written atomically via temp file rename under lock; read by monitors and widgets. |
+| `gemini-health-state.json` | Tracks toolkit-owned exclusions and in-flight intents (`{ schemaVersion: 2, excluded: string[], pending: string[] }`). | Mutated under `omp-toolkit.lock` during heal and restore operations. |
+| `gemini-health-auto-restore.json` | Sidecar listing manually excluded accounts opted into streak auto-restore. | Mutated through the health manager under `omp-toolkit.lock`; read during auto-restore evaluation. |
 | `gemini-health-widget.json` | Stores TUI widget visibility toggle (`{ enabled: boolean }`). | Mutated by `/gemini-health-widget`; read on every widget publish. |
 | `gemini-warmup-state.json` | Records timestamps of last warm-up execution per account to enforce 60s cooldown. | Written atomically during warm-up execution under `gemini-warmup.lock`. |
 | `gemini-warmup.lock` | Single-flight advisory lock file for warm-up and unhang check commands. | Created via `openSync("wx")`; expires after 5 minutes (`WARMUP_LOCK_STALE_MS`). |

@@ -225,18 +225,17 @@ a model, so an idle monitoring tab spends zero model tokens. See
 
 ## State files
 
-| File                         | Owner          | Purpose                                       |
-| ---------------------------- | -------------- | --------------------------------------------- |
-| `auth.accountPolicies`       | OMP config     | Active account exclusions (`reservePct: 100`) |
-| `gemini-health-state.json`   | Extension      | Managed exclusions created by heal/auto-heal  |
-| `gemini-health-streaks.json` | Extension      | Spaced healthy-check streaks                  |
-| `gemini-health-latest.json`  | Extension      | Cached route snapshot for read-only UIs       |
-| `gemini-health-widget.json`  | Extension      | TUI widget visibility                         |
-| `desktop-widget-error.log`   | Desktop widget | Append-only fatal and refresh diagnostics     |
+| File                         | Owner          | Purpose                                                     |
+| ---------------------------- | -------------- | ----------------------------------------------------------- |
+| `auth.accountPolicies`       | OMP config     | Active account exclusions (`reservePct: 100`)               |
+| `gemini-health-state.json`   | Extension      | Toolkit-owned exclusions plus in-flight exclusion intents   |
+| `gemini-health-latest.json`  | Extension      | Route snapshot: observations, streaks, incident (schema 2)  |
+| `gemini-health-widget.json`  | Extension      | TUI widget visibility                                       |
+| `desktop-widget-error.log`   | Desktop widget | Append-only fatal and refresh diagnostics                   |
 
 All non-config files use atomic writes. Mutating paths use strict reads so a
-corrupt state file is surfaced rather than silently replaced. Streak corruption
-is backed up to `.corrupt-<timestamp>` and rebuilt.
+corrupt state file is surfaced rather than silently replaced; invalid snapshot
+records are dropped instead of being trusted as current route evidence.
 
 ```mermaid
 flowchart TD
@@ -249,16 +248,14 @@ flowchart TD
 
     subgraph StateFiles["💾 State & Configuration Files"]
         Policies[("auth.accountPolicies<br/><code>Active exclusions (reservePct: 100)</code>")]
-        ManagedState[("gemini-health-state.json<br/><code>Managed exclusions by heal/auto-heal</code>")]
-        Streaks[("gemini-health-streaks.json<br/><code>Spaced healthy-check streaks</code>")]
-        Snapshot[("gemini-health-latest.json<br/><code>Cached route status snapshot</code>")]
+        ManagedState[("gemini-health-state.json<br/><code>Owned exclusions + in-flight intents</code>")]
+        Snapshot[("gemini-health-latest.json<br/><code>Route observations, streaks & incident</code>")]
         WidgetState[("gemini-health-widget.json<br/><code>TUI widget visibility state</code>")]
         DesktopLog[("desktop-widget-error.log<br/><code>Append-only crash & refresh diagnostics</code>")]
     end
 
-    Ext <-->|"read / write managed exclusions"| ManagedState
-    Ext <-->|"read / write streak intervals"| Streaks
-    Ext -->|"atomic write snapshot"| Snapshot
+    Ext <-->|"read / write owned exclusions"| ManagedState
+    Ext -->|"atomic write snapshot + streaks"| Snapshot
     Ext <-->|"read / write widget visibility"| WidgetState
     Ext <-->|"read / write policies"| Policies
     OMP <-->|"enforces account routing"| Policies
@@ -272,21 +269,32 @@ flowchart TD
     classDef readOnlyBox fill:#D3F9D8,stroke:#2B8A3E,stroke-width:2px,color:#000
 
     class Ext,CLI,Desktop,OMP compBox
-    class Policies,ManagedState,Streaks,WidgetState,DesktopLog fileBox
+    class Policies,ManagedState,WidgetState,DesktopLog fileBox
     class Snapshot readOnlyBox
 ```
 
 ## Guardrails
 
-- Heal applies only when a minority of accounts fail; all-failing is treated as
-  provider-wide and changes nothing.
+- Heal applies only to a confirmed retryable failure (`HANG`/timeout or
+  `ERR`/transient) and only while a fresh, non-excluded account still routes
+  the same probe model; otherwise nothing is excluded.
+- Exclusions are account-wide, but evidence is per route: a healthy probe model
+  does not imply the account's other models work.
+- Healing never edits a pre-existing user policy; it may remove only the exact
+  exclusion it created.
 - Managed exclusions restore only after `restoreStreak` healthy checks, spaced
-  by `restoreGapSeconds`.
+  by `restoreGapSeconds`, while the streak is still fresh.
 - Manual exclusions are never auto-removed.
-- `/gemini-enable` refuses when the latest snapshot is not `OK`, requires
-  `--force` to override, and refuses ambiguous local-part matches.
+- `/gemini-enable` removes only exclusions (`reservePct >= 100`), refuses without
+  fresh `OK` evidence for that exact route, requires `--force` to override, and
+  refuses ambiguous local-part matches.
 - `publish` isolates UI failures from the check/heal path.
-- Probe `401/403` invalidates the token cache.
+- Probe `401/403` and in-band auth errors invalidate the token cache.
+- Every route observation carries its own timestamp: `OK`/`HANG`/`ERR`/`AUTH`/`MODEL`
+  describe a fresh result, while `STALE` marks an observation older than 15
+  minutes. Stale evidence never authorizes exclusion or restoration.
+- Health records are keyed by provider + account + project + model, so a Gemini
+  observation is never attached to another provider or model.
 - The usage monitor watch loop survives `omp usage` failures and keeps the last
   frame until the next successful read.
 - Provider sections are scoped to this Machine's credentials: reports for OAuth

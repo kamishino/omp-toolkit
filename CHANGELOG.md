@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix route detection to prove a completed model response: the probe now frames SSE events across arbitrary chunks, rejects in-band auth/quota/transient errors, and requires non-empty model text plus a successful terminal `finishReason` before reporting `OK`.
+- Record route health per provider/account/project/model with per-observation timestamps, ordered evidence merge, and a schema-2 snapshot that also carries streaks and a complete-sweep watermark; legacy snapshots and the `gemini-health-streaks.json` sidecar are no longer trusted.
+- Require a confirmed retryable failure and a fresh, non-excluded healthy alternative on the same probe model before excluding an account, and never edit pre-existing user policies.
+- Report `STALE` route health per row instead of inheriting the snapshot timestamp, and stop attaching Gemini health to other providers or models that share an email.
+- Serialize incident, history, and opt-in sidecar mutations under `omp-toolkit.lock`, and stop stealing locks whose recorded local process is still alive.
+- Remove the obsolete `resolveStreakPath` resolver and streak sidecar documentation.
 - Add account ordering per provider section: `weekly-reset` (default, soonest weekly reset first) and `weekly-usage`, selectable in Desktop Settings and via `--sort` / `OMP_ACCOUNT_SORT`.
 - Hide provider sections with no local OMP credential on this machine, so secondary PCs no longer show cached usage from accounts they are not signed in to; API-key providers such as DeepSeek stay visible.
 - Add collapsible provider cards with accordion toggle, header status preview badges (account count, worst route, peak quota %), and `localStorage` layout persistence.

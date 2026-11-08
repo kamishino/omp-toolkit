@@ -25,11 +25,25 @@ OpenAI Codex, Muse Code, or DeepSeek.
 
 ## Route
 
-The provider -> account -> model path used for one request.
+The provider → account → model path used for a request.
+
+## Probe route
+
+The explicitly designated route used to verify an account's model readiness.
+Success on it does not establish readiness of other models.
+
+## Route observation
+
+The result of one completed attempt to verify a probe route.
 
 ## Route health
 
-The result of a route probe: OK, HANG, ERR, AUTH, or MODEL.
+The latest trustworthy observation of a route: OK, HANG, ERR, AUTH, or MODEL.
+
+## Stale route health
+
+A route observation older than fifteen minutes. Its last result is historical
+evidence, not a claim about current readiness.
 
 ## Route stall
 
@@ -43,17 +57,18 @@ restoration after consecutive healthy checks.
 
 ## Snapshot
 
-The latest recorded route-health result for every probed account.
+The latest recorded observations and recovery evidence for the known probe
+routes, together with any active incident.
 
 ## Managed exclusion
 
-A routing exclusion written by the toolkit. Managed exclusions are eligible for
-automatic restore.
+An account-wide routing exclusion created and still owned by the toolkit.
+Managed exclusions are eligible for automatic restore.
 
 ## Manual exclusion
 
-A routing exclusion that was not written by the toolkit. Manual exclusions are
-never restored automatically unless the account opts in.
+An account-wide routing exclusion owned by the operator, removable automatically
+only through explicit opt-in.
 
 ## Opt-in auto-restore
 
@@ -152,8 +167,8 @@ state.
 
 ## Warm-up eligible
 
-An account whose latest route status is OK or unknown. Known non-OK accounts are
-skipped by provider-wide warm-up and require an Unhang check.
+An account with current OK, stale, or unknown probe-route health. An account with
+fresh non-OK health requires Check instead.
 
 ## Unhang check
 
