@@ -16,36 +16,91 @@ export function isStatus(value: unknown): value is Status {
   return typeof value === "string" && (STATUS_VALUES as readonly string[]).includes(value);
 }
 
+export const EFFECTIVE_STATUS_VALUES = [...STATUS_VALUES, "stale"] as const;
+export type EffectiveRouteStatus = (typeof EFFECTIVE_STATUS_VALUES)[number];
+
+export function isEffectiveRouteStatus(value: unknown): value is EffectiveRouteStatus {
+  return (
+    typeof value === "string" && (EFFECTIVE_STATUS_VALUES as readonly string[]).includes(value)
+  );
+}
+
+export interface RouteIdentity {
+  provider: "google-antigravity";
+  email: string;
+  project: string;
+  model: string;
+}
+
+export const ROUTE_FAILURE_KINDS = [
+  "timeout",
+  "auth",
+  "credential",
+  "model",
+  "rate-limit",
+  "transient",
+  "network",
+  "protocol",
+] as const;
+export type RouteFailureKind = (typeof ROUTE_FAILURE_KINDS)[number];
+
+export function isRouteFailureKind(value: unknown): value is RouteFailureKind {
+  return typeof value === "string" && (ROUTE_FAILURE_KINDS as readonly string[]).includes(value);
+}
+
+export interface HealthResult extends RouteIdentity {
+  status: Status;
+  ms: number;
+  startedAt: number;
+  checkedAt: number;
+  failureKind: RouteFailureKind | null;
+  confirmed: boolean;
+  detail?: string;
+}
+
 export interface Account {
   index: number;
   email: string;
   project: string;
 }
 
-export interface ProbeResult extends Account {
-  status: Status;
-  ms: number;
-  detail?: string;
+export interface ProbeResult extends Account, HealthResult {}
+
+export interface ProbeSweep {
+  startedAt: number;
+  results: ProbeResult[];
 }
 
-export interface HealthResult {
-  email: string;
-  status: Status;
-  ms: number;
-  detail?: string;
-  checkedAt?: number;
-}
+export const HEALTH_INCIDENT_KINDS = [
+  "all-failed",
+  "restore-failed",
+  "lock-timeout",
+  "history-error",
+] as const;
+export type HealthIncidentKind = (typeof HEALTH_INCIDENT_KINDS)[number];
 
 export interface HealthIncident {
   id: string;
   at: number;
-  kind: "all-failed" | "restore-failed" | "lock-timeout" | "history-error";
+  kind: HealthIncidentKind;
   detail: string;
 }
 
+export interface StreakEntry {
+  ok: number;
+  firstAt: number;
+  lastAt: number;
+}
+
+export type StreakState = Record<string, StreakEntry>;
+
 export interface HealthSnapshot {
+  schemaVersion: 2;
+  probeModel: string;
+  sweepStartedAt: number | null;
   checkedAt: number;
   results: HealthResult[];
+  streaks: StreakState;
   incident?: HealthIncident;
 }
 
@@ -58,16 +113,10 @@ export interface Policy {
 }
 
 export interface HealthState {
+  schemaVersion: 2;
   excluded: string[];
-  updatedAt?: string;
+  pending: string[];
 }
-
-export interface StreakEntry {
-  ok: number;
-  lastAt: number;
-}
-
-export type StreakState = Record<string, StreakEntry>;
 
 export interface HealAction {
   changed: string[];

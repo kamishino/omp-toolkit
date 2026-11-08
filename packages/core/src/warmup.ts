@@ -1,4 +1,4 @@
-import { isStatus, type Status } from "./types";
+import { type EffectiveRouteStatus, isStatus, type Status } from "./types";
 
 export type WarmUpAction = "warm" | "check";
 export type WarmUpEligibility = "warm" | "check" | "unsupported";
@@ -6,12 +6,12 @@ export type WarmUpSkipReason = "non-ok" | "cooldown";
 
 export interface WarmUpResult {
   account: string;
+  model: string;
   status: Status;
   ms: number;
   checkedAt: number;
   detail?: string;
 }
-
 export interface WarmUpSkip {
   account: string;
   status: Status | null;
@@ -34,9 +34,12 @@ export function supportsWarmUp(provider: string): boolean {
   return provider === "google-antigravity";
 }
 
-export function warmUpEligibility(provider: string, status: Status | null): WarmUpEligibility {
+export function warmUpEligibility(
+  provider: string,
+  status: EffectiveRouteStatus | null,
+): WarmUpEligibility {
   if (!supportsWarmUp(provider)) return "unsupported";
-  return status === "ok" || status === null ? "warm" : "check";
+  return status === "ok" || status === "stale" || status === null ? "warm" : "check";
 }
 
 export function isWarmUpReport(value: unknown): value is WarmUpReport {
@@ -50,10 +53,14 @@ export function isWarmUpReport(value: unknown): value is WarmUpReport {
   const reasons = new Set(["non-ok", "cooldown"]);
   for (const result of report.results) {
     if (!result || typeof result !== "object") return false;
-    if (typeof result.account !== "string" || !isStatus(result.status)) return false;
-    if (typeof result.ms !== "number" || !Number.isFinite(result.ms)) return false;
-    if (typeof result.checkedAt !== "number" || !Number.isFinite(result.checkedAt)) return false;
-    if (result.detail !== undefined && typeof result.detail !== "string") return false;
+    if (
+      typeof result.account !== "string" ||
+      typeof result.model !== "string" ||
+      result.model.length === 0 ||
+      !isStatus(result.status)
+    ) {
+      return false;
+    }
   }
 
   for (const skip of report.skipped) {

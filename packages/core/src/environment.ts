@@ -21,9 +21,6 @@ export function resolveStatePath(env = process.env, home = homedir()): string {
   return path.join(resolveAgentDir(env, home), "gemini-health-state.json");
 }
 
-export function resolveStreakPath(env = process.env, home = homedir()): string {
-  return path.join(resolveAgentDir(env, home), "gemini-health-streaks.json");
-}
 export function resolveAutoRestorePath(env = process.env, home = homedir()): string {
   return path.join(resolveAgentDir(env, home), "gemini-health-auto-restore.json");
 }

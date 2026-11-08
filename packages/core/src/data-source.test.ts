@@ -23,25 +23,141 @@ describe("UsageDataSource ports & adapters", () => {
     expect(() => parseRawUsage(JSON.stringify({ notReports: [] }))).toThrow("unexpected payload");
   });
 
-  test("parseHealthSnapshot parses snapshot JSON cleanly", () => {
+  test("parseHealthSnapshot parses schema 2 snapshot JSON cleanly", () => {
     const json = JSON.stringify({
-      checkedAt: 1_700_000_000_000,
-      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: 1_700_000_000_000,
+      checkedAt: 1_700_000_000_100,
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "proj-1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 80,
+          startedAt: 1_700_000_000_000,
+          checkedAt: 1_700_000_000_080,
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
+      streaks: {
+        '["google-antigravity","user@example.com","proj-1","gemini-3.8-flash-high"]': {
+          ok: 1,
+          firstAt: 1_700_000_000_080,
+          lastAt: 1_700_000_000_080,
+        },
+      },
     });
     const snapshot = parseHealthSnapshot(json);
     expect(snapshot).not.toBeNull();
-    expect(snapshot?.checkedAt).toBe(1_700_000_000_000);
+    expect(snapshot?.schemaVersion).toBe(2);
+    expect(snapshot?.probeModel).toBe("gemini-3.8-flash-high");
+    expect(snapshot?.checkedAt).toBe(1_700_000_000_080);
     expect(snapshot?.results[0].status).toBe("ok");
+    expect(snapshot?.results[0].failureKind).toBeNull();
+  });
+
+  test("parseHealthSnapshot rejects legacy v1 snapshot without schemaVersion or with schemaVersion !== 2", () => {
+    const v1 = JSON.stringify({
+      checkedAt: 1_700_000_000_000,
+      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+    });
+    expect(parseHealthSnapshot(v1)).toBeNull();
+    expect(parseHealthSnapshot(JSON.stringify({ schemaVersion: 1 }))).toBeNull();
   });
 
   test("parseHealthSnapshot returns null on invalid JSON or non-array results", () => {
     expect(parseHealthSnapshot("{ invalid")).toBeNull();
-    expect(parseHealthSnapshot(JSON.stringify({ results: "not-array" }))).toBeNull();
+    expect(
+      parseHealthSnapshot(
+        JSON.stringify({
+          schemaVersion: 2,
+          probeModel: "gemini-3.8-flash-high",
+          checkedAt: 100,
+          results: "not-array",
+          streaks: {},
+        }),
+      ),
+    ).toBeNull();
   });
+
+  test("parseHealthSnapshot drops inconsistent failureKind combinations without dropping valid rows", () => {
+    const json = JSON.stringify({
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      checkedAt: 1000,
+      results: [
+        // Inconsistent: status ok with failureKind timeout
+        {
+          provider: "google-antigravity",
+          email: "bad1@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 10,
+          startedAt: 100,
+          checkedAt: 110,
+          failureKind: "timeout",
+          confirmed: false,
+        },
+        // Inconsistent: status hang with failureKind auth
+        {
+          provider: "google-antigravity",
+          email: "bad2@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15000,
+          startedAt: 100,
+          checkedAt: 15100,
+          failureKind: "auth",
+          confirmed: true,
+        },
+        // Valid hang
+        {
+          provider: "google-antigravity",
+          email: "good@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15000,
+          startedAt: 100,
+          checkedAt: 15100,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      streaks: {},
+    });
+    const snap = parseHealthSnapshot(json);
+    expect(snap).not.toBeNull();
+    expect(snap?.results.length).toBe(1);
+    expect(snap?.results[0].email).toBe("good@example.com");
+  });
+
   test("parseHealthSnapshot preserves valid incident and drops malformed incident without dropping snapshot", () => {
     const validJson = JSON.stringify({
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
       checkedAt: 1_700_000_000_000,
-      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 80,
+          startedAt: 1_700_000_000_000,
+          checkedAt: 1_700_000_000_080,
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
+      streaks: {},
       incident: {
         id: "inc-123",
         at: 1_700_000_000_100,
@@ -58,8 +174,24 @@ describe("UsageDataSource ports & adapters", () => {
     });
 
     const malformedJson = JSON.stringify({
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
       checkedAt: 1_700_000_000_000,
-      results: [{ email: "user@example.com", status: "ok", ms: 80 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 80,
+          startedAt: 1_700_000_000_000,
+          checkedAt: 1_700_000_000_080,
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
+      streaks: {},
       incident: {
         id: 123, // invalid type
         at: "not-a-number",
@@ -67,10 +199,9 @@ describe("UsageDataSource ports & adapters", () => {
     });
     const withoutIncident = parseHealthSnapshot(malformedJson);
     expect(withoutIncident).not.toBeNull();
-    expect(withoutIncident?.checkedAt).toBe(1_700_000_000_000);
+    expect(withoutIncident?.checkedAt).toBe(1_700_000_000_080);
     expect(withoutIncident?.incident).toBeUndefined();
   });
-
   test("UsageDataSource coordinates fetching and compiling dashboard via injected adapter", async () => {
     const mockReports = [
       {
@@ -80,8 +211,24 @@ describe("UsageDataSource ports & adapters", () => {
       },
     ];
     const mockSnapshot = {
-      checkedAt: 1_700_000_000_000,
-      results: [{ email: "user@example.com", status: "ok", ms: 40 }],
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      checkedAt: 1_700_000_000_040,
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "ok",
+          ms: 40,
+          startedAt: 1_700_000_000_000,
+          checkedAt: 1_700_000_000_040,
+          failureKind: null,
+          confirmed: false,
+        },
+      ],
+      streaks: {},
     };
 
     const mockAdapter = {
@@ -99,7 +246,7 @@ describe("UsageDataSource ports & adapters", () => {
     const dashboard = await source.fetchDashboard({ showHealth: true });
     expect(dashboard.providers.length).toBe(1);
     expect(dashboard.providers[0].name).toBe("GOOGLE ANTIGRAVITY");
-    expect(dashboard.health?.checkedAt).toBe(1_700_000_000_000);
+    expect(dashboard.health?.checkedAt).toBe(1_700_000_000_040);
   });
 
   test("fetchAuthenticatedProviders parses provider ids and degrades to undefined", async () => {

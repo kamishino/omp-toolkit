@@ -28,36 +28,65 @@ describe("warm-up domain logic", () => {
 
   test("mergeHealthResults preserves untouched rows and updates probed rows with checkedAt", () => {
     const previous: HealthResult[] = [
-      { email: "alpha@example.com", status: "ok", ms: 120, checkedAt: 1000 },
-      { email: "bravo@example.com", status: "hang", ms: 15000, checkedAt: 1000 },
+      {
+        provider: "google-antigravity",
+        email: "alpha@example.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "ok",
+        ms: 120,
+        startedAt: 900,
+        checkedAt: 1000,
+        failureKind: null,
+        confirmed: false,
+      },
+      {
+        provider: "google-antigravity",
+        email: "bravo@example.com",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
+        status: "hang",
+        ms: 15000,
+        startedAt: 900,
+        checkedAt: 1000,
+        failureKind: "timeout",
+        confirmed: true,
+      },
     ];
     const results: ProbeResult[] = [
       {
         index: 2,
+        provider: "google-antigravity",
         email: "bravo@example.com",
-        project: "proj-b",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
         status: "ok",
         ms: 250,
+        startedAt: 1900,
+        checkedAt: 2000,
+        failureKind: null,
+        confirmed: false,
       },
       {
         index: 3,
+        provider: "google-antigravity",
         email: "charlie@example.com",
-        project: "proj-c",
+        project: "p1",
+        model: "gemini-3.8-flash-high",
         status: "ok",
         ms: 300,
+        startedAt: 1900,
+        checkedAt: 2000,
+        failureKind: null,
+        confirmed: false,
       },
     ];
 
-    const merged = mergeHealthResults(previous, results, 2000);
+    const merged = mergeHealthResults(previous, results);
     expect(merged).toHaveLength(3);
 
     const alpha = merged.find((r) => r.email === "alpha@example.com");
-    expect(alpha).toEqual({
-      email: "alpha@example.com",
-      status: "ok",
-      ms: 120,
-      checkedAt: 1000,
-    });
+    expect(alpha).toEqual(previous[0]);
 
     const bravo = merged.find((r) => r.email === "bravo@example.com");
     expect(bravo).toMatchObject({
@@ -84,6 +113,7 @@ describe("warm-up domain logic", () => {
       results: [
         {
           account: "alpha@example.com",
+          model: "gemini-3.8-flash-high",
           status: "ok",
           ms: 200,
           checkedAt: 123456,

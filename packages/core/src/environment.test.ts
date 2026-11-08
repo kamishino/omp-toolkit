@@ -12,7 +12,6 @@ import {
   resolvePacingSamplesPath,
   resolveSnapshotPath,
   resolveStatePath,
-  resolveStreakPath,
 } from "./environment";
 
 describe("AgentEnvironment path resolver", () => {
@@ -33,7 +32,6 @@ describe("AgentEnvironment path resolver", () => {
     const dir = path.join(fakeHome, ".omp", "agent");
     expect(resolveSnapshotPath({}, fakeHome)).toBe(path.join(dir, "gemini-health-latest.json"));
     expect(resolveStatePath({}, fakeHome)).toBe(path.join(dir, "gemini-health-state.json"));
-    expect(resolveStreakPath({}, fakeHome)).toBe(path.join(dir, "gemini-health-streaks.json"));
     expect(resolveAutoRestorePath({}, fakeHome)).toBe(
       path.join(dir, "gemini-health-auto-restore.json"),
     );
