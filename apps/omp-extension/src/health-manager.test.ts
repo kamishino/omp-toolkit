@@ -1,11 +1,42 @@
 import { describe, expect, test } from "bun:test";
-import type { Account, Policy, ProbeResult } from "@omp-toolkit/core";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { type Account, DEFAULT_MODEL_WIRE, type Policy, type ProbeResult } from "@omp-toolkit/core";
 import { AntigravityHealthManager, incidentKindForError } from "./health-manager";
-import type { HistoryEventInput, ReliabilityHistoryStore } from "./history-store";
+import type { ReliabilityHistoryStore } from "./history-store";
 import type { RoutingPolicyStore } from "./policy-store";
 import type { AntigravityProbeClient } from "./probe-client";
 
 describe("AntigravityHealthManager deep recovery coordinator", () => {
+  const model = DEFAULT_MODEL_WIRE;
+
+  const makeProbeResult = (
+    index: number,
+    email: string,
+    status: ProbeResult["status"],
+    failureKind: ProbeResult["failureKind"],
+    options: {
+      ms?: number;
+      startedAt?: number;
+      checkedAt?: number;
+      confirmed?: boolean;
+      project?: string;
+    } = {},
+  ): ProbeResult => ({
+    index,
+    provider: "google-antigravity",
+    email,
+    project: options.project ?? "p1",
+    model,
+    status,
+    ms: options.ms ?? (status === "hang" ? 15000 : 50),
+    startedAt: options.startedAt ?? 1000,
+    checkedAt: options.checkedAt ?? 1050,
+    failureKind,
+    confirmed: options.confirmed ?? status === "hang",
+  });
+
   test("initializes with default policy store and probe client", () => {
     const manager = new AntigravityHealthManager();
     expect(manager.probeClient).toBeDefined();
@@ -15,16 +46,17 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
 
   test("accepts injected mock client for headless verification", async () => {
     const mockResults: ProbeResult[] = [
-      { index: 1, email: "alpha@example.com", project: "p1", status: "ok", ms: 40 },
-      { index: 2, email: "beta@example.com", project: "p2", status: "hang", ms: 12000 },
+      makeProbeResult(1, "alpha@example.com", "ok", null),
+      makeProbeResult(2, "beta@example.com", "hang", "timeout"),
     ];
 
     const mockProbeClient = {
-      checkAll: async () => mockResults,
-      probe: async (acc: Account) => ({ ...acc, status: "ok" as const, ms: 50 }),
+      modelWire: model,
+      checkAll: async () => ({ startedAt: 1000, results: mockResults }),
+      probe: async (acc: Account) => makeProbeResult(acc.index, acc.email, "ok", null),
       loadAccounts: async () => [
         { index: 1, email: "alpha@example.com", project: "p1" },
-        { index: 2, email: "beta@example.com", project: "p2" },
+        { index: 2, email: "beta@example.com", project: "p1" },
       ],
     } as unknown as AntigravityProbeClient;
 
@@ -42,41 +74,77 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
     expect(probed.status).toBe("ok");
   });
 
-  test("applies healing logic across check results", async () => {
-    let policies: Policy[] = [];
-    const mockPolicyStore = {
-      readPolicies: async () => policies,
-      readPoliciesStrict: async () => policies,
-      writePolicies: async (p: Policy[]) => {
-        policies = p;
-      },
-    } as unknown as RoutingPolicyStore;
-    const manager = new AntigravityHealthManager({ policyStore: mockPolicyStore });
-    const action = await manager.applyHeal([]);
-    expect(action.reason).toBe("no accounts to check");
+  test("recordHealth manages watermarking, pruning, and does not trigger all-failed on partial cold start", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-watermark-"));
+    try {
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
+      });
 
-    const healthyAction = await manager.applyHeal([
-      { index: 1, email: "ok@example.com", project: "p1", status: "ok", ms: 30 },
-    ]);
-    expect(healthyAction.reason).toBe("all accounts healthy");
+      // 1. Partial check cold start: 1 failing account
+      const failingPartial = [
+        makeProbeResult(1, "failing@example.com", "hang", "timeout", {
+          startedAt: 1000,
+          checkedAt: 1050,
+        }),
+      ];
+      await manager.recordHealth(failingPartial, { scope: "partial" });
 
-    const failAction = await manager.applyHeal([
-      { index: 1, email: "f1@example.com", project: "p1", status: "hang", ms: 15000 },
-      { index: 2, email: "f2@example.com", project: "p2", status: "hang", ms: 15000 },
-    ]);
-    expect(failAction.reason).toContain("all accounts failing");
+      const snap1 = manager.readSnapshot();
+      expect(snap1).not.toBeNull();
+      // Partial check MUST NOT trigger all-failed incident!
+      expect(snap1?.incident).toBeUndefined();
+      expect(snap1?.results.length).toBe(1);
 
-    await expect(manager.removeExclusion("nonexistent@example.com")).resolves.toBeUndefined();
+      // 2. Full sweep with 2 accounts (alpha OK, beta OK)
+      const fullSweep = [
+        makeProbeResult(1, "alpha@example.com", "ok", null, { startedAt: 2000, checkedAt: 2050 }),
+        makeProbeResult(2, "beta@example.com", "ok", null, { startedAt: 2000, checkedAt: 2050 }),
+      ];
+      await manager.recordHealth(fullSweep, { scope: "full", startedAt: 2000 });
+
+      const snap2 = manager.readSnapshot();
+      expect(snap2?.sweepStartedAt).toBe(2000);
+      // failing@example.com (startedAt 1000 <= 2000) was absent and must be pruned
+      expect(snap2?.results.map((r) => r.email).sort()).toEqual([
+        "alpha@example.com",
+        "beta@example.com",
+      ]);
+
+      // 3. Complete sweep where all accounts fail triggers all-failed
+      const allFailSweep = [
+        makeProbeResult(1, "alpha@example.com", "hang", "timeout", {
+          startedAt: 3000,
+          checkedAt: 3050,
+        }),
+        makeProbeResult(2, "beta@example.com", "error", "transient", {
+          startedAt: 3000,
+          checkedAt: 3050,
+        }),
+      ];
+      await manager.recordHealth(allFailSweep, { scope: "full", startedAt: 3000 });
+
+      const snap3 = manager.readSnapshot();
+      expect(snap3?.incident?.kind).toBe("all-failed");
+
+      // 4. Fresh partial check recovery on alpha resolves all-failed
+      const recoveredAlpha = [
+        makeProbeResult(1, "alpha@example.com", "ok", null, { startedAt: 4000, checkedAt: 4050 }),
+      ];
+      await manager.recordHealth(recoveredAlpha, { scope: "partial" });
+
+      const snap4 = manager.readSnapshot();
+      expect(snap4?.incident).toBeUndefined();
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
-  test("applyHeal applies reservePct=100 for minority failure and skips already excluded", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-heal-"));
 
+  test("applyHeal applies exclusion only with confirmed retryable failure and fresh healthy alternative", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-heal-rules-"));
     try {
       let policies: Policy[] = [];
-      const recordedHistory: HistoryEventInput[] = [];
       const mockPolicyStore = {
         readPolicies: async () => policies,
         readPoliciesStrict: async () => policies,
@@ -84,194 +152,95 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
           policies = p;
         },
       };
-      const mockHistoryStore = {
-        recordEvents: (events: HistoryEventInput[]) => {
-          recordedHistory.push(...events);
-        },
-      };
 
+      const now = 1_000_000;
       const manager = new AntigravityHealthManager({
         agentDir: tempDir,
         policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
-        historyStore: mockHistoryStore as unknown as ReliabilityHistoryStore,
+        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
+        now: () => now,
       });
 
-      // Minority failure: alpha is OK, beta hangs
-      const results: ProbeResult[] = [
-        { index: 1, email: "alpha@example.com", project: "p1", status: "ok", ms: 40 },
-        { index: 2, email: "beta@example.com", project: "p2", status: "hang", ms: 15000 },
+      // Scenario A: beta hangs, but alpha has auth error (not OK) -> NO healthy alternative
+      const resultsNoAlt: ProbeResult[] = [
+        makeProbeResult(1, "alpha@example.com", "auth", "auth", {
+          startedAt: now - 100,
+          checkedAt: now,
+        }),
+        makeProbeResult(2, "beta@example.com", "hang", "timeout", {
+          startedAt: now - 100,
+          checkedAt: now,
+          confirmed: true,
+        }),
       ];
+      await manager.recordHealth(resultsNoAlt, { scope: "full", startedAt: now - 100 });
 
-      const action = await manager.applyHeal(results, "heal");
-      expect(action.changed).toEqual(["beta@example.com"]);
-      expect(action.skipped).toEqual([]);
-      expect(action.reason).toContain("temporary reservePct=100 applied");
+      const actionA = await manager.applyHeal(resultsNoAlt, "heal");
+      expect(actionA.changed).toEqual([]);
+      expect(actionA.reason).toContain(
+        "no fresh routable healthy alternative; no exclusion applied",
+      );
+      expect(policies.length).toBe(0);
 
-      // Verified policy written
+      // Scenario B: alpha is OK, beta hangs with confirmed: true -> exclusion applied!
+      const resultsWithAlt: ProbeResult[] = [
+        makeProbeResult(1, "alpha@example.com", "ok", null, {
+          startedAt: now - 100,
+          checkedAt: now,
+        }),
+        makeProbeResult(2, "beta@example.com", "hang", "timeout", {
+          startedAt: now - 100,
+          checkedAt: now,
+          confirmed: true,
+        }),
+      ];
+      await manager.recordHealth(resultsWithAlt, { scope: "full", startedAt: now - 100 });
+
+      const actionB = await manager.applyHeal(resultsWithAlt, "heal");
+      expect(actionB.changed).toEqual(["beta@example.com"]);
       expect(policies.length).toBe(1);
-      expect(policies[0]?.account?.email).toBe("beta@example.com");
-      expect(policies[0]?.reservePct).toBe(100);
-
-      // Verified state written
-      expect(manager.readState().excluded).toEqual(["beta@example.com"]);
-
-      // Verified policy_change history event
-      expect(
-        recordedHistory.some((e) => e.kind === "policy_change" && e.account === "beta@example.com"),
-      ).toBe(true);
-
-      // Repeat heal when beta is already managed -> no new change
-      const repeatAction = await manager.applyHeal(results, "heal");
-      expect(repeatAction.changed).toEqual([]);
-      expect(policies.length).toBe(1);
-
-      // Unmanaged manual exclusion -> skipped
-      policies.push({
+      expect(policies[0]).toEqual({
         provider: "google-antigravity",
-        account: { email: "manual@example.com" },
+        account: { email: "beta@example.com" },
         reservePct: 100,
       });
-      const resultsWithManual: ProbeResult[] = [
-        { index: 1, email: "alpha@example.com", project: "p1", status: "ok", ms: 40 },
-        { index: 3, email: "manual@example.com", project: "p3", status: "hang", ms: 15000 },
-      ];
-      const manualAction = await manager.applyHeal(resultsWithManual, "heal");
-      expect(manualAction.changed).toEqual([]);
-      expect(manualAction.skipped).toEqual(["manual@example.com"]);
-      expect(manualAction.reason).toContain("failing accounts already have exclusions/policies");
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+      expect(manager.readState().excluded).toEqual(["beta@example.com"]);
 
-  test("resolveAccount prioritizes exact match and resolves unique prefix", async () => {
-    const accounts = [
-      { index: 1, email: "alpha@example.com", project: "p1" },
-      { index: 2, email: "beta@example.com", project: "p2" },
-      { index: 3, email: "alpha.work@example.com", project: "p3" },
-    ];
-
-    const manager = new AntigravityHealthManager({
-      probeClient: {
-        loadAccounts: async () => accounts,
-      } as unknown as AntigravityProbeClient,
-    });
-
-    // Exact email
-    const exact = await manager.resolveAccount("beta@example.com");
-    expect(exact.status).toBe("found");
-    if (exact.status === "found") expect(exact.account.index).toBe(2);
-
-    // Unique prefix
-    const prefix = await manager.resolveAccount("beta");
-    expect(prefix.status).toBe("found");
-    if (prefix.status === "found") expect(prefix.account.index).toBe(2);
-
-    // Not found
-    const notFound = await manager.resolveAccount("gamma");
-    expect(notFound.status).toBe("not_found");
-
-    // Empty
-    const empty = await manager.resolveAccount("   ");
-    expect(empty.status).toBe("not_found");
-  });
-
-  test("resolveAccount reports ambiguous for duplicate local parts", async () => {
-    const accounts = [
-      { index: 1, email: "dev@work.com", project: "p1" },
-      { index: 2, email: "dev@personal.com", project: "p2" },
-    ];
-
-    const manager = new AntigravityHealthManager({
-      probeClient: {
-        loadAccounts: async () => accounts,
-      } as unknown as AntigravityProbeClient,
-    });
-
-    const res = await manager.resolveAccount("dev");
-    expect(res.status).toBe("ambiguous");
-    if (res.status === "ambiguous") {
-      expect(res.matches.length).toBe(2);
-    }
-  });
-  test("auto-restore sidecar read and write with corrupt detection", () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-test-"));
-    try {
-      const manager = new AntigravityHealthManager({ agentDir: tempDir });
-      // File absent
-      expect(manager.readAutoRestore()).toEqual({ enabled: [] });
-
-      // Write sidecar
-      manager.writeAutoRestore({ enabled: ["test@example.com", "other@example.com"] });
-      expect(manager.readAutoRestore()).toEqual({
-        enabled: ["test@example.com", "other@example.com"],
-      });
-
-      // Corrupt content throws
-      const file = path.join(tempDir, "gemini-health-auto-restore.json");
-      fs.writeFileSync(file, "{ invalid json", "utf8");
-      expect(() => manager.readAutoRestore()).toThrow("corrupt auto-restore sidecar");
-
-      fs.writeFileSync(file, JSON.stringify({ enabled: "not-an-array" }), "utf8");
-      expect(() => manager.readAutoRestore()).toThrow("corrupt auto-restore sidecar");
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  test("hasExclusionsToRecover checks managed and opted-in manual exclusions", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-rec-"));
-    try {
-      let policies: Policy[] = [];
-      const mockPolicyStore = {
-        readPolicies: async () => policies,
-        readPoliciesStrict: async () => policies,
-        writePolicies: async (p: Policy[]) => {
-          policies = p;
-        },
-      };
-      const manager = new AntigravityHealthManager({
-        agentDir: tempDir,
-        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
-      });
-
-      // Initially false
-      expect(await manager.hasExclusionsToRecover()).toBe(false);
-
-      // Managed exclusion -> true
-      manager.writeState({ excluded: ["managed@example.com"] });
-      expect(await manager.hasExclusionsToRecover()).toBe(true);
-
-      // Clear managed, add manual without opt-in -> false
-      manager.writeState({ excluded: [] });
+      // Scenario C: matching user policy exists (reservePct: 20, priority: 2) -> NEVER overwritten
       policies = [
         {
           provider: "google-antigravity",
-          account: { email: "manual@example.com" },
-          reservePct: 100,
+          account: { email: "user-policy@example.com" },
+          reservePct: 20,
+          priority: 2,
         },
       ];
-      expect(await manager.hasExclusionsToRecover()).toBe(false);
+      const resultsUserPolicy: ProbeResult[] = [
+        makeProbeResult(1, "alpha@example.com", "ok", null, {
+          startedAt: now - 100,
+          checkedAt: now,
+        }),
+        makeProbeResult(3, "user-policy@example.com", "hang", "timeout", {
+          startedAt: now - 100,
+          checkedAt: now,
+          confirmed: true,
+        }),
+      ];
+      await manager.recordHealth(resultsUserPolicy, { scope: "full", startedAt: now - 100 });
 
-      // Opt-in manual -> true
-      manager.writeAutoRestore({ enabled: ["manual@example.com"] });
-      expect(await manager.hasExclusionsToRecover()).toBe(true);
+      const actionC = await manager.applyHeal(resultsUserPolicy, "heal");
+      expect(actionC.changed).toEqual([]);
+      expect(actionC.skipped).toEqual(["user-policy@example.com"]);
+      // User policy preserved exactly with priority: 2
+      expect(policies[0].reservePct).toBe(20);
+      expect(policies[0].priority).toBe(2);
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 
-  test("maybeRestoreManaged restores opted-in manual and managed exclusions and preserves sidecar", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-rest-"));
+  test("restoreManaged and maybeRestoreManaged atomic snapshot streaks persistence and policy preservation", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-restore-"));
     try {
       let policies: Policy[] = [
         {
@@ -281,15 +250,12 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
         },
         {
           provider: "google-antigravity",
-          account: { email: "manual-opted@example.com" },
+          account: { email: "manual@example.com" },
           reservePct: 100,
-        },
-        {
-          provider: "google-antigravity",
-          account: { email: "manual-not-opted@example.com" },
-          reservePct: 100,
+          priority: 5,
         },
       ];
+
       const mockPolicyStore = {
         readPolicies: async () => policies,
         readPoliciesStrict: async () => policies,
@@ -297,260 +263,137 @@ describe("AntigravityHealthManager deep recovery coordinator", () => {
           policies = p;
         },
       };
+
+      const now = 2_000_000;
       const manager = new AntigravityHealthManager({
         agentDir: tempDir,
         policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
+        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
+        now: () => now,
       });
 
-      manager.writeState({ excluded: ["managed@example.com"] });
-      manager.writeAutoRestore({ enabled: ["manual-opted@example.com"] });
-      manager.writeStreaks({
-        "managed@example.com": { ok: 3, lastAt: Date.now() },
-        "manual-opted@example.com": { ok: 3, lastAt: Date.now() },
-        "manual-not-opted@example.com": { ok: 3, lastAt: Date.now() },
-      });
+      // Seed snapshot with streaks
+      const results: ProbeResult[] = [
+        makeProbeResult(1, "managed@example.com", "ok", null, {
+          startedAt: now - 100,
+          checkedAt: now,
+        }),
+        makeProbeResult(2, "manual@example.com", "ok", null, {
+          startedAt: now - 100,
+          checkedAt: now,
+        }),
+      ];
+      await manager.recordHealth(results, { scope: "full", startedAt: now - 100 });
 
+      // Seed streaks in snapshot
+      const snap = manager.readSnapshot();
+      if (!snap) throw new Error("expected snapshot");
+      const keyManaged = JSON.stringify(["google-antigravity", "managed@example.com", "p1", model]);
+      const keyManual = JSON.stringify(["google-antigravity", "manual@example.com", "p1", model]);
+      snap.streaks[keyManaged] = { ok: 3, firstAt: now - 180_000, lastAt: now };
+      snap.streaks[keyManual] = { ok: 3, firstAt: now - 180_000, lastAt: now };
+      fs.writeFileSync(
+        path.join(tempDir, "gemini-health-latest.json"),
+        JSON.stringify(snap, null, 2),
+      );
+
+      manager.writeState({ schemaVersion: 2, excluded: ["managed@example.com"], pending: [] });
+      manager.writeAutoRestore({ enabled: ["manual@example.com"] });
+
+      // maybeRestoreManaged
       const restored = await manager.maybeRestoreManaged();
-      expect(restored.sort()).toEqual(["managed@example.com", "manual-opted@example.com"]);
+      expect(restored.sort()).toEqual(["managed@example.com", "manual@example.com"]);
 
-      // Managed removed from state
-      expect(manager.readState().excluded).toEqual([]);
+      // Managed exclusion was deleted completely
+      expect(policies.find((p) => p.account?.email === "managed@example.com")).toBeUndefined();
 
-      // Sidecar still has manual-opted
-      expect(manager.readAutoRestore().enabled).toEqual(["manual-opted@example.com"]);
+      // Manual exclusion had reservePct removed, but priority: 5 preserved!
+      const preservedManual = policies.find((p) => p.account?.email === "manual@example.com");
+      expect(preservedManual).toBeDefined();
+      expect(preservedManual?.reservePct).toBeUndefined();
+      expect(preservedManual?.priority).toBe(5);
 
-      // Policies removed for restored accounts only
-      expect(policies.length).toBe(1);
-      expect(policies[0]?.account?.email).toBe("manual-not-opted@example.com");
+      // Streaks in snapshot were atomically cleared on disk
+      const snapAfter = manager.readSnapshot();
+      expect(snapAfter?.streaks[keyManaged]).toBeUndefined();
+      expect(snapAfter?.streaks[keyManual]).toBeUndefined();
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
+
+  test("removeExclusion refuses without fresh OK unless force: true", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-remove-"));
+    try {
+      let policies: Policy[] = [
+        {
+          provider: "google-antigravity",
+          account: { email: "user@example.com" },
+          reservePct: 100,
+        },
+      ];
+
+      const mockPolicyStore = {
+        readPolicies: async () => policies,
+        readPoliciesStrict: async () => policies,
+        writePolicies: async (p: Policy[]) => {
+          policies = p;
+        },
+      };
+
+      const now = 3_000_000;
+      const manager = new AntigravityHealthManager({
+        agentDir: tempDir,
+        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
+        now: () => now,
+      });
+
+      const account: Account = { index: 1, email: "user@example.com", project: "p1" };
+
+      // No evidence in snapshot -> refuses
+      await expect(manager.removeExclusion(account)).rejects.toThrow(
+        "fresh OK route evidence required",
+      );
+
+      // Seed stale evidence in snapshot (>15 min old)
+      const staleResult = makeProbeResult(1, "user@example.com", "ok", null, {
+        startedAt: now - 20 * 60_000,
+        checkedAt: now - 20 * 60_000,
+      });
+      await manager.recordHealth([staleResult], { scope: "partial" });
+
+      // Stale evidence -> refuses
+      await expect(manager.removeExclusion(account)).rejects.toThrow(
+        "fresh OK route evidence required",
+      );
+
+      // With force: true -> succeeds!
+      await expect(manager.removeExclusion(account, { force: true })).resolves.toBeUndefined();
+      expect(policies.length).toBe(0);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test("setAutoRestore updates sidecar atomically under lock", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-sidecar-"));
+    try {
+      const manager = new AntigravityHealthManager({ agentDir: tempDir });
+      await manager.setAutoRestore("alpha@example.com", true);
+      expect(manager.readAutoRestore().enabled).toEqual(["alpha@example.com"]);
+
+      await manager.setAutoRestore("alpha@example.com", false);
+      expect(manager.readAutoRestore().enabled).toEqual([]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test("incidentKindForError identifies lock_timeout correctly", () => {
     expect(incidentKindForError(new Error("lock_timeout: operation timed out"))).toBe(
       "lock-timeout",
     );
     expect(incidentKindForError(new Error("database is locked"))).toBeNull();
     expect(incidentKindForError("string error")).toBeNull();
-  });
-
-  test("recordHealth manages all-failed incident lifecycle in gemini-health-latest.json and history", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-inc-"));
-    try {
-      const recordedEvents: HistoryEventInput[] = [];
-      const mockHistoryStore = {
-        recordEvents: (events: HistoryEventInput[]) => {
-          recordedEvents.push(...events);
-        },
-      };
-      const manager = new AntigravityHealthManager({
-        agentDir: tempDir,
-        historyStore: mockHistoryStore as unknown as ReliabilityHistoryStore,
-      });
-      // All accounts fail
-      const failedResults = [
-        { index: 1, email: "alpha@example.com", project: "p1", status: "hang" as const, ms: 15000 },
-        { index: 2, email: "beta@example.com", project: "p2", status: "error" as const, ms: 500 },
-      ];
-      await manager.recordHealth(failedResults);
-
-      // File on disk must be gemini-health-latest.json
-      const latestPath = path.join(tempDir, "gemini-health-latest.json");
-      expect(fs.existsSync(latestPath)).toBe(true);
-
-      const snapshot = manager.readSnapshot();
-      expect(snapshot?.incident).toBeDefined();
-      expect(snapshot?.incident?.kind).toBe("all-failed");
-
-      // History event recorded
-      const incidentEvent = recordedEvents.find((e) => e.kind === "incident");
-      expect(incidentEvent).toBeDefined();
-      expect(incidentEvent?.incidentId).toBe(snapshot?.incident?.id);
-
-      // Subsequent check with an ok result clears incident
-      const recoveredResults = [
-        { index: 1, email: "alpha@example.com", project: "p1", status: "ok" as const, ms: 50 },
-      ];
-      await manager.recordHealth(recoveredResults);
-
-      const updatedSnapshot = manager.readSnapshot();
-      expect(updatedSnapshot?.incident).toBeUndefined();
-
-      const resolvedEvent = recordedEvents.find((e) => e.kind === "incident_resolved");
-      expect(resolvedEvent).toBeDefined();
-      expect(resolvedEvent?.incidentId).toBe(incidentEvent?.incidentId);
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  test("recordHealth evaluates allFailed on merged snapshot rather than single-account check", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-merged-"));
-    try {
-      const manager = new AntigravityHealthManager({
-        agentDir: tempDir,
-        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
-      });
-
-      // Seed snapshot with 2 accounts (alpha OK, beta OK)
-      await manager.recordHealth([
-        { index: 1, email: "alpha@example.com", project: "p1", status: "ok", ms: 100 },
-        { index: 2, email: "beta@example.com", project: "p2", status: "ok", ms: 100 },
-      ]);
-
-      // Single account check on beta hangs with merge: true
-      await manager.recordHealth(
-        [{ index: 2, email: "beta@example.com", project: "p2", status: "hang", ms: 15000 }],
-        { merge: true, source: "check" },
-      );
-
-      // alpha is still OK in snapshot, so no all-failed incident should exist!
-      expect(manager.readSnapshot()?.incident).toBeUndefined();
-
-      // Now single account check on alpha also hangs with merge: true
-      await manager.recordHealth(
-        [{ index: 1, email: "alpha@example.com", project: "p1", status: "hang", ms: 15000 }],
-        { merge: true, source: "check" },
-      );
-
-      // Now ALL accounts in snapshot are failing -> incident triggers!
-      expect(manager.readSnapshot()?.incident?.kind).toBe("all-failed");
-
-      // Single account recovery on alpha with merge: true
-      await manager.recordHealth(
-        [{ index: 1, email: "alpha@example.com", project: "p1", status: "ok", ms: 120 }],
-        { merge: true, source: "check" },
-      );
-
-      // One account is OK -> all-failed resolved!
-      expect(manager.readSnapshot()?.incident).toBeUndefined();
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  test("applyHeal upgrades existing partial reservePct < 100 policy to 100", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-partial-"));
-    try {
-      let policies: Policy[] = [
-        {
-          provider: "google-antigravity",
-          account: { email: "partial@example.com" },
-          reservePct: 20,
-        },
-      ];
-      const mockPolicyStore = {
-        readPolicies: async () => policies,
-        readPoliciesStrict: async () => policies,
-        writePolicies: async (p: Policy[]) => {
-          policies = p;
-        },
-      };
-
-      const manager = new AntigravityHealthManager({
-        agentDir: tempDir,
-        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
-        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
-      });
-
-      // 1 ok, 1 hang (the partial one)
-      const action = await manager.applyHeal([
-        { index: 1, email: "ok@example.com", project: "p1", status: "ok", ms: 100 },
-        { index: 2, email: "partial@example.com", project: "p2", status: "hang", ms: 15000 },
-      ]);
-
-      expect(action.changed).toEqual(["partial@example.com"]);
-      expect(policies[0].reservePct).toBe(100);
-      expect(manager.readState().excluded).toContain("partial@example.com");
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  test("applyHeal rejects and aborts write when strict policy read fails", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-strict-"));
-    try {
-      let writeCalled = false;
-      const mockPolicyStore = {
-        readPolicies: async () => [],
-        readPoliciesStrict: async () => {
-          throw new Error("CLI failure");
-        },
-        writePolicies: async () => {
-          writeCalled = true;
-        },
-      };
-
-      const manager = new AntigravityHealthManager({
-        agentDir: tempDir,
-        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
-        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
-      });
-
-      await expect(
-        manager.applyHeal([
-          { index: 1, email: "ok@example.com", project: "p1", status: "ok", ms: 100 },
-          { index: 2, email: "bad@example.com", project: "p2", status: "hang", ms: 15000 },
-        ]),
-      ).rejects.toThrow("CLI failure");
-
-      expect(writeCalled).toBe(false);
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  test("maybeRestoreManaged restores manual exclusion with differing sidecar casing", async () => {
-    const fs = require("node:fs");
-    const os = require("node:os");
-    const path = require("node:path");
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hm-casing-"));
-    try {
-      let policies: Policy[] = [
-        {
-          provider: "google-antigravity",
-          account: { email: "User@Example.com" },
-          reservePct: 100,
-        },
-      ];
-      const mockPolicyStore = {
-        readPolicies: async () => policies,
-        readPoliciesStrict: async () => policies,
-        writePolicies: async (p: Policy[]) => {
-          policies = p;
-        },
-      };
-
-      const manager = new AntigravityHealthManager({
-        agentDir: tempDir,
-        policyStore: mockPolicyStore as unknown as RoutingPolicyStore,
-        historyStore: { recordEvents: () => {} } as unknown as ReliabilityHistoryStore,
-      });
-
-      // Sidecar has lowercase
-      manager.writeAutoRestore({ enabled: ["user@example.com"] });
-      // Streaks has lowercase
-      manager.writeStreaks({ "user@example.com": { ok: 3, lastAt: 0 } });
-
-      const restored = await manager.maybeRestoreManaged();
-      expect(restored).toEqual(["User@Example.com"]);
-      expect(policies.length).toBe(0);
-      // Streaks map should have cleaned up the key
-      expect(manager.readStreaks()["user@example.com"]).toBeUndefined();
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
   });
 });

@@ -78,11 +78,20 @@ export async function acquireLock(operation: string, options: LockOptions = {}):
         let isStale = false;
         try {
           let basis: number | undefined;
+          let lockPid: number | undefined;
+          let lockMachineId: string | undefined;
+
           try {
             const content = fs.readFileSync(lockFilePath, "utf8");
             const parsed = JSON.parse(content) as Partial<LockPayload>;
             if (typeof parsed?.acquiredAt === "number" && Number.isFinite(parsed.acquiredAt)) {
               basis = parsed.acquiredAt;
+            }
+            if (typeof parsed?.pid === "number") {
+              lockPid = parsed.pid;
+            }
+            if (typeof parsed?.machineId === "string") {
+              lockMachineId = parsed.machineId;
             }
           } catch {
             // Empty or malformed JSON falls through to file mtime basis
@@ -92,13 +101,29 @@ export async function acquireLock(operation: string, options: LockOptions = {}):
             basis = fs.statSync(lockFilePath).mtimeMs;
           }
 
-          if (Date.now() - basis > staleMs) {
+          // Do not steal a valid expired lock if its local recorded process is still alive
+          let isAlive = false;
+          if (
+            typeof lockPid === "number" &&
+            (lockMachineId === undefined || lockMachineId === machineId)
+          ) {
+            try {
+              process.kill(lockPid, 0);
+              isAlive = true;
+            } catch (err: unknown) {
+              const code = (err as { code?: string })?.code;
+              isAlive = code === "EPERM";
+            }
+          }
+
+          if (!isAlive && Date.now() - basis > staleMs) {
             isStale = true;
           }
         } catch {
           // File vanished between openSync and statSync: retry openSync
           isStale = true;
         }
+
         if (isStale) {
           try {
             fs.unlinkSync(lockFilePath);
@@ -107,7 +132,6 @@ export async function acquireLock(operation: string, options: LockOptions = {}):
             // Unlink race, continue loop
           }
         }
-
         if (Date.now() >= deadline) {
           throw new Error(
             `lock_timeout: operation "${operation}" failed to acquire ${lockFilePath}`,
