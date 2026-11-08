@@ -378,4 +378,60 @@ describe("renderer card module", () => {
       restoreDoc();
     }
   });
+
+  test("renderProviderCard does not render red badge-danger in collapsed preview on non-Antigravity provider", () => {
+    mockDoc();
+    try {
+      const card = renderProviderCard(
+        {
+          id: "deepseek",
+          name: "DEEPSEEK",
+          suffix: " · CNY",
+          accounts: 1,
+          columns: [{ key: "c1", label: "Balance" }],
+          rows: [
+            {
+              account: "key@example.com",
+              displayAccount: "key",
+              health: null,
+              maxUsed: 0,
+              level: "ok",
+              route: { text: "—", level: "unknown" },
+              limits: [{ label: "Balance", low: false, level: "ok", remaining: 10, unit: "cny" }],
+            },
+          ],
+        },
+        true, // hasAnyRoute is true because another provider has route data
+        0,
+        {
+          status: "loading",
+          data: null,
+          intervalSeconds: 300,
+          warmup: { running: false, message: null },
+          settings: DEFAULT_DESKTOP_SETTINGS,
+        },
+      );
+
+      interface MockElNode {
+        className?: string;
+        children?: MockElNode[];
+      }
+      const cardNode = card as unknown as MockElNode;
+      const findByClass = (node: MockElNode | undefined, cls: string): MockElNode | undefined => {
+        if (!node) return undefined;
+        if (node.className?.split(" ").includes(cls)) return node;
+        for (const child of node.children ?? []) {
+          const hit = findByClass(child, cls);
+          if (hit) return hit;
+        }
+        return undefined;
+      };
+
+      // Neutral providers with no route data MUST NOT render badge-danger
+      const dangerBadge = findByClass(cardNode, "badge-danger");
+      expect(dangerBadge).toBeUndefined();
+    } finally {
+      restoreDoc();
+    }
+  });
 });

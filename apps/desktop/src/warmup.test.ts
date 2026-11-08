@@ -19,6 +19,7 @@ describe("warmup desktop helpers", () => {
     results: [
       {
         account: "alpha@example.com",
+        model: "gemini-3.8-flash-high",
         status: "ok",
         ms: 150,
         checkedAt: 123456,
@@ -49,6 +50,7 @@ describe("warmup desktop helpers", () => {
       results: [
         {
           account: "alpha@example.com",
+          model: "gemini-3.8-flash-high",
           status: "hang",
           ms: 15000,
           checkedAt: 123456,

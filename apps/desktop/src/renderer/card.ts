@@ -56,6 +56,7 @@ const ROUTE_TITLES: Record<string, string> = {
   AUTH: "Route blocked — sign-in or credentials need attention",
   MODEL: "Route blocked — model unavailable for this account",
   ERR: "Route error — the last probe failed; use Check to probe it",
+  STALE: "Route observation is stale (>15m); use Check to probe it",
   "—": "No route health data yet",
 };
 
@@ -149,14 +150,23 @@ export function renderProviderCard(
   countBadge.textContent = `${matchingRows.length} ${matchingRows.length === 1 ? "acct" : "accts"}`;
   previewDiv.appendChild(countBadge);
 
-  if (hasAnyRoute) {
+  const hasRouteData = matchingRows.some((r) => r.route.text !== "—");
+  if (hasAnyRoute && hasWarmUp && hasRouteData) {
     const worstRoute =
       matchingRows.find((r) => r.route.text === "HANG" || r.route.text === "ERR") ??
       matchingRows.find((r) => r.route.text === "AUTH" || r.route.text === "MODEL") ??
+      matchingRows.find((r) => r.route.text === "STALE") ??
+      matchingRows.find((r) => r.route.text === "OK") ??
       matchingRows[0];
-    if (worstRoute) {
+    if (worstRoute && worstRoute.route.text !== "—") {
+      const badgeKind =
+        worstRoute.route.level === "ok"
+          ? "ok"
+          : worstRoute.route.level === "critical"
+            ? "danger"
+            : "neutral";
       const routeBadge = document.createElement("span");
-      routeBadge.className = `collapsed-badge badge-${worstRoute.route.level === "ok" ? "ok" : "danger"}`;
+      routeBadge.className = `collapsed-badge badge-${badgeKind}`;
       routeBadge.textContent = worstRoute.route.text;
       previewDiv.appendChild(routeBadge);
     }
@@ -296,15 +306,26 @@ export function renderProviderCard(
       const routeSpan = document.createElement("span");
       routeSpan.className = `route level-${row.route.level}`;
       routeSpan.textContent = row.route.text;
-      const isClickable = row.route.text !== "OK" && row.route.text !== "—";
+
+      let title = ROUTE_TITLES[row.route.text] ?? row.route.text;
+      if (row.route.model) {
+        title += ` (${row.route.model})`;
+      }
+      if (row.route.checkedAt) {
+        const ageMin = Math.round((Date.now() - row.route.checkedAt) / 60_000);
+        title += ` · ${ageMin}m ago`;
+      }
+      if (row.route.detail) {
+        title += ` · ${row.route.detail}`;
+      }
+
+      const isClickable = hasWarmUp && row.route.text !== "OK" && row.route.text !== "—";
       if (isClickable) {
         routeSpan.className += " route-clickable";
-        routeSpan.title = `${ROUTE_TITLES[row.route.text]} — Click to probe now`;
+        routeSpan.title = `${title} — Click to probe now`;
         routeSpan.addEventListener("click", (e) => {
           e.stopPropagation();
           if (state.warmup.running) return;
-          routeSpan.className += " route-probing";
-          routeSpan.textContent = "...";
           window.omp.warmup({
             provider: provider.id,
             action: "check",
@@ -312,8 +333,9 @@ export function renderProviderCard(
           });
         });
       } else {
-        routeSpan.title = ROUTE_TITLES[row.route.text] ?? row.route.text;
+        routeSpan.title = title;
       }
+
       routeSpan.setAttribute("aria-label", routeSpan.title);
       tdRoute.appendChild(routeSpan);
       tr.appendChild(tdRoute);

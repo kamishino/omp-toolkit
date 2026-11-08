@@ -19,9 +19,9 @@ describe("parseMonitorPayload", () => {
     tooltip: "OMP: no usage data",
     iconLevel: "unknown",
   };
-  test("parses valid schema 2 monitor payload", () => {
+  test("parses valid schema 3 monitor payload", () => {
     const raw = JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       fetchedAt: 1000,
       dashboard: validDashboard,
     });
@@ -41,12 +41,12 @@ describe("parseMonitorPayload", () => {
       fetchedAt: 1000,
       dashboard: validDashboard,
     });
-    expect(() => parseMonitorPayload(raw)).toThrow("unsupported monitor schema: 1 (expected 2)");
+    expect(() => parseMonitorPayload(raw)).toThrow("unsupported monitor schema: 1 (expected 3)");
   });
 
   test("single data seam: runs the monitor script and forwards thresholds as env", async () => {
     const payload = JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       fetchedAt: 1000,
       dashboard: validDashboard,
     });
@@ -83,7 +83,7 @@ describe("parseMonitorPayload", () => {
 
   test("throws on missing or invalid dashboard object", () => {
     const raw = JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
       fetchedAt: 1000,
       dashboard: {
         fetchedAt: 1000,
