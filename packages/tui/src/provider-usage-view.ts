@@ -39,6 +39,7 @@ const ROUTE_SPACING: Record<string, string> = {
   AUTH: "AUTH ",
   MODEL: "MODEL",
   ERR: " ERR ",
+  STALE: "STALE",
   "—": "  —  ",
 };
 

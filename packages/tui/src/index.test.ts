@@ -83,7 +83,21 @@ describe("terminal formatting", () => {
 describe("provider usage view", () => {
   test("shows providers, route health, and stale snapshots", () => {
     const health = new Map<string, HealthResult>([
-      ["hang@example.com", { email: "hang@example.com", status: "hang", ms: 15_000 }],
+      [
+        "hang@example.com",
+        {
+          provider: "google-antigravity",
+          email: "hang@example.com",
+          project: "hang",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15_000,
+          startedAt: Date.now() - 15_000,
+          checkedAt: Date.now(),
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
     ]);
     const sections = sectionsFor(reports, health);
     const view = renderProviderUsage(sections, {
@@ -189,7 +203,21 @@ describe("provider usage view", () => {
       ],
     };
     const health = new Map<string, HealthResult>([
-      ["codex@example.com", { email: "codex@example.com", status: "hang", ms: 15_000 }],
+      [
+        "hang@example.com",
+        {
+          provider: "google-antigravity",
+          email: "hang@example.com",
+          project: "hang",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 15_000,
+          startedAt: Date.now() - 15000,
+          checkedAt: Date.now(),
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
     ]);
     const view = renderProviderUsage(sectionsFor([...reports, codex], health), {
       interval: 300,
@@ -309,8 +337,25 @@ describe("provider usage view", () => {
 
     // Fresh incident (10 mins ago)
     const freshSnapshot: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: now - 600_000,
-      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 12_000,
+          startedAt: now - 612_000,
+          checkedAt: now - 600_000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      streaks: {},
       incident: {
         id: "inc-1",
         at: now - 600_000,
@@ -340,8 +385,25 @@ describe("provider usage view", () => {
 
     // Stale incident (25 hours ago)
     const staleSnapshot: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: now - 25 * 3600_000,
-      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 12_000,
+          startedAt: now - 25 * 3600_000 - 12_000,
+          checkedAt: now - 25 * 3600_000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      streaks: {},
       incident: {
         id: "inc-old",
         at: now - 25 * 3600_000,
@@ -362,8 +424,25 @@ describe("provider usage view", () => {
 
     // Very long detail is truncated to fit width
     const longSnapshot: HealthSnapshot = {
+      schemaVersion: 2,
+      probeModel: "gemini-3.8-flash-high",
+      sweepStartedAt: null,
       checkedAt: now - 60_000,
-      results: [{ email: "user@example.com", status: "hang", ms: 12000 }],
+      results: [
+        {
+          provider: "google-antigravity",
+          email: "user@example.com",
+          project: "p1",
+          model: "gemini-3.8-flash-high",
+          status: "hang",
+          ms: 12_000,
+          startedAt: now - 72_000,
+          checkedAt: now - 60_000,
+          failureKind: "timeout",
+          confirmed: true,
+        },
+      ],
+      streaks: {},
       incident: {
         id: "inc-long",
         at: now - 60_000,
