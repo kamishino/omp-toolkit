@@ -1,3 +1,4 @@
+export * from "./backup";
 export * from "./dashboard/index";
 export * from "./data-source";
 export * from "./deepseek";
