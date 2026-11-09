@@ -19,6 +19,8 @@ technical details.
 - The SQLite history database and report script.
 - Orca CLI invocation and command-string construction.
 - Desktop widget IPC surface, sandbox and context isolation, CSP policy, and terminal command construction.
+- Portable backup and recovery archives (AES-256-GCM encryption, passphrase handling, and profile isolation).
+- Pre-commit privacy boundaries: backup ciphertext, SQLite databases, and local credentials must never enter Git history.
 
 ## What this project does not do
 

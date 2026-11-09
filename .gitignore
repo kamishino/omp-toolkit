@@ -61,6 +61,13 @@ omp-toolkit-machine.json
 omp-toolkit.lock
 gemini-warmup.lock
 backups/
+# Private portability and backup artifacts
+*.enc
+omp-config-*.zip
+*.partial
+pending-restore.json
+credentials.json
+*.local
 
 # Private agent/session artifacts
 HANDOFF.md

@@ -47,7 +47,8 @@ host-specific absolute paths.
   user-visible behavior changes.
 - Use Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`).
 - Do not commit `HANDOFF.md`, `.env`, credentials, OMP state files, terminal
-  handles, personal paths, or generated `dist/` output.
+  handles, personal paths, encrypted snapshots (`*.enc`), backup archives, or generated `dist/` output.
+- Run `bun run check:privacy` before submitting changes to ensure no private artifacts are tracked.
 - Do not add a new provider adapter without an issue that defines its fixture
   and failure behavior.
 
