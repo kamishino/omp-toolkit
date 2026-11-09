@@ -16,6 +16,13 @@
         "typescript": "^7.0.2",
       },
     },
+    "apps/backup": {
+      "name": "@omp-toolkit/backup",
+      "version": "0.5.0",
+      "dependencies": {
+        "@omp-toolkit/core": "workspace:*",
+      },
+    },
     "apps/desktop": {
       "name": "@omp-toolkit/desktop",
       "version": "0.5.0",
@@ -93,6 +100,7 @@
 
     "@mdi/js": ["@mdi/js@7.4.47", "", {}, "sha512-KPnNOtm5i2pMabqZxpUz7iQf+mfrYZyKCZ8QNz85czgEt7cuHcGorWfdzUMWYA0SD+a6Hn4FmJ+YhzzzjkTZrQ=="],
 
+    "@omp-toolkit/backup": ["@omp-toolkit/backup@workspace:apps/backup"],
     "@omp-toolkit/core": ["@omp-toolkit/core@workspace:packages/core"],
 
     "@omp-toolkit/desktop": ["@omp-toolkit/desktop@workspace:apps/desktop"],

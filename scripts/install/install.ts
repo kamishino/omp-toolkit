@@ -55,6 +55,21 @@ install(
   path.join(scriptsDir, "omp-gateway.ps1"),
 );
 install(path.join(root, "apps/gateway/dist/index.js"), path.join(scriptsDir, "omp-gateway-ctl.js"));
+install(path.join(root, "apps/backup/dist/index.js"), path.join(scriptsDir, "omp-backup.js"));
+if (process.platform === "win32") {
+  install(
+    path.join(root, "scripts/backup/export-omp-config.ps1"),
+    path.join(scriptsDir, "export-omp-config.ps1"),
+  );
+  install(
+    path.join(root, "scripts/backup/import-omp-config.ps1"),
+    path.join(scriptsDir, "import-omp-config.ps1"),
+  );
+  install(
+    path.join(root, "scripts/backup/start-omp-direct.ps1"),
+    path.join(scriptsDir, "start-omp-direct.ps1"),
+  );
+}
 removeLegacy(path.join(extensionsDir, "gemini-health.ts"));
 removeLegacy(path.join(scriptsDir, "omp-provider-usage.ts"));
 removeLegacy(path.join(scriptsDir, "gemini-usage.ts"));

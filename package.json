@@ -55,7 +55,11 @@
     "gateway": "powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1",
     "gateway:ctl": "bun apps/gateway/src/index.ts",
     "gateway:status": "bun scripts/gateway/doctor-gateway.ts",
-    "gateway:test": "powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1 test"
+    "gateway:test": "powershell -ExecutionPolicy Bypass -File scripts/gateway/omp-gateway.ps1 test",
+    "backup:ctl": "bun apps/backup/src/index.ts",
+    "backup:export": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup/export-omp-config.ps1",
+    "backup:import": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup/import-omp-config.ps1",
+    "backup:direct": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/backup/start-omp-direct.ps1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",

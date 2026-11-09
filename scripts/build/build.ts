@@ -25,6 +25,11 @@ const targets = [
     entry: path.join(root, "apps/gateway/src/index.ts"),
     outdir: path.join(root, "apps/gateway/dist"),
   },
+  {
+    name: "backup",
+    entry: path.join(root, "apps/backup/src/index.ts"),
+    outdir: path.join(root, "apps/backup/dist"),
+  },
 ];
 
 export async function buildTargets(): Promise<void> {
