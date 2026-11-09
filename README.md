@@ -86,6 +86,9 @@ Run `monitor` and `desktop` commands from the checkout (`~/.omp/omp-toolkit` aft
 | Desktop shortcut | `bun run desktop:shortcut` |
 | Orca floating tab | `bun run monitor:orca` (`Ctrl+Alt+A` / `Cmd+Alt+A`) |
 | Install Nerd Font | `bun run font:install [family]` |
+| Export backup snapshot | `bun run backup:export` |
+| Import backup snapshot | `bun run backup:import` |
+| Launch direct recovery profile | `bun run backup:direct` |
 
 `--no-health` hides the route column; `--no-alt-screen` keeps output in the scrollback; `--sort=weekly-reset|weekly-usage` picks the account order (soonest weekly reset by default); in watch mode `Tab` switches between usage and schedule.
 
@@ -112,6 +115,7 @@ Inside OMP:
 | `OMP_ACCOUNT_SORT` | Account order per provider: `weekly-reset` or `weekly-usage` | `weekly-reset` |
 | `OMP_TOOLKIT_HOME` | Checkout used by installers and templates | `~/.omp/omp-toolkit` |
 | `PI_CODING_AGENT_DIR` | OMP state directory | `~/.omp/agent` |
+| `OMP_BACKUP_DIR` | Target directory for encrypted backup snapshots | unset (requires `-DestinationDir`) |
 | `OMP_TOOLKIT_HISTORY_DB` | Override the SQLite history file | `<agentDir>/omp-toolkit-history.db` |
 | `OMP_WIDGET_INTERVAL_SECONDS` | Tray refresh interval (minimum 30) | `300` |
 | `BUN_BIN` | Bun executable for desktop subprocesses | system `bun` |

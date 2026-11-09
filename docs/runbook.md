@@ -38,6 +38,27 @@ Interpretation:
 so the snapshot no longer represents current readiness. Run `/gemini-health` or
 the health CLI. Stale evidence never creates or restores an exclusion.
 
+## Disaster recovery and standby profile
+
+During primary gateway outages, an authorized secondary workstation can operate independently using an encrypted backup snapshot (ADR-0011).
+
+### 1. Export from primary machine
+```powershell
+bun run backup:export -- -DestinationDir "D:\Backups\omp"
+```
+Or set `OMP_BACKUP_DIR="D:\Backups\omp"`. Prompts for passphrase and produces an encrypted archive (`.enc`).
+
+### 2. Import into secondary machine
+```powershell
+bun run backup:import -- -SnapshotPath "D:\Backups\omp\omp-config-latest.enc"
+```
+Displays inspection preview, captures pre-restore recovery snapshot, and restores into the isolated `omp-portable` profile.
+
+### 3. Launch direct mode
+```powershell
+bun run backup:direct
+```
+Launches OMP bound to `omp-portable` with all broker and gateway overrides stripped.
 ## Additional workstation setup (optional)
 
 The toolkit is scoped to one primary workstation. To run it on an additional

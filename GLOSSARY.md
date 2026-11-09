@@ -59,6 +59,25 @@ restoration after consecutive healthy checks.
 
 The latest recorded observations and recovery evidence for the known probe
 routes, together with any active incident.
+## Backup snapshot
+
+A captured restore point for portable preferences and provider logins, stored as an encrypted archive (.enc).
+_Avoid_: Sync archive, cloud mirror
+
+## Recovery snapshot
+
+The target workstation's portable state captured before an import, allowing that import to be reversed.
+_Avoid_: Undo file, temporary backup
+
+## Portable profile
+
+The independent OMP profile (`omp-portable`) used for restored preferences and accounts during disaster recovery, separate from the normal gateway-connected profile.
+_Avoid_: Direct mode flag, offline toggle
+
+## Recovery workstation
+
+A machine authorized to continue OMP work independently using restored provider credentials in an isolated portable profile when the primary gateway host is unavailable (ADR-0011).
+_Avoid_: Thin client
 
 ## Managed exclusion
 
@@ -226,7 +245,8 @@ from quota or auth outcomes and expires on its own.
 ## Gateway host
 
 The Machine that holds the credential vault and serves the gateway to gateway
-clients. Other machines hold no provider credentials.
+clients during normal operation. Other machines hold no provider credentials except
+when configured as an isolated recovery workstation (ADR-0011).
 _Avoid_: Vault PC, server
 
 ## Control plane
@@ -351,9 +371,9 @@ vault, running the gateway proxy, cooldown engine, and Cloudflare tunnel.
 
 ## Thin client workstation
 
-A secondary workstation (PC2, PC3) holding zero upstream provider credentials,
-routing all agent requests to the SSOT gateway host through the tunnel.
-
+A secondary workstation (PC2, PC3) holding zero upstream provider credentials during
+normal operation, routing all agent requests to the SSOT gateway host through the tunnel.
+During primary outages, a secondary workstation may be used as a recovery workstation (ADR-0011).
 ## Universal custom provider pattern
 
 The standardized 3-tuple configuration (`Base URL`, `API Key`, `Model ID`)

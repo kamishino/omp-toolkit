@@ -9,6 +9,7 @@
 | Presentation (desktop)  | `apps/desktop`        | Electron host, tray/menu, OS login item, terminal/Orca launch; renderer consumes dashboard JSON |
 | Adapters                | `apps/omp-extension`  | OMP hooks, commands, tool, account probing, state/config persistence                            |
 | Adapter                 | `apps/provider-usage` | CLI flags, `omp usage` read, snapshot read, watch loop, schema-2 JSON payload                   |
+| Adapter                 | `apps/backup`         | Encrypted backup & recovery archives, profile isolation, and direct-mode launch (ADR-0011)       |
 | Design                  | `design/tokens.json`  | Color and threshold SSOT for TUI ANSI and desktop OKLCH                                         |
 
 `core` has no network, OMP, or arbitrary I/O imports; filesystem access is limited to deterministic path resolution (`environment.ts`) and template checkout lookup (`templates.ts`). `tui` imports `core`, `terminui`, and the JSON design tokens. The apps own I/O and runtime boundaries.
