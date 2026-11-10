@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { Dashboard } from "@omp-toolkit/core";
+import { type Dashboard, GEMINI_HEALTH_PAUSED_MESSAGE } from "@omp-toolkit/core";
 import { DesktopRuntime } from "./runtime";
 import { DEFAULT_DESKTOP_SETTINGS } from "./settings";
 
@@ -188,6 +188,7 @@ describe("DesktopRuntime deep coordinator", () => {
         userDataDir: tmpDir,
         checkoutRoot: tmpDir,
         dialogHost: mockDialogHost,
+        env: { GEMINI_HEALTH_ENABLED: "1" },
       });
 
       await runtime.handleWarmUp({ provider: "google-antigravity", action: "warm", all: true });
@@ -240,6 +241,7 @@ describe("DesktopRuntime deep coordinator", () => {
           warmUpCalled = true;
           return { success: true, message: "Warmed up 1 account" };
         },
+        env: { GEMINI_HEALTH_ENABLED: "1" },
       });
 
       // Seed initial dashboard
@@ -251,6 +253,107 @@ describe("DesktopRuntime deep coordinator", () => {
       expect(refreshCalls).toBe(2); // Initial + after warmup success
       expect(runtime.getState().warmup.running).toBe(false);
       expect(runtime.getState().warmup.message).toBe("Warmed up 1 account");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("handleWarmUp explains the pause for bulk warm-up and route checks", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      const dashboard = dummyDashboard();
+      dashboard.providers = [
+        {
+          id: "google-antigravity",
+          name: "GOOGLE ANTIGRAVITY",
+          suffix: "",
+          accounts: 1,
+          columns: [],
+          rows: [
+            {
+              account: "test@example.com",
+              displayAccount: "test",
+              health: "hang",
+              maxUsed: 0.2,
+              level: "hot",
+              route: { text: "HANG", level: "hot" },
+              limits: [],
+            },
+          ],
+        },
+      ];
+
+      let executeCalls = 0;
+      let confirmations = 0;
+      let errorDialogs = 0;
+      let refreshCalls = 0;
+
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        fetchDashboardFn: async () => {
+          refreshCalls++;
+          return dashboard;
+        },
+        dialogHost: {
+          showErrorBox: () => {
+            errorDialogs++;
+          },
+          showMessageBox: async () => {
+            confirmations++;
+            return { response: 1 };
+          },
+        },
+        executeWarmUpFn: async () => {
+          executeCalls++;
+          return { success: true, message: "Warmed up 1 account" };
+        },
+        env: {},
+      });
+
+      await runtime.refresh();
+      expect(refreshCalls).toBe(1);
+
+      await runtime.handleWarmUp({ provider: "google-antigravity", action: "warm", all: true });
+      expect(runtime.getState().warmup.running).toBe(false);
+      expect(runtime.getState().warmup.message).toBe(GEMINI_HEALTH_PAUSED_MESSAGE);
+
+      await runtime.handleWarmUp({
+        provider: "google-antigravity",
+        action: "check",
+        account: "test@example.com",
+      });
+      expect(runtime.getState().warmup.running).toBe(false);
+      expect(runtime.getState().warmup.message).toBe(GEMINI_HEALTH_PAUSED_MESSAGE);
+
+      expect(executeCalls).toBe(0);
+      expect(confirmations).toBe(0);
+      expect(errorDialogs).toBe(0);
+      expect(refreshCalls).toBe(1);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("paused gate does not block other providers", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      let errorDialogs = 0;
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        dialogHost: {
+          showErrorBox: () => {
+            errorDialogs++;
+          },
+          showMessageBox: async () => ({ response: 0 }),
+        },
+        env: {},
+      });
+
+      await runtime.handleWarmUp({ provider: "openai", action: "warm", all: true });
+      expect(errorDialogs).toBe(1);
+      expect(runtime.getState().warmup.message).toBeNull();
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

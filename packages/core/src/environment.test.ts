@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import {
+  GEMINI_HEALTH_PAUSED_MESSAGE,
+  isGeminiHealthEnabled,
   resolveAgentDir,
   resolveAutoRestorePath,
   resolveHealthScriptCandidates,
@@ -75,6 +77,15 @@ describe("AgentEnvironment path resolver", () => {
     expect(candidates[2]).toContain(
       path.join(checkout, "apps", "provider-usage", "src", "index.ts"),
     );
+  });
+
+  test("isGeminiHealthEnabled requires the literal opt-in value 1", () => {
+    expect(isGeminiHealthEnabled({})).toBe(false);
+    expect(isGeminiHealthEnabled({ GEMINI_HEALTH_ENABLED: "" })).toBe(false);
+    expect(isGeminiHealthEnabled({ GEMINI_HEALTH_ENABLED: "0" })).toBe(false);
+    expect(isGeminiHealthEnabled({ GEMINI_HEALTH_ENABLED: "true" })).toBe(false);
+    expect(isGeminiHealthEnabled({ GEMINI_HEALTH_ENABLED: "1" })).toBe(true);
+    expect(GEMINI_HEALTH_PAUSED_MESSAGE).toContain("GEMINI_HEALTH_ENABLED=1");
   });
 
   test("resolveHealthScriptCandidates returns expected ordered search array", () => {

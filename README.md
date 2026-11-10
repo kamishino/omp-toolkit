@@ -122,6 +122,7 @@ Inside OMP:
 | `GEMINI_HEALTH_RESTORE_STREAK` | Healthy checks needed to restore an account | `3` |
 | `GEMINI_HEALTH_RESTORE_GAP_SECONDS` | Minimum seconds between streak checks | `60` |
 | `GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS` | Recovery sweep interval (minimum 60) | `300` |
+| `GEMINI_HEALTH_ENABLED` | Set to `1` to run Gemini health probes and policy management; anything else pauses them | paused |
 | `PI_AI_ANTIGRAVITY_VERSION` | Antigravity client version header | `2.24.0` |
 | `ORCA_BIN` | Orca executable override | auto-detected |
 | `ORCA_CLI_COMMAND` | Orca-managed CLI command override | auto-detected |
@@ -133,7 +134,7 @@ Inside OMP:
 
 **Why is an account excluded?** The toolkit set `reservePct: 100` so OMP stops routing to it. `/gemini-restore` removes toolkit-managed exclusions; `/gemini-enable <account>` re-enables one account. Manual exclusions stay until you run `/gemini-auto-restore <account>` to opt in.
 
-**The footer says the snapshot is stale.** The last check is older than 15 minutes. Run `/gemini-health` or `bun ~/.omp/agent/extensions/gemini-health.js`.
+**The footer says the snapshot is stale.** The last check is older than 15 minutes. With `GEMINI_HEALTH_ENABLED=1`, run `/gemini-health` or `bun ~/.omp/agent/extensions/gemini-health.js`. Without it, Gemini health is paused, so the snapshot stays as-is.
 
 **Does monitoring cost model tokens?** No. Health probes cost roughly 11 tokens per account and a warm-up about 8.
 

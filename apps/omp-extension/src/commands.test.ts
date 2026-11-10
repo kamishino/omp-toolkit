@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import type { Account, Policy, ProbeResult } from "@omp-toolkit/core";
+import {
+  type Account,
+  GEMINI_HEALTH_PAUSED_MESSAGE,
+  type Policy,
+  type ProbeResult,
+} from "@omp-toolkit/core";
 import { type CommandDependencies, registerCommandsAndTools } from "./commands";
 import { healthManager } from "./health-manager";
 import type { WarmUpDependencies } from "./warmup";
@@ -79,7 +86,7 @@ describe("registerCommandsAndTools", () => {
     healthManager.removeExclusion = origRemoveExclusion;
   });
 
-  function createTestHarness() {
+  function createTestHarness(healthEnabled = true) {
     const commands: Record<string, RegisteredCommand> = {};
     const tools: Record<string, RegisteredTool> = {};
     const sentMessages: Array<{ customType: string; content: string }> = [];
@@ -130,9 +137,15 @@ describe("registerCommandsAndTools", () => {
     } as unknown as ExtensionContext;
 
     let reloaded = false;
+    let refreshCalls = 0;
+    let probeCalls = 0;
     const mockCoordinator = {
-      refresh: async () => {},
+      isHealthEnabled: () => healthEnabled,
+      refresh: async () => {
+        refreshCalls += 1;
+      },
       probeAndPublish: async (_ctx: ExtensionContext, _confirm?: boolean) => {
+        probeCalls += 1;
         const results: ProbeResult[] = [
           {
             index: 0,
@@ -207,53 +220,153 @@ describe("registerCommandsAndTools", () => {
       mockCtx,
       mockCoordinator,
       isReloaded: () => reloaded,
+      refreshCalls: () => refreshCalls,
+      probeCalls: () => probeCalls,
     };
   }
 
-  test("registers all slash commands and the gemini_health tool", () => {
-    const { commands, tools } = createTestHarness();
+  function withTempAgentDir(): { restore: () => void } {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-commands-agent-"));
+    const previous = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = dir;
+    return {
+      restore: () => {
+        if (previous === undefined) {
+          delete process.env.PI_CODING_AGENT_DIR;
+        } else {
+          process.env.PI_CODING_AGENT_DIR = previous;
+        }
+        fs.rmSync(dir, { recursive: true, force: true });
+      },
+    };
+  }
 
-    const expectedCommands = [
-      "gemini-health-widget",
-      "gemini-health",
-      "gemini-warmup",
-      "gemini-check",
-      "gemini-heal",
-      "gemini-restore",
-      "gemini-enable",
-      "gemini-auto-restore",
-      "gateway",
-      "font-install",
-    ];
+  test("paused Gemini commands explain the pause without touching health state", async () => {
+    const {
+      commands,
+      tools,
+      mockCtx,
+      notifications,
+      sentMessages,
+      isReloaded,
+      refreshCalls,
+      probeCalls,
+    } = createTestHarness(false);
 
-    for (const cmd of expectedCommands) {
-      expect(commands[cmd]).toBeDefined();
-      expect(typeof commands[cmd].handler).toBe("function");
+    const origLoadAccounts = healthManager.loadAccounts;
+    const origRestoreManaged = healthManager.restoreManaged;
+    const origApplyHeal = healthManager.applyHeal;
+    const origReadPolicies = healthManager.readPolicies;
+    let accountLoads = 0;
+    let restores = 0;
+    let heals = 0;
+    let policyReads = 0;
+    healthManager.loadAccounts = async () => {
+      accountLoads += 1;
+      return [];
+    };
+    healthManager.restoreManaged = async () => {
+      restores += 1;
+      return [];
+    };
+    healthManager.applyHeal = async () => {
+      heals += 1;
+      return { status: "success", changed: [], skipped: [], reason: "paused" };
+    };
+    healthManager.readPolicies = async () => {
+      policyReads += 1;
+      return [];
+    };
+
+    try {
+      await commands["gemini-health"].handler("--confirm", mockCtx);
+      await commands["gemini-warmup"].handler("--all", mockCtx);
+      await commands["gemini-check"].handler("alpha", mockCtx);
+      await commands["gemini-heal"].handler("--dry-run", mockCtx);
+      await commands["gemini-restore"].handler("", mockCtx);
+      await commands["gemini-enable"].handler("alpha@example.com", mockCtx);
+      await commands["gemini-auto-restore"].handler("", mockCtx);
+      const toolResult = await tools.gemini_health.execute(
+        "call-paused",
+        { confirm: true, heal: true },
+        null,
+        null,
+        mockCtx,
+      );
+
+      expect(notifications).toHaveLength(7);
+      for (const notification of notifications) {
+        expect(notification.message).toBe(GEMINI_HEALTH_PAUSED_MESSAGE);
+        expect(notification.type).toBe("info");
+      }
+      expect(toolResult.content).toEqual([{ type: "text", text: GEMINI_HEALTH_PAUSED_MESSAGE }]);
+      expect(toolResult.details).toEqual({ paused: true });
+      expect(sentMessages).toHaveLength(0);
+      expect(isReloaded()).toBe(false);
+      expect(refreshCalls()).toBe(0);
+      expect(probeCalls()).toBe(0);
+      expect(accountLoads).toBe(0);
+      expect(restores).toBe(0);
+      expect(heals).toBe(0);
+      expect(policyReads).toBe(0);
+    } finally {
+      healthManager.loadAccounts = origLoadAccounts;
+      healthManager.restoreManaged = origRestoreManaged;
+      healthManager.applyHeal = origApplyHeal;
+      healthManager.readPolicies = origReadPolicies;
     }
-
-    expect(tools.gemini_health).toBeDefined();
-    expect(typeof tools.gemini_health.execute).toBe("function");
   });
 
   test("gemini-health-widget toggles, enables, and hides widget", async () => {
-    const { commands, mockCtx, notifications, statuses, widgets } = createTestHarness();
-    const handler = commands["gemini-health-widget"].handler;
+    const agentDir = withTempAgentDir();
+    try {
+      const { commands, mockCtx, notifications, statuses, widgets, refreshCalls } =
+        createTestHarness();
+      const handler = commands["gemini-health-widget"].handler;
 
-    // Test "off"
-    await handler("off", mockCtx);
-    expect(widgetEnabled()).toBe(false);
-    expect(statuses["gemini-health"]).toBeUndefined();
-    expect(widgets["gemini-health"]).toBeUndefined();
-    expect(notifications.some((n) => n.message.includes("hidden"))).toBe(true);
+      // Test "off"
+      await handler("off", mockCtx);
+      expect(widgetEnabled()).toBe(false);
+      expect(statuses["gemini-health"]).toBeUndefined();
+      expect(widgets["gemini-health"]).toBeUndefined();
+      expect(notifications.some((n) => n.message.includes("hidden"))).toBe(true);
 
-    // Test "on"
-    await handler("on", mockCtx);
-    expect(widgetEnabled()).toBe(true);
-    expect(notifications.some((n) => n.message.includes("enabled"))).toBe(true);
+      // Test "on"
+      await handler("on", mockCtx);
+      expect(widgetEnabled()).toBe(true);
+      expect(notifications.some((n) => n.message.includes("enabled"))).toBe(true);
+      expect(refreshCalls()).toBe(1);
 
-    // Test toggle (empty args flips true -> false)
-    await handler("", mockCtx);
-    expect(widgetEnabled()).toBe(false);
+      // Test toggle (empty args flips true -> false)
+      await handler("", mockCtx);
+      expect(widgetEnabled()).toBe(false);
+    } finally {
+      agentDir.restore();
+    }
+  });
+
+  test("gemini-health-widget while paused cannot trigger a check", async () => {
+    const agentDir = withTempAgentDir();
+    try {
+      const { commands, mockCtx, notifications, statuses, widgets, refreshCalls } =
+        createTestHarness(false);
+      const handler = commands["gemini-health-widget"].handler;
+
+      await handler("on", mockCtx);
+      expect(widgetEnabled()).toBe(true);
+      expect(refreshCalls()).toBe(0);
+      expect(statuses["gemini-health"]).toBeUndefined();
+      expect(widgets["gemini-health"]).toBeUndefined();
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].message).toBe(GEMINI_HEALTH_PAUSED_MESSAGE);
+      expect(notifications[0].type).toBe("info");
+
+      await handler("off", mockCtx);
+      expect(widgetEnabled()).toBe(false);
+      expect(notifications.some((n) => n.message.includes("hidden"))).toBe(true);
+    } finally {
+      agentDir.restore();
+    }
   });
 
   test("gemini-health runs probe check, sends message, and notifies", async () => {

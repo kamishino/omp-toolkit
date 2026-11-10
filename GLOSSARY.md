@@ -45,6 +45,13 @@ The latest trustworthy observation of a route: OK, HANG, ERR, AUTH, or MODEL.
 A route observation older than fifteen minutes. Its last result is historical
 evidence, not a claim about current readiness.
 
+## Gemini health pause
+
+The intentional suspension of all toolkit Gemini route checks and account
+recovery management while `GEMINI_HEALTH_ENABLED` is not `1`. It is not a
+route-health observation, account exclusion, or widget state.
+_Avoid_: Provider disabled, auth failure
+
 ## Route stall
 
 A route that emits no first SSE event within the probe timeout, or that fails

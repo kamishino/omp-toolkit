@@ -1,6 +1,10 @@
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import { isRetryableRouteFailure, type WarmUpRequest } from "@omp-toolkit/core";
+import {
+  GEMINI_HEALTH_PAUSED_MESSAGE,
+  isRetryableRouteFailure,
+  type WarmUpRequest,
+} from "@omp-toolkit/core";
 import type { AutoHealCoordinator } from "./auto-heal";
 import { PROVIDER, RESTORE_STREAK } from "./config";
 import { short } from "./fs-util";
@@ -19,8 +23,14 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
   const { warmUpDeps, coordinator, reloadIfAvailable } = deps;
   const z = pi.zod;
 
+  function notifyIfPaused(ctx: ExtensionContext): boolean {
+    if (coordinator.isHealthEnabled()) return false;
+    ctx.ui.notify(GEMINI_HEALTH_PAUSED_MESSAGE, "info");
+    return true;
+  }
+
   pi.registerCommand("gemini-health-widget", {
-    description: "Show, hide, or toggle the Gemini health widget; auto-heal stays active",
+    description: "Show, hide, or toggle the Gemini health widget",
     handler: async (args, ctx) => {
       const choice = args.trim().toLowerCase();
       const enabled = choice === "off" ? false : choice === "on" ? true : !widgetEnabled();
@@ -28,7 +38,12 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
       if (!enabled) {
         ctx.ui.setStatus("gemini-health", undefined);
         ctx.ui.setWidget("gemini-health", undefined);
-        ctx.ui.notify("Gemini health widget hidden. Auto-heal and commands remain active.", "info");
+        ctx.ui.notify("Gemini health widget hidden.", "info");
+        return;
+      }
+      if (notifyIfPaused(ctx)) {
+        ctx.ui.setStatus("gemini-health", undefined);
+        ctx.ui.setWidget("gemini-health", undefined);
         return;
       }
       ctx.ui.notify("Gemini health widget enabled. Checking…", "info");
@@ -39,6 +54,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
   pi.registerCommand("gemini-health", {
     description: "Probe every Google Antigravity account for gemini-3.8-flash route hangs",
     handler: async (args, ctx) => {
+      if (notifyIfPaused(ctx)) return;
       const confirm = /--confirm\b/.test(args);
       await coordinator.runExclusive(ctx, "Gemini health check", async () => {
         try {
@@ -74,6 +90,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     description:
       "Warm up eligible Antigravity accounts with a minimal model request; skips non-OK accounts",
     handler: async (args, ctx) => {
+      if (notifyIfPaused(ctx)) return;
       const all = /--all\b/.test(args);
       const needle = args
         .replace(/--all\b/g, "")
@@ -157,6 +174,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
   pi.registerCommand("gemini-check", {
     description: "Probe one Antigravity account to check if its route has recovered (unhang check)",
     handler: async (args, ctx) => {
+      if (notifyIfPaused(ctx)) return;
       const needle = args.trim().toLowerCase();
       if (!needle) {
         ctx.ui.notify("Usage: /gemini-check <email-or-local-part>", "info");
@@ -194,6 +212,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
   pi.registerCommand("gemini-heal", {
     description: "Temporarily exclude Antigravity accounts whose Gemini 3.8 route is hung",
     handler: async (args, ctx) => {
+      if (notifyIfPaused(ctx)) return;
       const dryRun = /--dry-run\b/.test(args);
       await coordinator.runExclusive(ctx, "Gemini health check", async () => {
         try {
@@ -255,6 +274,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
   pi.registerCommand("gemini-restore", {
     description: "Remove only the Antigravity account exclusions added by /gemini-heal",
     handler: async (_args, ctx) => {
+      if (notifyIfPaused(ctx)) return;
       try {
         const removed = await healthManager.restoreManaged();
         healthManager.recordHistory([
@@ -293,6 +313,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     description:
       "Explicitly remove a Gemini account exclusion and re-enable it (requires --force if latest check is not OK)",
     handler: async (args, ctx) => {
+      if (notifyIfPaused(ctx)) return;
       const force = /--force\b/.test(args);
       const needle = args
         .replace(/--force\b/g, "")
@@ -358,6 +379,7 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     description:
       "Manage opt-in automatic restoration for manual Gemini account exclusions: /gemini-auto-restore [<email>|off <email>]",
     handler: async (args, ctx) => {
+      if (notifyIfPaused(ctx)) return;
       const trimmed = args.trim();
       try {
         const sidecar = healthManager.readAutoRestore();
@@ -523,6 +545,12 @@ export function registerCommandsAndTools(pi: ExtensionAPI, deps: CommandDependen
     loadMode: "essential",
     approval: "write",
     async execute(_id, params, _signal, _onUpdate, ctx) {
+      if (!coordinator.isHealthEnabled()) {
+        return {
+          content: [{ type: "text", text: GEMINI_HEALTH_PAUSED_MESSAGE }],
+          details: { paused: true },
+        };
+      }
       const results = await healthManager.checkAll(params.confirm);
       await healthManager.recordHealth(results);
       const restored = params.heal ? await healthManager.maybeRestoreManaged() : [];

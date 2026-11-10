@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import type { Policy, ProbeResult } from "@omp-toolkit/core";
+import { isGeminiHealthEnabled, type Policy, type ProbeResult } from "@omp-toolkit/core";
 import { AUTO_HEAL_COOLDOWN_MS, PROVIDER, RESTORE_STREAK } from "./config";
 import { short } from "./fs-util";
 import { healthManager } from "./health-manager";
@@ -165,6 +165,7 @@ export interface AutoHealCoordinatorOptions {
   cooldownMs?: number;
   provider?: string;
   recoveryIntervalMs?: number;
+  healthEnabled?: boolean;
   recordHistoryFn?: (events: HistoryEventInput[]) => void | Promise<void>;
 }
 
@@ -174,6 +175,7 @@ export class AutoHealCoordinator {
   private readonly cooldownMs: number;
   private readonly provider: string;
   private readonly recoveryIntervalMs: number;
+  private readonly healthEnabled: boolean;
   private readonly recordHistoryFn: (events: HistoryEventInput[]) => void | Promise<void>;
   private recoveryTimer: NodeJS.Timeout | null = null;
   private warnedNoIdle = false;
@@ -182,8 +184,13 @@ export class AutoHealCoordinator {
     this.cooldownMs = options.cooldownMs ?? AUTO_HEAL_COOLDOWN_MS;
     this.provider = options.provider ?? PROVIDER;
     this.recoveryIntervalMs = options.recoveryIntervalMs ?? RECOVERY_INTERVAL_MS;
+    this.healthEnabled = options.healthEnabled ?? isGeminiHealthEnabled();
     this.recordHistoryFn =
       options.recordHistoryFn ?? ((events) => void healthManager.recordHistory(events));
+  }
+
+  isHealthEnabled(): boolean {
+    return this.healthEnabled;
   }
 
   getRecoveryTimer(): NodeJS.Timeout | null {
@@ -198,6 +205,7 @@ export class AutoHealCoordinator {
   }
 
   async tickRecovery(ctx: ExtensionContext): Promise<void> {
+    if (!this.healthEnabled) return;
     if (this.running) return;
     if (typeof ctx.isIdle === "function") {
       if (!ctx.isIdle()) return;
@@ -272,10 +280,12 @@ export class AutoHealCoordinator {
   }
 
   async refresh(ctx: ExtensionContext, notify = false): Promise<void> {
+    if (!this.healthEnabled) return;
     await this.runExclusive(ctx, "Gemini health check", () => this.refreshInner(ctx, notify));
   }
 
   async autoHeal(ctx: ExtensionContext, trigger: string): Promise<void> {
+    if (!this.healthEnabled) return;
     if (this.running) return;
     this.running = true;
     try {
@@ -312,14 +322,19 @@ export class AutoHealCoordinator {
   registerEvents(pi: ExtensionAPI): void {
     pi.on("session_start", (_event, ctx) => {
       this.stopRecoveryTimer();
-      if (ctx.agent.kind === "main") {
+      if (this.healthEnabled && ctx.agent.kind === "main") {
         this.recoveryTimer = setInterval(() => {
           void this.tickRecovery(ctx);
         }, this.recoveryIntervalMs);
         (this.recoveryTimer as { unref?: () => void }).unref?.();
       }
       if (ctx.agent.kind !== "main" || ctx.mode !== "tui") return;
-      healthManager.recordHistory([{ at: Date.now(), kind: "session_start", detail: "tui" }]);
+      void this.recordHistoryFn([{ at: Date.now(), kind: "session_start", detail: "tui" }]);
+      if (!this.healthEnabled) {
+        ctx.ui.setStatus("gemini-health", undefined);
+        ctx.ui.setWidget("gemini-health", undefined);
+        return;
+      }
       if (!widgetEnabled()) return;
       ctx.ui.setStatus("gemini-health", "Gemini 3.8: checking…");
       ctx.ui.setWidget("gemini-health", ["Gemini health: checking…"], {
@@ -364,6 +379,7 @@ export class AutoHealCoordinator {
       }
 
       if (last?.role !== "assistant" || last.stopReason !== "error") return;
+      if (!this.healthEnabled) return;
       const current = ctx.models.current();
       if (
         !current ||
@@ -383,6 +399,7 @@ export class AutoHealCoordinator {
 
     pi.on("auto_retry_start", (event, ctx) => {
       if (ctx.agent.kind !== "main") return;
+      if (!this.healthEnabled) return;
       const retryEvent = parseRetryEvent(event);
       if (retryEvent.attempt !== 1) return;
       const current = ctx.models.current();

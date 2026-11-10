@@ -81,3 +81,12 @@ export function resolveHealthScriptCandidates(
     path.join(checkoutRoot, "apps", "omp-extension", "src", "index.ts"),
   ];
 }
+
+export const GEMINI_HEALTH_PAUSED_MESSAGE =
+  "Gemini health is paused. Set GEMINI_HEALTH_ENABLED=1 before starting OMP, the desktop widget, or the health CLI to resume.";
+
+export function isGeminiHealthEnabled(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.GEMINI_HEALTH_ENABLED === "1";
+}

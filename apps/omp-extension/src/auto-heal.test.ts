@@ -15,7 +15,14 @@ describe("AutoHealCoordinator recovery timer", () => {
     expect(coordinator.getRecoveryTimer()).toBeNull();
   });
   test("starts and stops timer on session_start and session_shutdown", () => {
-    const coordinator = new AutoHealCoordinator({ recoveryIntervalMs: 60_000 });
+    const recorded: HistoryEventInput[][] = [];
+    const coordinator = new AutoHealCoordinator({
+      recoveryIntervalMs: 60_000,
+      healthEnabled: true,
+      recordHistoryFn: (events) => {
+        recorded.push(events);
+      },
+    });
     const handlers: Record<string, (...args: unknown[]) => void> = {};
     const mockPi = {
       on: (event: string, handler: (...args: unknown[]) => void) => {
@@ -47,7 +54,7 @@ describe("AutoHealCoordinator recovery timer", () => {
   });
 
   test("tickRecovery returns early if not idle or no exclusions", async () => {
-    const coordinator = new AutoHealCoordinator();
+    const coordinator = new AutoHealCoordinator({ healthEnabled: true });
     let isIdleVal = false;
     let refreshCalled = false;
 
@@ -71,7 +78,7 @@ describe("AutoHealCoordinator recovery timer", () => {
   });
 
   test("tickRecovery runs probeAndPublish without deadlock when idle and exclusions present", async () => {
-    const coordinator = new AutoHealCoordinator();
+    const coordinator = new AutoHealCoordinator({ healthEnabled: true });
     let probeAndPublishCalled = false;
     const notifications: string[] = [];
 
@@ -195,6 +202,7 @@ describe("agent_run recording in agent_end event", () => {
   test("records distinct token totals and isolates from production history", () => {
     const recorded: HistoryEventInput[][] = [];
     const coordinator = new AutoHealCoordinator({
+      healthEnabled: true,
       recordHistoryFn: (events) => {
         recorded.push(events);
       },
@@ -315,5 +323,142 @@ describe("agent_run recording in agent_end event", () => {
       mockCtxRpc,
     );
     expect(recorded).toHaveLength(5);
+  });
+});
+
+describe("AutoHealCoordinator health pause", () => {
+  const oauthFailure = new Error(
+    'Command failed: omp token google-antigravity --list No OAuth accounts found for provider "google-antigravity". --account/--list select among OAuth accounts; this provider has none',
+  );
+
+  function registerHandlers(coordinator: AutoHealCoordinator) {
+    const handlers: Record<string, (...args: unknown[]) => void> = {};
+    coordinator.registerEvents({
+      on: (event: string, handler: (...args: unknown[]) => void) => {
+        handlers[event] = handler;
+      },
+    } as never);
+    return handlers;
+  }
+
+  test("paused startup records history, clears the widget, and never probes", async () => {
+    const recorded: HistoryEventInput[][] = [];
+    const coordinator = new AutoHealCoordinator({
+      healthEnabled: false,
+      recoveryIntervalMs: 60_000,
+      recordHistoryFn: (events) => {
+        recorded.push(events);
+      },
+    });
+    const handlers = registerHandlers(coordinator);
+    const statuses: Array<string | undefined> = [];
+    const widgets: Array<string[] | undefined> = [];
+    const scheduled: number[] = [];
+    const notifications: string[] = [];
+    const mainCtx = {
+      agent: { kind: "main" },
+      mode: "tui",
+      isIdle: () => true,
+      ui: {
+        setStatus: (_key: string, value: string | undefined) => statuses.push(value),
+        setWidget: (_key: string, value: string[] | undefined) => widgets.push(value),
+        notify: (message: string) => notifications.push(message),
+      },
+      setTimeout: (_fn: () => void, ms: number) => {
+        scheduled.push(ms);
+      },
+    };
+
+    const origCheckAllSweep = healthManager.checkAllSweep;
+    let probeCalls = 0;
+    healthManager.checkAllSweep = async () => {
+      probeCalls += 1;
+      throw oauthFailure;
+    };
+    try {
+      handlers.session_start({}, mainCtx);
+      expect(coordinator.getRecoveryTimer()).toBeNull();
+      expect(statuses).toEqual([undefined]);
+      expect(widgets).toEqual([undefined]);
+      expect(scheduled).toEqual([]);
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0][0].kind).toBe("session_start");
+
+      await coordinator.tickRecovery(mainCtx as never);
+      expect(probeCalls).toBe(0);
+      expect(notifications).toEqual([]);
+    } finally {
+      healthManager.checkAllSweep = origCheckAllSweep;
+      coordinator.stopRecoveryTimer();
+    }
+  });
+
+  test("paused Gemini stalls do not heal while run telemetry still records", () => {
+    const recorded: HistoryEventInput[][] = [];
+    const coordinator = new AutoHealCoordinator({
+      healthEnabled: false,
+      recordHistoryFn: (events) => {
+        recorded.push(events);
+      },
+    });
+    const handlers = registerHandlers(coordinator);
+    const notifications: string[] = [];
+    const ctx = {
+      agent: { kind: "main" },
+      mode: "tui",
+      models: { current: () => ({ provider: "google-antigravity", id: "gemini-3.8-flash" }) },
+      ui: { notify: (message: string) => notifications.push(message) },
+    };
+
+    const origCheckAllSweep = healthManager.checkAllSweep;
+    const origApplyHeal = healthManager.applyHeal;
+    let probeCalls = 0;
+    healthManager.checkAllSweep = async () => {
+      probeCalls += 1;
+      throw oauthFailure;
+    };
+    healthManager.applyHeal = async () => {
+      throw new Error("applyHeal must not run while paused");
+    };
+    try {
+      handlers.agent_end(
+        { messages: [{ role: "assistant", stopReason: "error", error: "503 UNAVAILABLE" }] },
+        ctx,
+      );
+      handlers.auto_retry_start({ attempt: 1, errorMessage: "socket reset" }, ctx);
+      expect(probeCalls).toBe(0);
+      expect(notifications).toEqual([]);
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0][0].kind).toBe("agent_run");
+      expect(recorded[0][0].status).toBe("error");
+    } finally {
+      healthManager.checkAllSweep = origCheckAllSweep;
+      healthManager.applyHeal = origApplyHeal;
+    }
+  });
+
+  test("enabled refresh still reports the account-discovery failure", async () => {
+    const coordinator = new AutoHealCoordinator({ healthEnabled: true });
+    const notifications: Array<{ message: string; type?: string }> = [];
+    const ctx = {
+      ui: {
+        notify: (message: string, type?: "info" | "warning" | "error") => {
+          notifications.push({ message, type });
+        },
+      },
+    };
+    const origCheckAllSweep = healthManager.checkAllSweep;
+    healthManager.checkAllSweep = async () => {
+      throw oauthFailure;
+    };
+    try {
+      await coordinator.refresh(ctx as never, false);
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].type).toBe("error");
+      expect(notifications[0].message).toContain("Gemini health check failed");
+      expect(notifications[0].message).toContain("No OAuth accounts found");
+    } finally {
+      healthManager.checkAllSweep = origCheckAllSweep;
+    }
   });
 });

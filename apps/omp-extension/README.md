@@ -161,7 +161,7 @@ On Windows, replace `~` with `$HOME` or run through PowerShell. For complete wor
 
 | Command | Purpose | Important behavior |
 | :--- | :--- | :--- |
-| `/gemini-health-widget [on\|off]` | Show, hide, or toggle the TUI widget | Without arguments, toggles visibility. Hiding clears the widget display but keeps background probing, commands, and auto-heal active. Enabling triggers an immediate refresh. |
+| `/gemini-health-widget [on\|off]` | Show, hide, or toggle the TUI widget | Without arguments, toggles visibility. Hiding clears the widget display but keeps commands available. Health execution follows `GEMINI_HEALTH_ENABLED`; enabling the widget while paused does not start a check. |
 | `/gemini-health [--confirm]` | Probe all Antigravity accounts | Probes all accounts and prints the tabular status in chat. `--confirm` re-probes failing accounts after a 1s pause. Records snapshot, updates streaks, and executes streak auto-restore. |
 | `/gemini-warmup <email-or-local-part>` | Warm one eligible account | Sends an 8-token generation ping to keep the route warm. Skips accounts whose latest check is not `OK`. Enforces a 60s per-account cooldown. |
 | `/gemini-warmup --all` | Warm all eligible accounts | Sequentially warms all `OK` accounts with a 1s pause between requests. Skips non-OK and cooling-down accounts. Cannot be combined with an account name. |
@@ -173,6 +173,8 @@ On Windows, replace `~` with `$HOME` or run through PowerShell. For complete wor
 | `/gemini-auto-restore <email-or-local-part>` | Opt in manual exclusion | Enables streak-based auto-restore for a manually excluded account. Account must resolve to a live Antigravity account. |
 | `/gemini-auto-restore off <email-or-local-part>` | Opt out manual exclusion | Disables auto-restore for an account. If an account was deleted upstream, matches by email or local-part in the sidecar to allow cleanup. |
 | `/gateway [status\|start\|stop\|restart\|client-add\|recipe]` | Manage Auth Gateway & client PC tokens | `/gateway status` checks daemon and tunnel health, `/gateway start`/`stop` manages daemons, `/gateway client-add <name>` issues a scoped bearer token for a secondary PC, `/gateway recipe` prints client setup snippets. |
+
+When `GEMINI_HEALTH_ENABLED` is not `1`, every `/gemini-*` command except `/gemini-health-widget` returns the pause explanation without resolving accounts, probing, or changing policies.
 
 ```text
 /gemini-health --confirm
@@ -226,6 +228,8 @@ The tool always checks all accounts, updates snapshots, and refreshes the TUI wi
 ---
 
 ## Automatic behavior
+
+Health execution is opt-in. Unless `GEMINI_HEALTH_ENABLED=1`, the extension performs no Gemini route probe or account-policy mutation: startup checks, the idle recovery sweeper, stall-triggered auto-heal, `/gemini-*` commands, the `gemini_health` tool, and CLI probes report the pause explanation instead. General session and agent-run history still records, and existing exclusions and auto-restore opt-ins stay in place. Resuming requires setting the variable before starting OMP, the desktop widget, or the health CLI.
 
 ### Startup and widget
 
@@ -297,7 +301,7 @@ The extension can be executed directly as a standalone CLI daemon or diagnostic 
 - **Source execution:** `bun apps/omp-extension/src/index.ts [options]`
 - **Installed execution:** `bun ~/.omp/agent/extensions/gemini-health.js [options]`
 
-In the table below, `<ext>` refers to either execution path.
+In the table below, `<ext>` refers to either execution path. Unless `GEMINI_HEALTH_ENABLED=1`, every invocation exits `2` immediately without calling OMP: JSON mode prints `{"paused":true,"message":...}`, text mode prints the pause explanation, and argument validation still runs first.
 
 | Invocation | Behavior | Exit code |
 | :--- | :--- | :--- |
@@ -349,6 +353,7 @@ The extension is configured via environment variables. Numeric values are parsed
 | `GEMINI_HEALTH_RESTORE_STREAK` | `3` | `1` | Number of consecutive healthy checks required before an account is auto-restored. |
 | `GEMINI_HEALTH_RESTORE_GAP_SECONDS` | `60` | `30` | Minimum seconds that must elapse between probes for a check to increment a streak. |
 | `GEMINI_HEALTH_RECOVERY_INTERVAL_SECONDS` | `300` | `60` | Interval in seconds for the background idle recovery sweeper timer. |
+| `GEMINI_HEALTH_ENABLED` | unset (paused) | — | Set to `1` to run automatic and explicit Gemini probes and policy management; any other value pauses them. |
 | `PI_AI_ANTIGRAVITY_VERSION` | `"2.24.0"` | — | Client version header injected into Antigravity user-agent probe requests. See [docs/runbook.md](../../docs/runbook.md#probe-wire-pins-audit). |
 | `OMP_TOOLKIT_HISTORY_DB` | `<agentDir>/omp-toolkit-history.db` | — | Path override for the 30-day SQLite reliability history database. |
 | `OMP_TOOLKIT_HOME` | Auto-detected | — | Local checkout root override for prompt template and script resolution. |
@@ -396,6 +401,7 @@ Policy reads during mutation workflows are strict: if `omp config get` fails, th
 | Symptom | Likely cause | What to do |
 | :--- | :--- | :--- |
 | **No accounts found** | OMP Antigravity accounts not logged in or CLI account resolution failed | Verify Antigravity login via `omp usage --provider google-antigravity`. Use full email address if local-part resolution is ambiguous. In CLI mode, provide the full exact email. |
+| **`Gemini health is paused`** | `GEMINI_HEALTH_ENABLED` is not `1` | Set `GEMINI_HEALTH_ENABLED=1` and restart OMP, the desktop widget, or the health CLI. Saved snapshots, exclusions, and auto-restore opt-ins are unchanged while paused. |
 | **All accounts `HANG` or `ERR`** | Upstream Google Antigravity outage or network partition | Auto-heal intentionally applies no exclusions during 100% failure to prevent shutting down all accounts. Wait for provider recovery and verify via `/gemini-health --confirm`. The `all-failed` incident clears automatically when at least one account passes. |
 | **Excluded account not restoring** | Account has not met streak threshold or is not opted in | Check whether the exclusion was manual (run `/gemini-auto-restore` to verify opt-in). Run `/gemini-check <email>` to test recovery, or force-enable via `/gemini-enable <email> --force`. Ensure checks are spaced at least 60s apart. |
 | **Account still used after heal** | Session is pinned to the account in memory | Run `/gemini-heal` to re-trigger a settings reload, or start `/new` to create a fresh unpinned session. Check policy status with `omp config get auth.accountPolicies`. |

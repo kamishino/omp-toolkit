@@ -6,7 +6,13 @@ import type {
   UsageReport,
   WarmUpRequest,
 } from "@omp-toolkit/core";
-import { evaluateQuotaAlerts, supportsWarmUp, warmUpEligibility } from "@omp-toolkit/core";
+import {
+  evaluateQuotaAlerts,
+  GEMINI_HEALTH_PAUSED_MESSAGE,
+  isGeminiHealthEnabled,
+  supportsWarmUp,
+  warmUpEligibility,
+} from "@omp-toolkit/core";
 import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { fetchDashboard } from "./data";
 import type { GatewayPanelView, PanelState } from "./ipc";
@@ -280,6 +286,14 @@ export class DesktopRuntime {
 
   async handleWarmUp(request: WarmUpRequest, panelWindow?: BrowserWindow | null): Promise<void> {
     if (this.warmupRunning || this.quitting) return;
+
+    if (
+      request.provider === "google-antigravity" &&
+      !isGeminiHealthEnabled(this.options.env ?? process.env)
+    ) {
+      this.setWarmUp(false, GEMINI_HEALTH_PAUSED_MESSAGE);
+      return;
+    }
 
     if (!this.lastDashboard) {
       this.dialogHost.showErrorBox(

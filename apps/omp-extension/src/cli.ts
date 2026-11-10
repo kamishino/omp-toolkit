@@ -1,4 +1,8 @@
-import type { WarmUpRequest } from "@omp-toolkit/core";
+import {
+  GEMINI_HEALTH_PAUSED_MESSAGE,
+  isGeminiHealthEnabled,
+  type WarmUpRequest,
+} from "@omp-toolkit/core";
 import { PROVIDER, RESTORE_STREAK } from "./config";
 import { short } from "./fs-util";
 import { healthManager } from "./health-manager";
@@ -12,6 +16,15 @@ function sleep(ms: number): Promise<void> {
   return promise;
 }
 
+function exitPaused(json: boolean): never {
+  if (json) {
+    console.log(JSON.stringify({ paused: true, message: GEMINI_HEALTH_PAUSED_MESSAGE }));
+  } else {
+    console.log(GEMINI_HEALTH_PAUSED_MESSAGE);
+  }
+  process.exit(2);
+}
+
 export async function runExtensionCli(
   argv: string[],
   warmUpDeps: WarmUpDependencies,
@@ -21,6 +34,7 @@ export async function runExtensionCli(
   const confirm = argv.includes("--confirm");
   const warmup = argv.includes("--warmup");
   const check = argv.includes("--check");
+  const healthEnabled = isGeminiHealthEnabled();
 
   if (warmup || check) {
     if (warmup && check) {
@@ -54,6 +68,10 @@ export async function runExtensionCli(
       process.exit(1);
     }
 
+    if (!healthEnabled && providerArg === PROVIDER) {
+      exitPaused(json);
+    }
+
     const request: WarmUpRequest = check
       ? { provider: providerArg, action: "check", account: accountArg ?? "" }
       : all
@@ -83,6 +101,10 @@ export async function runExtensionCli(
       console.error(`error: ${short(error)}`);
       process.exit(1);
     }
+  }
+
+  if (!healthEnabled) {
+    exitPaused(json);
   }
 
   const intervalArg = argv.find((arg) => arg.startsWith("--interval="));
