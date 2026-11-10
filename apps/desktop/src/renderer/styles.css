@@ -431,6 +431,71 @@ body {
   color: var(--color-accent);
 }
 
+.provider-notice {
+  margin: 0;
+  padding: var(--space-sm);
+  border: var(--size-border) solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-raised);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+.provider-notice-summary {
+  cursor: pointer;
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.provider-notice-body {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.provider-notice-heading {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.provider-notice-body p,
+.provider-notice-body ol {
+  margin: 0;
+}
+
+.provider-notice-label {
+  color: var(--color-muted);
+}
+
+.provider-notice-sha {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.provider-notice-body code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.provider-notice-warning {
+  color: var(--color-warn);
+}
+
+.provider-notice-error {
+  color: var(--color-danger);
+}
+
+.provider-notice-steps {
+  display: grid;
+  gap: var(--space-xs);
+  padding-left: var(--space-lg);
+}
+
 .incident-banner {
   margin: 0;
   padding: var(--space-xs) var(--space-sm);

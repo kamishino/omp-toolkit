@@ -13,8 +13,8 @@ import {
   mdiWindowMinimize,
 } from "@mdi/js";
 import { type DashboardRow, formatAge } from "@omp-toolkit/core";
-import type { PanelState } from "../ipc";
-import { UNKNOWN_GATEWAY_PANEL_VIEW } from "../ipc";
+import type { OmpBuildView, PanelState } from "../ipc";
+import { OMP_VERSION_CHECKPOINT, UNKNOWN_GATEWAY_PANEL_VIEW } from "../ipc";
 import { DEFAULT_DESKTOP_SETTINGS, type DesktopSettings } from "../settings";
 import { type FilterScope, renderProviderCard } from "./card";
 import { icon } from "./icon";
@@ -64,6 +64,185 @@ export function buildIncidentBanner(state: PanelState, now = Date.now()): HTMLEl
   banner.setAttribute("role", "alert");
   banner.textContent = `Incident ${incident.kind} · ${formatAge(incident.at, now)} · ${incident.detail}`;
   return banner;
+}
+
+let providerNoticeExpanded = false;
+
+function noticeField(label: string, value: string, valueClass?: string): HTMLElement {
+  const row = document.createElement("p");
+  row.className = "provider-notice-field";
+  const key = document.createElement("span");
+  key.className = "provider-notice-label";
+  key.textContent = `${label}: `;
+  const val = document.createElement("span");
+  if (valueClass) val.className = valueClass;
+  val.textContent = value;
+  row.appendChild(key);
+  row.appendChild(val);
+  return row;
+}
+
+function noticeStep(parts: Array<string | { code: string }>): HTMLElement {
+  const item = document.createElement("li");
+  for (const part of parts) {
+    if (typeof part === "string") {
+      item.appendChild(document.createTextNode(part));
+    } else {
+      const code = document.createElement("code");
+      code.textContent = part.code;
+      item.appendChild(code);
+    }
+  }
+  return item;
+}
+
+function buildNoticeBody(build: OmpBuildView): HTMLElement {
+  const body = document.createElement("div");
+  body.className = "provider-notice-body";
+
+  const comparisonText =
+    build.comparison === "same"
+      ? "Same as checkpoint"
+      : build.comparison === "changed"
+        ? "Changed since checkpoint"
+        : "Cannot compare";
+
+  const version = build.version ?? "Unavailable";
+  const sha256 = build.sha256 ?? "Unavailable";
+
+  body.appendChild(
+    el(
+      "p",
+      "provider-notice-lead",
+      "This is OMP's built-in default for the recorded reference, not an inspection of extension overrides, credential validity, or effective session access.",
+    ),
+  );
+
+  body.appendChild(el("h3", "provider-notice-heading", "Recorded provider policy"));
+  if (build.builtInAntigravityPolicy === "documented-pause") {
+    body.appendChild(noticeField("State", "Paused by this OMP build"));
+    body.appendChild(el("p", "provider-notice-reason", OMP_VERSION_CHECKPOINT.reason));
+    body.appendChild(noticeField("Reference", OMP_VERSION_CHECKPOINT.policyUrl));
+  } else {
+    body.appendChild(noticeField("State", "Unverified for this OMP build"));
+    body.appendChild(
+      el(
+        "p",
+        "provider-notice-reason",
+        `Recorded ${OMP_VERSION_CHECKPOINT.version} reason: ${OMP_VERSION_CHECKPOINT.reason}`,
+      ),
+    );
+    body.appendChild(noticeField("Reference", OMP_VERSION_CHECKPOINT.policyUrl));
+  }
+
+  body.appendChild(el("h3", "provider-notice-heading", "OMP build comparison"));
+  body.appendChild(noticeField("Current version", version));
+  body.appendChild(noticeField("Checkpoint version", OMP_VERSION_CHECKPOINT.version));
+  body.appendChild(noticeField("Current SHA-256", sha256, "provider-notice-sha"));
+  body.appendChild(
+    noticeField("Checkpoint SHA-256", OMP_VERSION_CHECKPOINT.sha256, "provider-notice-sha"),
+  );
+  body.appendChild(noticeField("Captured", `${OMP_VERSION_CHECKPOINT.capturedAt} (UTC)`));
+  body.appendChild(noticeField("Comparison", comparisonText));
+  if (build.inspectionError) {
+    body.appendChild(el("p", "provider-notice-error", build.inspectionError));
+  }
+
+  body.appendChild(el("h3", "provider-notice-heading", "Gemini route status"));
+  body.appendChild(
+    el(
+      "p",
+      "provider-notice-text",
+      "Gemini CLI (google-gemini-cli) is a separate provider and is not paused by this Antigravity rule.",
+    ),
+  );
+  body.appendChild(
+    el(
+      "p",
+      "provider-notice-text",
+      `Toolkit health checks: ${build.healthProbesEnabled ? "enabled" : "paused"}. GEMINI_HEALTH_ENABLED=1 neither enables the provider nor is required for Gemini CLI.`,
+    ),
+  );
+
+  body.appendChild(el("h3", "provider-notice-heading", "Supported route: Gemini CLI (manual)"));
+  body.appendChild(
+    el(
+      "p",
+      "provider-notice-warning",
+      "Gemini CLI is a distinct Google service and provider with separate account eligibility and quota. Google terms and any plan-specific charges apply; OMP support does not promise access or immunity from restrictions. Native login opens a browser, stores credentials in the selected profile or store, and can refresh the model catalog online. This panel performs none of those actions.",
+    ),
+  );
+  const steps = document.createElement("ol");
+  steps.className = "provider-notice-steps";
+  steps.appendChild(
+    noticeStep([
+      "In the OMP session or profile intended for use, run ",
+      { code: "/login google-gemini-cli" },
+      "; alternatively use ",
+      { code: "omp login google-gemini-cli" },
+      " from a terminal with the intended profile.",
+    ]),
+  );
+  steps.appendChild(
+    noticeStep([
+      "Complete OMP's native browser consent flow. Do not route it through this widget or copy tokens. Cloud Code Assist project eligibility is account-dependent; if the OAuth callback cannot bind, port 8085 must be available.",
+    ]),
+  );
+  steps.appendChild(
+    noticeStep([
+      "Open ",
+      { code: "/model" },
+      " or ",
+      { code: "/models" },
+      " and choose an available entry whose provider is ",
+      { code: "google-gemini-cli" },
+      ". Do not hardcode an Antigravity model ID or assume a particular roster.",
+    ]),
+  );
+  body.appendChild(steps);
+
+  body.appendChild(el("h3", "provider-notice-heading", "Not implemented here"));
+  body.appendChild(
+    el(
+      "p",
+      "provider-notice-text",
+      "Custom models under paused google-antigravity stay blocked; renaming is not equivalent transport or protection. Removing the source rule and rebuilding, or overriding with a same-ID extension OAuth registration, are possible technical opt-outs but retain the original account risk. This panel only explains the supported Gemini CLI route.",
+    ),
+  );
+
+  return body;
+}
+
+export function buildProviderNotice(state: PanelState): HTMLElement | null {
+  const build = state.ompBuild;
+  if (!build) return null;
+
+  const aside = document.createElement("aside");
+  aside.className = "provider-notice";
+  aside.setAttribute("role", "note");
+
+  const details = document.createElement("details");
+  details.className = "provider-notice-details";
+  details.open = providerNoticeExpanded;
+
+  const summary = document.createElement("summary");
+  summary.className = "provider-notice-summary";
+  summary.textContent =
+    build.builtInAntigravityPolicy === "documented-pause"
+      ? "Antigravity: built-in OMP safety pause (Google-account restriction risk). Details"
+      : "Antigravity policy is unverified for this OMP build. Details";
+
+  details.addEventListener("toggle", () => {
+    providerNoticeExpanded = details.open;
+    if (typeof window !== "undefined" && window.omp?.resize) {
+      window.omp.resize(measureContentHeight());
+    }
+  });
+
+  details.appendChild(summary);
+  details.appendChild(buildNoticeBody(build));
+  aside.appendChild(details);
+  return aside;
 }
 
 function el(tag: string, className: string, text?: string): HTMLElement {
@@ -544,6 +723,11 @@ export function buildPanel(state: PanelState): HTMLElement {
     const content = document.createElement("div");
     content.className = "content";
     content.setAttribute("aria-busy", state.status === "loading" ? "true" : "false");
+
+    const providerNotice = buildProviderNotice(state);
+    if (providerNotice) {
+      content.appendChild(providerNotice);
+    }
 
     if (state.data && state.data.providers.length === 0) {
       const emptyDiv = document.createElement("div");

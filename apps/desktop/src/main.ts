@@ -11,6 +11,7 @@ import { IPC, type RendererToMainEvents } from "./ipc";
 import { consumeLaunchFailure } from "./launch-failure";
 import { logError } from "./logger";
 import { createLoginItem, type LoginItem } from "./login-item";
+import { createOmpBuildReader } from "./omp-build";
 import { DesktopPanel } from "./panel";
 import { agentDir, findBun, panelPaths, resolveGatewayScript } from "./paths";
 import { DesktopRuntime } from "./runtime";
@@ -97,6 +98,7 @@ void app.whenReady().then(async () => {
     loginItem,
     argv: process.argv,
     env: process.env,
+    readOmpBuildFn: createOmpBuildReader({ env: process.env }),
     onNotification: (title, body) => {
       if (Notification.isSupported()) {
         new Notification({ title, body }).show();

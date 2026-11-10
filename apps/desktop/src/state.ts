@@ -1,5 +1,5 @@
 import type { Dashboard } from "@omp-toolkit/core";
-import type { GatewayPanelView, PanelState, WarmUpState } from "./ipc";
+import type { GatewayPanelView, OmpBuildView, PanelState, WarmUpState } from "./ipc";
 import { UNKNOWN_GATEWAY_PANEL_VIEW } from "./ipc";
 import type { DesktopSettings } from "./settings";
 
@@ -11,14 +11,24 @@ export interface PanelStateOptions {
   warmup: WarmUpState;
   settings: DesktopSettings;
   gateway?: GatewayPanelView;
+  ompBuild?: OmpBuildView;
 }
 
 export function computePanelState(options: PanelStateOptions): PanelState {
   const { intervalSeconds, lastDashboard, refreshing, lastError, warmup, settings } = options;
   const gateway = options.gateway ?? UNKNOWN_GATEWAY_PANEL_VIEW;
+  const ompBuild = options.ompBuild;
 
   if (refreshing) {
-    return { status: "loading", data: lastDashboard, intervalSeconds, warmup, settings, gateway };
+    return {
+      status: "loading",
+      data: lastDashboard,
+      intervalSeconds,
+      warmup,
+      settings,
+      gateway,
+      ompBuild,
+    };
   }
 
   if (lastError) {
@@ -30,12 +40,21 @@ export function computePanelState(options: PanelStateOptions): PanelState {
       warmup,
       settings,
       gateway,
+      ompBuild,
     };
   }
 
   if (lastDashboard) {
-    return { status: "ready", data: lastDashboard, intervalSeconds, warmup, settings, gateway };
+    return {
+      status: "ready",
+      data: lastDashboard,
+      intervalSeconds,
+      warmup,
+      settings,
+      gateway,
+      ompBuild,
+    };
   }
 
-  return { status: "loading", data: null, intervalSeconds, warmup, settings, gateway };
+  return { status: "loading", data: null, intervalSeconds, warmup, settings, gateway, ompBuild };
 }

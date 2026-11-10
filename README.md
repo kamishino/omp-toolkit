@@ -70,7 +70,7 @@ cd "$HOME/.omp/omp-toolkit"
 bun run desktop:once
 ```
 
-The first command prints the usage frame with a `ROUTE` column. The second prints a short text summary and exits; `bun run desktop` starts the tray widget. For a manual checkout, see [CONTRIBUTING.md](CONTRIBUTING.md).
+The first command prints the usage frame with a `ROUTE` column. The second prints a short text summary and exits; `bun run desktop` starts the tray widget. The tray panel also explains OMP's built-in Google Antigravity pause, compares the running OMP build with the recorded 18.18.6 checkpoint, and shows the manual `google-gemini-cli` login/model-selection steps. It never signs in, sends a model request, or changes OMP configuration. For a manual checkout, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Everyday commands
 

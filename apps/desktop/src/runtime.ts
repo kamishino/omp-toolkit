@@ -15,8 +15,8 @@ import {
 } from "@omp-toolkit/core";
 import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { fetchDashboard } from "./data";
-import type { GatewayPanelView, PanelState } from "./ipc";
-import { UNKNOWN_GATEWAY_PANEL_VIEW } from "./ipc";
+import type { GatewayPanelView, OmpBuildView, PanelState } from "./ipc";
+import { UNKNOWN_GATEWAY_PANEL_VIEW, UNKNOWN_OMP_BUILD_VIEW } from "./ipc";
 import { logError } from "./logger";
 import type { LoginItem } from "./login-item";
 import { openOrca, openTerminal } from "./open";
@@ -84,6 +84,7 @@ export interface DesktopRuntimeOptions {
   home?: string;
   onNotification?: (title: string, body: string) => void;
   now?: () => number;
+  readOmpBuildFn?: () => Promise<OmpBuildView>;
 }
 
 export type RuntimeListener = (state: PanelState) => void;
@@ -107,6 +108,7 @@ export class DesktopRuntime {
   private warmupRunning = false;
   private warmupMessage: string | null = null;
   private gatewayView: GatewayPanelView = UNKNOWN_GATEWAY_PANEL_VIEW;
+  private ompBuild: OmpBuildView | undefined;
   private refreshTimer: NodeJS.Timeout | null = null;
   private readonly dialogHost: DialogHost;
   private readonly listeners = new Set<RuntimeListener>();
@@ -131,6 +133,7 @@ export class DesktopRuntime {
       warmup: { running: this.warmupRunning, message: this.warmupMessage },
       settings: this.settings,
       gateway: this.gatewayView,
+      ompBuild: this.ompBuild,
     });
   }
 
@@ -185,65 +188,87 @@ export class DesktopRuntime {
     }
   }
 
+  private async inspectOmpBuild(): Promise<OmpBuildView | undefined> {
+    const read = this.options.readOmpBuildFn;
+    if (!read) return undefined;
+    try {
+      return await read();
+    } catch {
+      return {
+        ...UNKNOWN_OMP_BUILD_VIEW,
+        healthProbesEnabled: isGeminiHealthEnabled(this.options.env ?? process.env),
+        inspectionError: "OMP build information is unavailable.",
+      };
+    }
+  }
+
   async refresh(): Promise<void> {
     if (this.refreshing || this.quitting) return;
     this.refreshing = true;
     this.notify();
 
+    const inspection = this.inspectOmpBuild();
     try {
-      let dashboard: Dashboard;
-      if (this.options.fetchDashboardFn) {
-        dashboard = await this.options.fetchDashboardFn({
-          balanceAlert: this.settings.balanceAlert,
-          accountSort: this.settings.accountSort,
-        });
-      } else {
-        const bun = findBun();
-        const script = resolveMonitorScript(
-          this.options.env ?? process.env,
-          this.options.checkoutRoot,
-        );
+      try {
+        let dashboard: Dashboard;
+        if (this.options.fetchDashboardFn) {
+          dashboard = await this.options.fetchDashboardFn({
+            balanceAlert: this.settings.balanceAlert,
+            accountSort: this.settings.accountSort,
+          });
+        } else {
+          const bun = findBun();
+          const script = resolveMonitorScript(
+            this.options.env ?? process.env,
+            this.options.checkoutRoot,
+          );
 
-        if (!bun) {
-          throw new Error("Bun not found. Install Bun or set BUN_BIN.");
-        }
-        if (!script) {
-          throw new Error('Monitor script not found. Run "bun run install:omp".');
-        }
+          if (!bun) {
+            throw new Error("Bun not found. Install Bun or set BUN_BIN.");
+          }
+          if (!script) {
+            throw new Error('Monitor script not found. Run "bun run install:omp".');
+          }
 
-        dashboard = await fetchDashboard(
-          { bun, script },
-          { balanceAlert: this.settings.balanceAlert, accountSort: this.settings.accountSort },
-        );
-      }
-      if (dashboard) {
-        const now = this.options.now ? this.options.now() : Date.now();
-        const reports: UsageReport[] = dashboard.providers.flatMap((p) =>
-          p.rows.map((r) => ({
-            provider: p.id,
-            metadata: { email: r.account },
-            limits: r.limits.map((l) => ({
-              label: l.label,
-              amount: { usedFraction: l.usedFraction },
-              window: { resetsAt: l.resetsAt },
+          dashboard = await fetchDashboard(
+            { bun, script },
+            { balanceAlert: this.settings.balanceAlert, accountSort: this.settings.accountSort },
+          );
+        }
+        if (dashboard) {
+          const now = this.options.now ? this.options.now() : Date.now();
+          const reports: UsageReport[] = dashboard.providers.flatMap((p) =>
+            p.rows.map((r) => ({
+              provider: p.id,
+              metadata: { email: r.account },
+              limits: r.limits.map((l) => ({
+                label: l.label,
+                amount: { usedFraction: l.usedFraction },
+                window: { resetsAt: l.resetsAt },
+              })),
             })),
-          })),
-        );
-        const { alerts, updatedHistory } = evaluateQuotaAlerts(
-          reports,
-          this.quotaAlertHistory,
-          now,
-        );
-        this.quotaAlertHistory = updatedHistory;
-        for (const alert of alerts) {
-          this.options.onNotification?.(alert.title, alert.message);
+          );
+          const { alerts, updatedHistory } = evaluateQuotaAlerts(
+            reports,
+            this.quotaAlertHistory,
+            now,
+          );
+          this.quotaAlertHistory = updatedHistory;
+          for (const alert of alerts) {
+            this.options.onNotification?.(alert.title, alert.message);
+          }
         }
+        this.lastDashboard = dashboard;
+        this.lastError = null;
+      } catch (error) {
+        this.lastError = error instanceof Error ? error.message : String(error);
+        logError(error);
       }
-      this.lastDashboard = dashboard;
-      this.lastError = null;
-    } catch (error) {
-      this.lastError = error instanceof Error ? error.message : String(error);
-      logError(error);
+
+      const inspected = await inspection;
+      if (inspected) {
+        this.ompBuild = inspected;
+      }
     } finally {
       this.refreshing = false;
       this.notify();

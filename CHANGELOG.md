@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add a desktop-panel notice explaining OMP's built-in Google Antigravity pause, comparing the running OMP build (version plus SHA-256) against the recorded 18.18.6 checkpoint, and listing the reviewed manual `google-gemini-cli` login and model-selection steps; it never signs in, sends a model request, or changes configuration.
 - Pause Gemini health by default: with `GEMINI_HEALTH_ENABLED` unset or not `1`, startup checks, idle recovery, stall auto-heal, `/gemini-*` commands, the `gemini_health` tool, CLI probes, and desktop warm-up/check perform no account discovery, probing, or policy mutation, and report the pause instead; resume explicitly with `GEMINI_HEALTH_ENABLED=1`.
 - Fix route detection to prove a completed model response: the probe now frames SSE events across arbitrary chunks, rejects in-band auth/quota/transient errors, and requires non-empty model text plus a successful terminal `finishReason` before reporting `OK`.
 - Record route health per provider/account/project/model with per-observation timestamps, ordered evidence merge, and a schema-2 snapshot that also carries streaks and a complete-sweep watermark; legacy snapshots and the `gemini-health-streaks.json` sidecar are no longer trusted.

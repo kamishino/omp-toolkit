@@ -37,6 +37,39 @@ export interface WarmUpState {
   message: string | null;
 }
 
+/**
+ * Fixed user-recorded OMP build reference, captured before provider-policy
+ * experimentation. Never overwritten by refresh, restart, or auto-update.
+ */
+export const OMP_VERSION_CHECKPOINT = {
+  version: "18.18.6",
+  sha256: "dfb15c27cb2ea192a94761c26aa5cd4eed54b1e0a5a85c02938ab07d769bc8f7",
+  capturedAt: "2026-11-10T10:42:31.883Z",
+  releaseUrl: "https://github.com/can1357/oh-my-pi/releases/tag/v18.18.6",
+  policyUrl: "https://github.com/can1357/oh-my-pi/pull/18622",
+  reason:
+    "Google may restrict accounts that use Antigravity outside its own apps, so this provider is paused for now.",
+} as const;
+
+/** Read-only identity of the OMP build the panel is running against. */
+export interface OmpBuildView {
+  version: string | null;
+  sha256: string | null;
+  comparison: "same" | "changed" | "unknown";
+  builtInAntigravityPolicy: "documented-pause" | "unverified";
+  healthProbesEnabled: boolean;
+  inspectionError: string | null;
+}
+
+export const UNKNOWN_OMP_BUILD_VIEW: OmpBuildView = {
+  version: null,
+  sha256: null,
+  comparison: "unknown",
+  builtInAntigravityPolicy: "unverified",
+  healthProbesEnabled: false,
+  inspectionError: null,
+};
+
 export interface GatewayActionResult {
   success: boolean;
   message: string;
@@ -85,6 +118,7 @@ export type PanelState =
       warmup: WarmUpState;
       settings: DesktopSettings;
       gateway?: GatewayPanelView;
+      ompBuild?: OmpBuildView;
     }
   | {
       status: "ready";
@@ -93,6 +127,7 @@ export type PanelState =
       warmup: WarmUpState;
       settings: DesktopSettings;
       gateway?: GatewayPanelView;
+      ompBuild?: OmpBuildView;
     }
   | {
       status: "error";
@@ -102,6 +137,7 @@ export type PanelState =
       warmup: WarmUpState;
       settings: DesktopSettings;
       gateway?: GatewayPanelView;
+      ompBuild?: OmpBuildView;
     };
 
 export interface OmpApi {

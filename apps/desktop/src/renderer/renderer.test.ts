@@ -349,6 +349,89 @@ describe("renderer panel", () => {
     expect(findByClass(controls as MockNode, "gw-toggle-btn")).toBeDefined();
   });
 
+  test("provider notice explains Antigravity policy without an Antigravity card", async () => {
+    mockDoc();
+    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
+    const { buildPanel } = await import("./renderer");
+    const panel = buildPanel({
+      status: "ready",
+      data: dashboardWith({
+        providers: [
+          {
+            id: "deepseek",
+            name: "DEEPSEEK",
+            suffix: "",
+            accounts: 1,
+            columns: [],
+            rows: [
+              {
+                account: "dev@example.com",
+                displayAccount: "dev",
+                health: "ok",
+                maxUsed: 0.1,
+                level: "ok",
+                route: { text: "OK", level: "ok" },
+                limits: [],
+              },
+            ],
+          },
+        ],
+      }),
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+      ompBuild: {
+        version: "18.18.6",
+        sha256: "dfb15c27cb2ea192a94761c26aa5cd4eed54b1e0a5a85c02938ab07d769bc8f7",
+        comparison: "same",
+        builtInAntigravityPolicy: "documented-pause",
+        healthProbesEnabled: false,
+        inspectionError: null,
+      },
+    } as never) as unknown as MockNode;
+
+    const notice = findByClass(panel, "provider-notice");
+    expect(notice).toBeDefined();
+    expect(findByClass(notice as MockNode, "provider-notice-summary")?.textContent).toContain(
+      "built-in OMP safety pause",
+    );
+    const serialized = JSON.stringify(notice);
+    expect(serialized).toContain("google-gemini-cli");
+    expect(serialized).toContain("GEMINI_HEALTH_ENABLED=1");
+    expect(serialized).toContain("Same as checkpoint");
+    expect(serialized).not.toContain("provider-action");
+  });
+
+  test("provider notice marks a changed build policy as unverified", async () => {
+    mockDoc();
+    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
+    const { buildPanel } = await import("./renderer");
+    const panel = buildPanel({
+      status: "ready",
+      data: dashboardWith({}),
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+      ompBuild: {
+        version: "18.18.7",
+        sha256: "0".repeat(64),
+        comparison: "changed",
+        builtInAntigravityPolicy: "unverified",
+        healthProbesEnabled: false,
+        inspectionError: null,
+      },
+    } as never) as unknown as MockNode;
+
+    const notice = findByClass(panel, "provider-notice");
+    expect(notice).toBeDefined();
+    expect(findByClass(notice as MockNode, "provider-notice-summary")?.textContent).toContain(
+      "unverified",
+    );
+    const serialized = JSON.stringify(notice);
+    expect(serialized).toContain("Changed since checkpoint");
+    expect(serialized).not.toContain("Paused by this OMP build");
+  });
+
   test("browser bundle paints loading and error states without Node globals", async () => {
     // bun-types 1.4.3 omits `write: false` even though the Bun 1.4.3 runtime supports it.
     const buildConfig = {
@@ -425,11 +508,26 @@ describe("renderer panel", () => {
       intervalSeconds: 300,
       warmup: { running: false, message: null },
       settings: DEFAULT_DESKTOP_SETTINGS,
+      ompBuild: {
+        version: "18.18.6",
+        sha256: "dfb15c27cb2ea192a94761c26aa5cd4eed54b1e0a5a85c02938ab07d769bc8f7",
+        comparison: "same",
+        builtInAntigravityPolicy: "documented-pause",
+        healthProbesEnabled: false,
+        inspectionError: null,
+      },
     });
 
     const errorContent = findByClass(app, "content");
     expect(errorContent?.attributes["aria-busy"]).toBe("false");
     expect(JSON.stringify(errorContent)).toContain("fixture monitor failure");
     expect(findByClass(errorContent as MockNode, "button-secondary")?.textContent).toBe("Retry");
+
+    const notice = findByClass(app, "provider-notice");
+    expect(notice).toBeDefined();
+    const noticeText = JSON.stringify(notice);
+    expect(noticeText).toContain("built-in OMP safety pause");
+    expect(noticeText).toContain("google-gemini-cli");
+    expect(noticeText).toContain("Same as checkpoint");
   });
 });

@@ -115,6 +115,62 @@ describe("DesktopRuntime deep coordinator", () => {
     }
   });
 
+  test("refresh keeps the dashboard when build inspection fails", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      const dashboard = dummyDashboard();
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        fetchDashboardFn: async () => dashboard,
+        readOmpBuildFn: async () => {
+          throw new Error("inspection failed");
+        },
+      });
+
+      await runtime.refresh();
+
+      const state = runtime.getState();
+      expect(state.status).toBe("ready");
+      expect(state.ompBuild?.comparison).toBe("unknown");
+      expect(state.ompBuild?.builtInAntigravityPolicy).toBe("unverified");
+      expect(state.ompBuild?.inspectionError).toBe("OMP build information is unavailable.");
+      expect(runtime.getLastError()).toBeNull();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test("refresh publishes build identity even when usage fails", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
+    try {
+      const runtime = new DesktopRuntime({
+        userDataDir: tmpDir,
+        checkoutRoot: tmpDir,
+        fetchDashboardFn: async () => {
+          throw new Error("usage down");
+        },
+        readOmpBuildFn: async () => ({
+          version: "18.18.7",
+          sha256: "0".repeat(64),
+          comparison: "changed",
+          builtInAntigravityPolicy: "unverified",
+          healthProbesEnabled: false,
+          inspectionError: null,
+        }),
+      });
+
+      await runtime.refresh();
+
+      const state = runtime.getState();
+      expect(state.status).toBe("error");
+      expect(state.ompBuild?.version).toBe("18.18.7");
+      expect(state.ompBuild?.comparison).toBe("changed");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   test("updateSettings persists valid settings and notifies listeners", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "omp-runtime-test-"));
     try {
