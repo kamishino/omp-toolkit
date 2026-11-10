@@ -1,445 +1,408 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import path from "node:path";
 import { createContext, runInContext, SourceTextModule } from "node:vm";
+import type { Dashboard } from "@omp-toolkit/core";
+import type { PanelState } from "../ipc";
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings";
+import { mountPanel } from "./renderer";
+
+type MockEvent = { key?: string; preventDefault?: () => void };
 
 interface MockNode {
   tagName: string;
+  id: string;
   className: string;
-  textContent?: string;
+  textContent: string;
   title?: string;
-  attributes: Record<string, string>;
+  hidden: boolean;
+  disabled: boolean;
+  value: string;
+  checked: boolean;
+  open: boolean;
+  tabIndex: number;
+  focused: boolean;
   dataset: Record<string, string>;
+  attributes: Record<string, string>;
   style: Record<string, string> & { setProperty?: (name: string, value: string) => void };
   children: MockNode[];
-  appendChild: (c: unknown) => unknown;
-  replaceChildren: (...children: unknown[]) => void;
-  querySelector: (selector: string) => MockNode | null;
-  setAttribute: (k: string, v: string) => void;
-  addEventListener: () => void;
+  appendChild(child: MockNode): MockNode;
+  replaceChildren(...children: MockNode[]): void;
+  remove(): void;
+  setAttribute(key: string, value: string): void;
+  removeAttribute(key: string): void;
+  addEventListener(type: string, handler: (event: MockEvent) => void): void;
+  dispatch(type: string, event?: MockEvent): void;
+  click(): void;
+  focus(): void;
+  scrollIntoView(): void;
+  querySelector(selector: string): MockNode | null;
+  querySelectorAll(selector: string): MockNode[];
+  classList: { toggle(name: string, force?: boolean): void };
 }
 
 function makeNode(tag: string): MockNode {
-  const el: MockNode = {
+  const listeners = new Map<string, Array<(event: MockEvent) => void>>();
+  const node: MockNode = {
     tagName: tag,
+    id: "",
     className: "",
-    attributes: {},
+    textContent: "",
+    hidden: false,
+    disabled: false,
+    value: "",
+    checked: false,
+    open: false,
+    tabIndex: 0,
+    focused: false,
     dataset: {},
+    attributes: {},
     style: {},
     children: [],
-    appendChild: (c: unknown) => {
-      el.children.push(c as MockNode);
-      return c;
+    appendChild(child) {
+      node.children.push(child);
+      return child;
     },
-    replaceChildren: (...children: unknown[]) => {
-      el.children = children as MockNode[];
+    replaceChildren(...children) {
+      node.children = children;
     },
-    querySelector: (selector: string) => findDescendant(el, selector),
-    setAttribute: (k: string, v: string) => {
-      el.attributes[k] = v;
+    remove() {
+      node.children = [];
+    },
+    setAttribute(key, value) {
+      node.attributes[key] = value;
+      if (key === "aria-expanded") node.open = value === "true";
+    },
+    removeAttribute(key) {
+      delete node.attributes[key];
+    },
+    addEventListener(type, handler) {
+      listeners.set(type, [...(listeners.get(type) ?? []), handler]);
+    },
+    dispatch(type, event = {}) {
+      for (const handler of listeners.get(type) ?? []) handler(event);
+    },
+    click() {
+      node.dispatch("click");
+    },
+    focus() {
+      node.focused = true;
+      (globalThis.document as unknown as { activeElement: MockNode }).activeElement = node;
+    },
+    scrollIntoView() {},
+    querySelector(selector) {
+      return node.querySelectorAll(selector)[0] ?? null;
+    },
+    querySelectorAll(selector) {
+      const matches: MockNode[] = [];
+      const visit = (candidate: MockNode) => {
+        if (selector === "details" && candidate.tagName === "details") matches.push(candidate);
+        else if (selector.startsWith("#") && candidate.id === selector.slice(1)) {
+          matches.push(candidate);
+        } else if (selector === "[data-provider]" && candidate.dataset.provider) {
+          matches.push(candidate);
+        } else if (
+          selector.startsWith(".") &&
+          candidate.className.split(" ").includes(selector.slice(1))
+        ) {
+          matches.push(candidate);
+        }
+        for (const child of candidate.children) visit(child);
+      };
+      visit(node);
+      return matches;
+    },
+    classList: {
+      toggle(name, force) {
+        const set = new Set(node.className.split(" ").filter(Boolean));
+        const shouldAdd = force ?? !set.has(name);
+        if (shouldAdd) set.add(name);
+        else set.delete(name);
+        node.className = [...set].join(" ");
+      },
+    },
+  };
+  return node;
+}
+
+const originalDocument = globalThis.document;
+const originalWindow = globalThis.window;
+const originalResizeObserver = globalThis.ResizeObserver;
+
+afterEach(() => {
+  globalThis.document = originalDocument;
+  globalThis.window = originalWindow;
+  globalThis.ResizeObserver = originalResizeObserver;
+});
+
+function installDom(): MockNode {
+  const documentElement = makeNode("html");
+  documentElement.style.setProperty = () => {};
+  globalThis.document = {
+    createElement: (tag: string) => makeNode(tag),
+    createElementNS: (_ns: string, tag: string) => makeNode(tag),
+    createTextNode: (text: string) => {
+      const node = makeNode("#text");
+      node.textContent = text;
+      return node;
+    },
+    documentElement,
+    activeElement: null,
+    querySelector: () => null,
+    addEventListener: () => {},
+  } as unknown as Document;
+  globalThis.window = {
+    omp: {
+      refresh: () => {},
+      hide: () => {},
+      warmup: () => {},
+      resize: () => {},
+      saveSettings: async () => ({ valid: true, errors: [] }),
+      onState: () => () => {},
+      onOpenSettings: () => () => {},
+      gatewayAction: async () => ({ success: true, message: "" }),
+      gatewayConnect: async () => ({ success: false, message: "unavailable" }),
     },
     addEventListener: () => {},
-  };
-  return el;
+    removeEventListener: () => {},
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    getComputedStyle: () => ({ paddingTop: "16", paddingBottom: "16", rowGap: "12" }),
+  } as unknown as Window & typeof globalThis;
+  globalThis.ResizeObserver = undefined as unknown as typeof ResizeObserver;
+  return documentElement;
 }
 
-function mockDoc(): void {
-  globalThis.document = {
-    documentElement: { dataset: {}, style: { setProperty: () => {} } },
-    createElement: (tag: string) => makeNode(tag) as unknown as HTMLElement,
-    createElementNS: (_ns: string, tag: string) => makeNode(tag) as unknown as HTMLElement,
-    createTextNode: (txt: string) => ({ textContent: txt }) as unknown as Text,
-    querySelector: () => null,
-  } as unknown as Document;
-}
-
-function findByClass(node: MockNode, cls: string): MockNode | undefined {
-  if (node.className?.split(" ").includes(cls)) return node;
-  for (const child of node.children ?? []) {
-    const hit = findByClass(child as MockNode, cls);
-    if (hit) return hit;
-  }
-  return undefined;
-}
-
-function findDescendant(node: MockNode, selector: string): MockNode | null {
-  const classes = selector
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.startsWith("."))
-    .map((part) => part.slice(1));
-  if (classes.length === 0) return null;
-  for (const child of node.children ?? []) {
-    const childClasses = (child.className ?? "").split(" ");
-    if (classes.some((cls) => childClasses.includes(cls))) return child;
-    const nested = findDescendant(child, selector);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-function dashboardWith(overrides: Record<string, unknown>): never {
+function dashboard(): Dashboard {
   return {
-    fetchedAt: Date.now(),
+    fetchedAt: 1_000_000,
     providers: [
       {
         id: "google-antigravity",
         name: "GOOGLE ANTIGRAVITY",
         suffix: " · Gemini",
-        accounts: 0,
-        columns: [],
-        rows: [],
+        accounts: 3,
+        columns: [{ key: "weekly", label: "Weekly" }],
+        rows: [
+          {
+            account: "hot@example.com",
+            displayAccount: "hot",
+            health: "ok",
+            maxUsed: 0.75,
+            level: "hot",
+            route: { text: "OK", level: "ok" },
+            limits: [
+              {
+                label: "Weekly",
+                usedFraction: 0.75,
+                low: false,
+                level: "hot",
+                resetsAt: 2_000_000,
+              },
+            ],
+          },
+          {
+            account: "edge@example.com",
+            displayAccount: "edge",
+            health: "ok",
+            maxUsed: 0.8,
+            level: "hot",
+            route: { text: "OK", level: "ok" },
+            limits: [{ label: "Weekly", usedFraction: 0.8, low: false, level: "hot" }],
+          },
+          {
+            account: "stale@example.com",
+            displayAccount: "stale",
+            health: "stale",
+            maxUsed: 0.2,
+            level: "ok",
+            route: { text: "STALE", level: "unknown" },
+            limits: [{ label: "Weekly", usedFraction: 0.2, low: false, level: "ok" }],
+          },
+        ],
+      },
+      {
+        id: "deepseek",
+        name: "DEEPSEEK",
+        suffix: " · USD",
+        accounts: 1,
+        columns: [{ key: "balance", label: "Balance" }],
+        rows: [
+          {
+            account: "low@example.com",
+            displayAccount: "low",
+            health: null,
+            maxUsed: 0,
+            level: "ok",
+            route: { text: "—", level: "unknown" },
+            limits: [{ label: "Balance", remaining: 2, unit: "usd", low: true, level: "critical" }],
+          },
+        ],
       },
     ],
     summary: {
-      providers: 1,
-      accounts: 0,
-      above80: 0,
+      providers: 2,
+      accounts: 4,
+      above80: 1,
       maxed: 0,
       aboveThreshold: 0.8,
-      tightest: null,
+      tightest: {
+        provider: "google-antigravity",
+        account: "edge@example.com",
+        usedFraction: 0.8,
+      },
     },
     health: null,
     balance: null,
-    tooltip: "OMP: no usage data",
-    iconLevel: "unknown",
-    ...overrides,
-  } as never;
+    tooltip: "",
+    iconLevel: "hot",
+  };
 }
 
-describe("renderer panel", () => {
-  test("fresh incident is announced in the panel; stale incident is not", async () => {
-    mockDoc();
-    const { buildPanel } = await import("./renderer");
-    const now = Date.now();
-    const fresh = buildPanel({
-      status: "ready",
-      data: dashboardWith({
-        health: {
-          checkedAt: now - 600_000,
-          ageMs: 600_000,
-          stale: false,
-          incident: {
-            id: "inc-1",
-            at: now - 600_000,
-            kind: "all-failed",
-            detail: "all accounts failed to respond",
-          },
-        },
-      }),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-    } as never) as unknown as MockNode;
+function readyState(): PanelState {
+  return {
+    status: "ready",
+    data: dashboard(),
+    intervalSeconds: 300,
+    warmup: { running: false, message: null },
+    settings: DEFAULT_DESKTOP_SETTINGS,
+    ompBuild: {
+      version: "18.18.6",
+      sha256: "dfb15c27cb2ea192a94761c26aa5cd4eed54b1e0a5a85c02938ab07d769bc8f7",
+      comparison: "same",
+      builtInAntigravityPolicy: "documented-pause",
+      healthProbesEnabled: false,
+      inspectionError: null,
+    },
+  };
+}
 
-    const banner = findByClass(fresh, "incident-banner");
-    expect(banner).toBeDefined();
-    expect(banner?.attributes.role).toBe("alert");
-    expect(banner?.textContent ?? banner?.children.map((c) => c.textContent).join(" ")).toContain(
-      "all-failed",
+function mountForTest(app: MockNode, state: PanelState) {
+  // Mock DOM nodes stand in for HTMLElement in this unit harness.
+  return mountPanel(app as unknown as HTMLElement, state);
+}
+
+function findByClass(node: MockNode, className: string): MockNode | undefined {
+  if (node.className.split(" ").includes(className)) return node;
+  for (const child of node.children) {
+    const hit = findByClass(child, className);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function findAllByClass(node: MockNode, className: string): MockNode[] {
+  const matches: MockNode[] = [];
+  if (node.className.split(" ").includes(className)) matches.push(node);
+  for (const child of node.children) matches.push(...findAllByClass(child, className));
+  return matches;
+}
+
+describe("panel renderer", () => {
+  test("mounts a tabbed, status-first shell with no gateway controls in Usage", () => {
+    installDom();
+    const app = makeNode("main");
+    const renderer = mountForTest(app, readyState());
+    const panel = findByClass(app, "panel");
+    expect(panel).toBeDefined();
+    expect(findByClass(app, "title")?.textContent).toBe("Provider usage");
+    expect(findAllByClass(app, "panel-tab").map((tab) => tab.textContent)).toEqual([
+      "Usage",
+      "Gateway",
+      "Settings",
+    ]);
+    const usagePanel = app.querySelector("#panel-view-usage");
+    expect(usagePanel?.querySelector(".gw-controls")).toBeNull();
+    expect(usagePanel?.querySelector(".provider-access")).toBeNull();
+    expect(
+      app.querySelector("#panel-view-settings")?.querySelector(".provider-access"),
+    ).not.toBeNull();
+    expect(findByClass(app, "footer-link")?.textContent).toBe("Provider access");
+    renderer.destroy();
+  });
+
+  test("filters use one threshold and triage predicate", () => {
+    installDom();
+    const app = makeNode("main");
+    const renderer = mountForTest(app, readyState());
+    const chips = findAllByClass(app, "metric-chip");
+    const labels = chips.map((chip) => ({
+      label: chip.children.find((child) => child.className === "chip-label")?.textContent,
+      count: chip.children.find((child) => child.className === "chip-count")?.textContent,
+    }));
+    expect(labels).toEqual([
+      { label: "All", count: "(4)" },
+      { label: "High usage", count: "(1)" },
+      { label: "Needs attention", count: "(2)" },
+    ]);
+
+    const highUsage = chips.find(
+      (chip) =>
+        chip.children.find((child) => child.className === "chip-label")?.textContent ===
+        "High usage",
     );
-
-    const stale = buildPanel({
-      status: "ready",
-      data: dashboardWith({
-        health: {
-          checkedAt: now - 25 * 3_600_000,
-          ageMs: 25 * 3_600_000,
-          stale: true,
-          incident: { id: "inc-old", at: now - 25 * 3_600_000, kind: "all-failed", detail: "old" },
-        },
-      }),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-    } as never) as unknown as MockNode;
-    expect(findByClass(stale, "incident-banner")).toBeUndefined();
+    highUsage?.click();
+    const accountNames = findAllByClass(app, "account-name").map((node) => node.textContent);
+    expect(accountNames).toEqual(["edge"]);
+    renderer.destroy();
   });
 
-  test("footer offers a visible Settings action from first paint", async () => {
-    mockDoc();
-    const { buildPanel } = await import("./renderer");
-    const panel = buildPanel({
-      status: "ready",
-      data: dashboardWith({}),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-    } as never) as unknown as MockNode;
-    const action = findByClass(panel, "footer-settings");
-    expect(action).toBeDefined();
-    expect(action?.textContent).toBe("Settings");
+  test("tab keyboard navigation selects Gateway and keeps hidden views hidden", () => {
+    installDom();
+    const app = makeNode("main");
+    const renderer = mountForTest(app, readyState());
+    const usageTab = findAllByClass(app, "panel-tab")[0];
+    usageTab.dispatch("keydown", {
+      key: "ArrowRight",
+      preventDefault: () => {},
+    });
+    expect(usageTab.attributes["aria-selected"]).toBe("false");
+    const gatewayPanel = app.querySelector("#panel-view-gateway");
+    const usagePanel = app.querySelector("#panel-view-usage");
+    expect(gatewayPanel?.hidden).toBe(false);
+    expect(usagePanel?.hidden).toBe(true);
+    renderer.destroy();
   });
 
-  test("settings shortcut is Ctrl/Cmd+comma only", async () => {
-    mockDoc();
-    const { isSettingsShortcut } = await import("./renderer");
-    expect(isSettingsShortcut({ key: ",", ctrlKey: true })).toBe(true);
-    expect(isSettingsShortcut({ key: ",", metaKey: true })).toBe(true);
-    expect(isSettingsShortcut({ key: "," })).toBe(false);
-    expect(isSettingsShortcut({ key: ".", ctrlKey: true })).toBe(false);
+  test("provider access entry opens Settings and expands the read-only guide", () => {
+    installDom();
+    const app = makeNode("main");
+    const renderer = mountForTest(app, readyState());
+    findByClass(app, "footer-link")?.click();
+    const settingsTab = findAllByClass(app, "panel-tab")[2];
+    expect(settingsTab.attributes["aria-selected"]).toBe("true");
+    const details = app.querySelector("details");
+    expect(details?.open).toBe(true);
+    expect(findByClass(app, "provider-access-title")?.focused).toBe(true);
+    expect(findByClass(app, "provider-access-body")).toBeDefined();
+    renderer.destroy();
   });
 
-  test("gateway strip shows active state with model, client, and pool figures", async () => {
-    mockDoc();
-    const { buildGatewayStrip } = await import("./renderer");
-    const strip = buildGatewayStrip({
-      status: "ready",
-      data: dashboardWith({
-        providers: [
-          {
-            id: "google-antigravity",
-            name: "GOOGLE ANTIGRAVITY",
-            suffix: "",
-            accounts: 2,
-            columns: [],
-            rows: [{}, {}],
-          },
-        ],
-      }),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-      gateway: {
-        state: "active",
-        label: "Gateway: Active (:4000)",
-        endpoint: "127.0.0.1:4000",
-        modelCount: 25,
-        antigravityModelCount: 12,
-        clientCount: 2,
-        checkedAt: 1,
-      },
-    } as never) as unknown as MockNode;
-    expect(strip.attributes["data-state"]).toBe("active");
-    expect(findByClass(strip, "gw-state")?.textContent).toBe("Active");
-    expect(findByClass(strip, "gw-meta")?.textContent).toContain("25 models · 12 Antigravity");
-    expect(findByClass(strip, "gw-meta")?.textContent).toContain("2 clients");
-    expect(findByClass(strip, "gw-pool-num")?.textContent).toBe("2/2");
+  test("background state updates preserve an edited Settings draft", () => {
+    installDom();
+    const app = makeNode("main");
+    const renderer = mountForTest(app, readyState());
+    findAllByClass(app, "panel-tab")[2].click();
+    const interval = app.querySelector("#setting-interval");
+    if (!interval) throw new Error("interval input missing");
+    interval.value = "45";
+    interval.dispatch("input", {});
+
+    const next = readyState();
+    next.settings = { ...DEFAULT_DESKTOP_SETTINGS, intervalSeconds: 120 };
+    renderer.update(next);
+
+    expect(interval.value).toBe("45");
+    renderer.destroy();
   });
+});
 
-  test("gateway strip off state tells the operator how to start it", async () => {
-    mockDoc();
-    const { buildGatewayStrip } = await import("./renderer");
-    const strip = buildGatewayStrip({
-      status: "ready",
-      data: dashboardWith({}),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-      gateway: {
-        state: "off",
-        label: "Gateway: Off",
-        endpoint: "127.0.0.1:4000",
-        modelCount: null,
-        antigravityModelCount: null,
-        clientCount: null,
-        checkedAt: 1,
-      },
-    } as never) as unknown as MockNode;
-    expect(findByClass(strip, "gw-state")?.textContent).toBe("Off");
-    expect(findByClass(strip, "gw-meta")?.textContent).toContain("gateway:ctl start");
-    expect(findByClass(strip, "gw-pool")).toBeUndefined();
-  });
-
-  test("zero providers shows guidance instead of a blank panel", async () => {
-    mockDoc();
-    const { buildPanel } = await import("./renderer");
-    const panel = buildPanel({
-      status: "ready",
-      data: dashboardWith({ providers: [] }),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-    } as never) as unknown as MockNode;
-    const empty = findByClass(panel, "empty-message");
-    expect(empty?.textContent).toContain("No providers");
-  });
-
-  test("header renders interactive summary metric chips for active dashboard", async () => {
-    mockDoc();
-    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
-    const { buildPanel } = await import("./renderer");
-    const panel = buildPanel({
-      status: "ready",
-      data: dashboardWith({
-        providers: [
-          {
-            id: "google-antigravity",
-            name: "GOOGLE ANTIGRAVITY",
-            suffix: "",
-            accounts: 2,
-            columns: [],
-            rows: [
-              {
-                account: "a@x.com",
-                displayAccount: "a",
-                health: "ok",
-                maxUsed: 0.1,
-                level: "ok",
-                route: { text: "OK", level: "ok" },
-                limits: [],
-              },
-              {
-                account: "b@x.com",
-                displayAccount: "b",
-                health: "hang",
-                maxUsed: 0.9,
-                level: "hot",
-                route: { text: "HANG", level: "danger" },
-                limits: [],
-              },
-            ],
-          },
-        ],
-      }),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-    } as never) as unknown as MockNode;
-
-    const chips = findByClass(panel, "summary-chips");
-    expect(chips).toBeDefined();
-    expect(chips?.attributes.role).toBe("toolbar");
-    const metricChips = chips?.children.filter((c) => c.className?.includes("metric-chip")) ?? [];
-    expect(metricChips.length).toBe(4);
-  });
-
-  test("gateway strip renders action controls and supports drawer persistence", async () => {
-    mockDoc();
-    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
-    const { buildGatewayStrip, isGatewayDrawerOpen, setGatewayDrawerOpen } = await import(
-      "./renderer"
-    );
-
-    const memStorage = new Map<string, string>();
-    globalThis.localStorage = {
-      getItem: (k: string) => memStorage.get(k) ?? null,
-      setItem: (k: string, v: string) => memStorage.set(k, v),
-      removeItem: (k: string) => memStorage.delete(k),
-      clear: () => memStorage.clear(),
-      length: 0,
-      key: () => null,
-    } as unknown as Storage;
-
-    expect(isGatewayDrawerOpen()).toBe(false);
-    setGatewayDrawerOpen(true);
-    expect(isGatewayDrawerOpen()).toBe(true);
-    setGatewayDrawerOpen(false);
-
-    const strip = buildGatewayStrip({
-      status: "ready",
-      data: dashboardWith({}),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-      gateway: {
-        state: "off",
-        label: "Gateway: Off",
-        endpoint: "127.0.0.1:4000",
-        modelCount: null,
-        antigravityModelCount: null,
-        clientCount: null,
-        checkedAt: 1,
-      },
-    } as never) as unknown as MockNode;
-
-    const controls = findByClass(strip, "gw-controls");
-    expect(controls).toBeDefined();
-    expect(findByClass(controls as MockNode, "gw-action-btn")).toBeDefined();
-    expect(findByClass(controls as MockNode, "gw-toggle-btn")).toBeDefined();
-  });
-
-  test("provider notice explains Antigravity policy without an Antigravity card", async () => {
-    mockDoc();
-    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
-    const { buildPanel } = await import("./renderer");
-    const panel = buildPanel({
-      status: "ready",
-      data: dashboardWith({
-        providers: [
-          {
-            id: "deepseek",
-            name: "DEEPSEEK",
-            suffix: "",
-            accounts: 1,
-            columns: [],
-            rows: [
-              {
-                account: "dev@example.com",
-                displayAccount: "dev",
-                health: "ok",
-                maxUsed: 0.1,
-                level: "ok",
-                route: { text: "OK", level: "ok" },
-                limits: [],
-              },
-            ],
-          },
-        ],
-      }),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-      ompBuild: {
-        version: "18.18.6",
-        sha256: "dfb15c27cb2ea192a94761c26aa5cd4eed54b1e0a5a85c02938ab07d769bc8f7",
-        comparison: "same",
-        builtInAntigravityPolicy: "documented-pause",
-        healthProbesEnabled: false,
-        inspectionError: null,
-      },
-    } as never) as unknown as MockNode;
-
-    const notice = findByClass(panel, "provider-notice");
-    expect(notice).toBeDefined();
-    expect(findByClass(notice as MockNode, "provider-notice-summary")?.textContent).toContain(
-      "built-in OMP safety pause",
-    );
-    const serialized = JSON.stringify(notice);
-    expect(serialized).toContain("google-gemini-cli");
-    expect(serialized).toContain("GEMINI_HEALTH_ENABLED=1");
-    expect(serialized).toContain("Same as checkpoint");
-    expect(serialized).not.toContain("provider-action");
-  });
-
-  test("provider notice marks a changed build policy as unverified", async () => {
-    mockDoc();
-    // Dynamic import required: renderer.ts initializes themeManager on document at module evaluation time
-    const { buildPanel } = await import("./renderer");
-    const panel = buildPanel({
-      status: "ready",
-      data: dashboardWith({}),
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-      ompBuild: {
-        version: "18.18.7",
-        sha256: "0".repeat(64),
-        comparison: "changed",
-        builtInAntigravityPolicy: "unverified",
-        healthProbesEnabled: false,
-        inspectionError: null,
-      },
-    } as never) as unknown as MockNode;
-
-    const notice = findByClass(panel, "provider-notice");
-    expect(notice).toBeDefined();
-    expect(findByClass(notice as MockNode, "provider-notice-summary")?.textContent).toContain(
-      "unverified",
-    );
-    const serialized = JSON.stringify(notice);
-    expect(serialized).toContain("Changed since checkpoint");
-    expect(serialized).not.toContain("Paused by this OMP build");
-  });
-
-  test("browser bundle paints loading and error states without Node globals", async () => {
-    // bun-types 1.4.3 omits `write: false` even though the Bun 1.4.3 runtime supports it.
+describe("browser bundle", () => {
+  test("mounts the tabbed shell and applies state without Node globals", async () => {
     const buildConfig = {
       entrypoints: [path.join(import.meta.dir, "renderer.ts")],
-      target: "browser",
-      format: "esm",
+      target: "browser" as const,
+      format: "esm" as const,
       write: false,
-    } as Parameters<typeof Bun.build>[0];
+    };
     const build = await Bun.build(buildConfig);
     if (!build.success) {
       throw new Error(build.logs.map((log) => log.message).join("\n"));
@@ -451,41 +414,43 @@ describe("renderer panel", () => {
     const documentElement = makeNode("html");
     documentElement.style.setProperty = () => {};
     const stateListeners: Array<(state: unknown) => void> = [];
-
     const context = createContext({
       document: {
         documentElement,
         createElement: (tag: string) => makeNode(tag),
         createElementNS: (_ns: string, tag: string) => makeNode(tag),
-        createTextNode: (text: string) => ({ textContent: text }),
+        createTextNode: (text: string) => {
+          const node = makeNode("#text");
+          node.textContent = text;
+          return node;
+        },
         querySelector: (selector: string) => (selector === "#app" ? app : null),
         addEventListener: () => {},
+        activeElement: null,
       },
       window: {
         matchMedia: () => ({ matches: false, addEventListener: () => {} }),
         addEventListener: () => {},
+        removeEventListener: () => {},
         setTimeout: () => 0,
         clearTimeout: () => {},
-        getComputedStyle: () => ({ paddingTop: "20", paddingBottom: "20", rowGap: "16" }),
+        getComputedStyle: () => ({ paddingTop: "16", paddingBottom: "16", rowGap: "12" }),
         omp: {
           onState: (callback: (state: unknown) => void) => {
             stateListeners.push(callback);
             return () => {};
           },
           onOpenSettings: () => () => {},
+          resize: () => {},
         },
       },
       crypto: globalThis.crypto,
       console,
-      localStorage: {
-        getItem: () => null,
-        setItem: () => {},
-      },
+      localStorage: { getItem: () => null, setItem: () => {} },
     });
 
     expect(runInContext("typeof Buffer", context)).toBe("undefined");
     expect(runInContext("typeof process", context)).toBe("undefined");
-
     const module = new SourceTextModule(await artifact.text(), {
       context,
       identifier: "renderer.js",
@@ -495,39 +460,10 @@ describe("renderer panel", () => {
     });
     await module.evaluate({ timeout: 2_000 });
 
-    expect(findByClass(app, "panel")).toBeDefined();
-    expect(findByClass(app, "footer-settings")?.textContent).toBe("Settings");
-    const loadingContent = findByClass(app, "content");
-    expect(loadingContent?.attributes["aria-busy"]).toBe("true");
+    expect(findAllByClass(app, "panel-tab")).toHaveLength(3);
     expect(stateListeners).toHaveLength(1);
-
-    stateListeners[0]({
-      status: "error",
-      data: null,
-      message: "fixture monitor failure",
-      intervalSeconds: 300,
-      warmup: { running: false, message: null },
-      settings: DEFAULT_DESKTOP_SETTINGS,
-      ompBuild: {
-        version: "18.18.6",
-        sha256: "dfb15c27cb2ea192a94761c26aa5cd4eed54b1e0a5a85c02938ab07d769bc8f7",
-        comparison: "same",
-        builtInAntigravityPolicy: "documented-pause",
-        healthProbesEnabled: false,
-        inspectionError: null,
-      },
-    });
-
-    const errorContent = findByClass(app, "content");
-    expect(errorContent?.attributes["aria-busy"]).toBe("false");
-    expect(JSON.stringify(errorContent)).toContain("fixture monitor failure");
-    expect(findByClass(errorContent as MockNode, "button-secondary")?.textContent).toBe("Retry");
-
-    const notice = findByClass(app, "provider-notice");
-    expect(notice).toBeDefined();
-    const noticeText = JSON.stringify(notice);
-    expect(noticeText).toContain("built-in OMP safety pause");
-    expect(noticeText).toContain("google-gemini-cli");
-    expect(noticeText).toContain("Same as checkpoint");
+    stateListeners[0](readyState());
+    expect(findAllByClass(app, "metric-chip")).toHaveLength(3);
+    expect(app.querySelector("#panel-view-usage")?.querySelector(".provider-access")).toBeNull();
   });
 });

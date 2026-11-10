@@ -1,6 +1,12 @@
 import type { WarmUpRequest } from "@omp-toolkit/core";
 import { contextBridge, ipcRenderer } from "electron";
-import { IPC, type OmpApi, type PanelState, type RendererToMainEvents } from "./ipc";
+import {
+  IPC,
+  type OmpApi,
+  type PanelState,
+  type RendererToMainEvents,
+  type SettingsSaveResult,
+} from "./ipc";
 import type { DesktopSettings } from "./settings";
 
 function sendIpc<K extends keyof RendererToMainEvents>(
@@ -37,8 +43,8 @@ const api: OmpApi = {
   warmup(request: WarmUpRequest): void {
     sendIpc(IPC.warmup, request);
   },
-  saveSettings(settings: DesktopSettings): void {
-    sendIpc(IPC.saveSettings, settings);
+  saveSettings(settings: DesktopSettings): Promise<SettingsSaveResult> {
+    return ipcRenderer.invoke(IPC.saveSettings, settings);
   },
   resize(height: number): void {
     sendIpc(IPC.resize, height);

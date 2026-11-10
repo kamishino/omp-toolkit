@@ -1,10 +1,13 @@
 import { type AccountSortOrder, isAccountSortOrder } from "@omp-toolkit/core";
+import type { SettingsSaveResult } from "../ipc";
 import type { DesktopSettings, DesktopTheme } from "../settings";
 import { MAX_INTERVAL_SECONDS, MIN_INTERVAL_SECONDS, validateDesktopSettings } from "../settings";
 import { applyThemePreference } from "./tokens";
 
 export interface SettingsViewController {
   element: HTMLElement;
+  actions: HTMLElement;
+  syncSettings(settings: DesktopSettings): void;
   destroy(): void;
 }
 
@@ -67,94 +70,33 @@ function buildBalanceSection(draft: DesktopSettings): {
   return { section, cnyInput: cny.input, usdInput: usd.input };
 }
 
-function buildSystemSection(draft: DesktopSettings): {
-  section: HTMLElement;
-  toggleInput: HTMLInputElement;
-} {
-  const section = document.createElement("fieldset");
-  section.className = "settings-section";
-
-  const legend = document.createElement("legend");
-  legend.textContent = "System";
-  section.appendChild(legend);
-
-  const toggleWrapper = document.createElement("label");
-  toggleWrapper.className = "toggle-row";
-  toggleWrapper.htmlFor = "setting-login";
-
-  const toggleText = document.createElement("div");
-  toggleText.className = "toggle-text";
-  const toggleTitle = document.createElement("span");
-  toggleTitle.className = "toggle-title";
-  toggleTitle.textContent = "Start at login";
-  const toggleDesc = document.createElement("span");
-  toggleDesc.className = "form-help";
-  toggleDesc.textContent = "Launch the widget automatically when signing in to OS";
-  toggleText.appendChild(toggleTitle);
-  toggleText.appendChild(toggleDesc);
-
-  const toggleInput = document.createElement("input");
-  toggleInput.id = "setting-login";
-  toggleInput.type = "checkbox";
-  toggleInput.className = "toggle-checkbox";
-  toggleInput.checked = draft.openAtLogin;
-  toggleInput.addEventListener("change", () => {
-    draft.openAtLogin = toggleInput.checked;
-  });
-
-  const toggleTrack = document.createElement("span");
-  toggleTrack.className = "toggle-track";
-  const toggleThumb = document.createElement("span");
-  toggleThumb.className = "toggle-thumb";
-  toggleTrack.appendChild(toggleThumb);
-
-  toggleWrapper.appendChild(toggleText);
-  toggleWrapper.appendChild(toggleInput);
-  toggleWrapper.appendChild(toggleTrack);
-  section.appendChild(toggleWrapper);
-
-  return { section, toggleInput };
-}
-
 export function renderSettingsView(
   initialSettings: DesktopSettings,
-  onSave: (settings: DesktopSettings) => void,
-  onCancel: () => void,
+  onSave: (settings: DesktopSettings) => Promise<SettingsSaveResult>,
+  onClose: () => void,
 ): SettingsViewController {
+  let baseline = initialSettings;
+  let saved = false;
+  let destroyed = false;
+  let pending = false;
+
+  const dirty = {
+    interval: false,
+    cny: false,
+    usd: false,
+    theme: false,
+    login: false,
+    sort: false,
+  };
+
   const container = document.createElement("div");
   container.className = "settings-view";
 
-  const titleRow = document.createElement("div");
-  titleRow.className = "settings-header-row";
-
-  const title = document.createElement("h2");
-  title.className = "settings-title";
-  title.textContent = "Settings";
-  titleRow.appendChild(title);
-
-  const escHint = document.createElement("span");
-  escHint.className = "esc-hint";
-  escHint.textContent = "Esc to cancel";
-  titleRow.appendChild(escHint);
-
-  container.appendChild(titleRow);
-
   const form = document.createElement("form");
   form.className = "settings-form";
+  form.id = "omp-panel-settings-form";
 
-  // State draft
-  const draft: DesktopSettings = {
-    intervalSeconds: initialSettings.intervalSeconds,
-    balanceAlert: {
-      cny: initialSettings.balanceAlert.cny,
-      usd: initialSettings.balanceAlert.usd,
-    },
-    theme: initialSettings.theme,
-    openAtLogin: initialSettings.openAtLogin,
-    accountSort: initialSettings.accountSort,
-  };
-
-  // ── Section 1: Display & Timing ───────────────────────────────────
+  // ── Timing & Appearance ────────────────────────────────────────────
   const timingSection = document.createElement("fieldset");
   timingSection.className = "settings-section";
 
@@ -162,7 +104,6 @@ export function renderSettingsView(
   timingLegend.textContent = "Timing & Appearance";
   timingSection.appendChild(timingLegend);
 
-  // Interval
   const intervalGroup = document.createElement("div");
   intervalGroup.className = "form-group";
   const intervalLabel = document.createElement("label");
@@ -177,7 +118,7 @@ export function renderSettingsView(
   intervalInput.type = "number";
   intervalInput.min = String(MIN_INTERVAL_SECONDS);
   intervalInput.max = String(MAX_INTERVAL_SECONDS);
-  intervalInput.value = String(draft.intervalSeconds);
+  intervalInput.value = String(baseline.intervalSeconds);
 
   const intervalUnit = document.createElement("span");
   intervalUnit.className = "unit-suffix";
@@ -195,10 +136,11 @@ export function renderSettingsView(
   intervalGroup.appendChild(intervalHelp);
   timingSection.appendChild(intervalGroup);
 
-  // Theme Segmented Control
+  // Theme radios
   const themeGroup = document.createElement("div");
   themeGroup.className = "form-group";
-  const themeLabel = document.createElement("label");
+  const themeLabel = document.createElement("span");
+  themeLabel.className = "form-label";
   themeLabel.textContent = "Theme";
   themeGroup.appendChild(themeLabel);
 
@@ -213,29 +155,31 @@ export function renderSettingsView(
     { value: "dark", label: "Dark" },
   ];
 
-  const themeButtons: HTMLButtonElement[] = [];
+  const themeInputs: HTMLInputElement[] = [];
 
-  for (const t of themes) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `segmented-item${t.value === draft.theme ? " active" : ""}`;
-    btn.setAttribute("role", "radio");
-    btn.setAttribute("aria-checked", String(t.value === draft.theme));
-    btn.textContent = t.label;
+  for (const theme of themes) {
+    const optionLabel = document.createElement("label");
+    optionLabel.className = "segmented-item";
 
-    btn.addEventListener("click", () => {
-      draft.theme = t.value;
-      for (const b of themeButtons) {
-        b.className = "segmented-item";
-        b.setAttribute("aria-checked", "false");
-      }
-      btn.className = "segmented-item active";
-      btn.setAttribute("aria-checked", "true");
-      applyThemePreference(draft.theme);
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "panel-theme";
+    input.value = theme.value;
+    input.className = "segmented-input";
+    input.checked = theme.value === baseline.theme;
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      dirty.theme = true;
+      applyThemePreference(theme.value);
     });
 
-    themeButtons.push(btn);
-    segmented.appendChild(btn);
+    const text = document.createElement("span");
+    text.textContent = theme.label;
+
+    optionLabel.appendChild(input);
+    optionLabel.appendChild(text);
+    themeInputs.push(input);
+    segmented.appendChild(optionLabel);
   }
 
   themeGroup.appendChild(segmented);
@@ -261,7 +205,10 @@ export function renderSettingsView(
     optionEl.textContent = option.label;
     sortSelect.appendChild(optionEl);
   }
-  sortSelect.value = draft.accountSort;
+  sortSelect.value = baseline.accountSort;
+  sortSelect.addEventListener("change", () => {
+    dirty.sort = true;
+  });
 
   const sortHelp = document.createElement("span");
   sortHelp.className = "form-help";
@@ -274,102 +221,194 @@ export function renderSettingsView(
   timingSection.appendChild(sortGroup);
   form.appendChild(timingSection);
 
-  const { section: balanceSection, cnyInput, usdInput } = buildBalanceSection(draft);
+  const { section: balanceSection, cnyInput, usdInput } = buildBalanceSection(baseline);
   form.appendChild(balanceSection);
 
-  const { section: systemSection, toggleInput } = buildSystemSection(draft);
+  // System section
+  const systemSection = document.createElement("fieldset");
+  systemSection.className = "settings-section";
+  const systemLegend = document.createElement("legend");
+  systemLegend.textContent = "System";
+  systemSection.appendChild(systemLegend);
+
+  const toggleWrapper = document.createElement("label");
+  toggleWrapper.className = "toggle-row";
+  toggleWrapper.htmlFor = "setting-login";
+
+  const toggleText = document.createElement("span");
+  toggleText.className = "toggle-text";
+  const toggleTitle = document.createElement("span");
+  toggleTitle.className = "toggle-title";
+  toggleTitle.textContent = "Start at login";
+  const toggleDesc = document.createElement("span");
+  toggleDesc.className = "form-help";
+  toggleDesc.textContent = "Launch the widget automatically when signing in to OS";
+  toggleText.appendChild(toggleTitle);
+  toggleText.appendChild(toggleDesc);
+
+  const toggleInput = document.createElement("input");
+  toggleInput.id = "setting-login";
+  toggleInput.type = "checkbox";
+  toggleInput.className = "toggle-checkbox";
+  toggleInput.checked = baseline.openAtLogin;
+  toggleInput.addEventListener("change", () => {
+    dirty.login = true;
+  });
+
+  const toggleTrack = document.createElement("span");
+  toggleTrack.className = "toggle-track";
+  const toggleThumb = document.createElement("span");
+  toggleThumb.className = "toggle-thumb";
+  toggleTrack.appendChild(toggleThumb);
+
+  toggleWrapper.appendChild(toggleText);
+  toggleWrapper.appendChild(toggleInput);
+  toggleWrapper.appendChild(toggleTrack);
+  systemSection.appendChild(toggleWrapper);
   form.appendChild(systemSection);
 
-  // ── Validation Errors ──────────────────────────────────────────────
+  // Validation errors
   const errorContainer = document.createElement("div");
   errorContainer.className = "form-errors";
-  errorContainer.style.display = "none";
+  errorContainer.setAttribute("role", "alert");
+  errorContainer.setAttribute("aria-live", "assertive");
+  errorContainer.hidden = true;
   form.appendChild(errorContainer);
 
-  // ── Action Buttons ─────────────────────────────────────────────────
-  const actionsGroup = document.createElement("div");
-  actionsGroup.className = "form-actions";
+  // Footer actions
+  const actions = document.createElement("div");
+  actions.className = "settings-actions";
 
   const cancelBtn = document.createElement("button");
   cancelBtn.type = "button";
   cancelBtn.className = "button button-secondary";
   cancelBtn.textContent = "Cancel";
 
-  let saved = false;
-  let destroyed = false;
-
-  const cleanup = () => {
-    if (destroyed) return;
-    destroyed = true;
-    window.removeEventListener("keydown", keyHandler);
-    if (!saved) {
-      applyThemePreference(initialSettings.theme);
-    }
-  };
-
-  const handleCancel = () => {
-    cleanup();
-    onCancel();
-  };
-
-  cancelBtn.addEventListener("click", handleCancel);
-
   const saveBtn = document.createElement("button");
   saveBtn.type = "submit";
+  saveBtn.setAttribute("form", form.id);
   saveBtn.className = "button button-primary";
-  saveBtn.textContent = "Save Changes";
+  saveBtn.textContent = "Save";
 
-  actionsGroup.appendChild(cancelBtn);
-  actionsGroup.appendChild(saveBtn);
-  form.appendChild(actionsGroup);
+  actions.appendChild(cancelBtn);
+  actions.appendChild(saveBtn);
+  container.appendChild(form);
 
-  function validate(): boolean {
-    draft.intervalSeconds = Number(intervalInput.value);
-    draft.balanceAlert.cny = Number(cnyInput.value);
-    draft.balanceAlert.usd = Number(usdInput.value);
-    draft.openAtLogin = toggleInput.checked;
-    if (isAccountSortOrder(sortSelect.value)) {
-      draft.accountSort = sortSelect.value;
+  const setEnabled = (enabled: boolean) => {
+    const controls: Array<HTMLInputElement | HTMLSelectElement> = [
+      intervalInput,
+      cnyInput,
+      usdInput,
+      sortSelect,
+      toggleInput,
+      ...themeInputs,
+    ];
+    for (const control of controls) {
+      control.disabled = !enabled;
     }
-
-    const res = validateDesktopSettings(draft);
-    if (!res.valid) {
-      errorContainer.textContent = res.errors.join(". ");
-      errorContainer.style.display = "block";
-      saveBtn.disabled = true;
-      return false;
-    }
-
-    errorContainer.textContent = "";
-    errorContainer.style.display = "none";
-    saveBtn.disabled = false;
-    return true;
-  }
-
-  intervalInput.addEventListener("input", validate);
-  cnyInput.addEventListener("input", validate);
-  usdInput.addEventListener("input", validate);
-
-  const keyHandler = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      handleCancel();
-    }
+    cancelBtn.disabled = !enabled;
+    saveBtn.disabled = !enabled;
   };
-  window.addEventListener("keydown", keyHandler);
 
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    if (validate()) {
-      saved = true;
-      cleanup();
-      onSave(draft);
-    }
+  const numberValue = (raw: string): number => {
+    const trimmed = raw.trim();
+    return trimmed.length === 0 ? Number.NaN : Number(trimmed);
+  };
+
+  const readDraft = (): DesktopSettings => ({
+    intervalSeconds: numberValue(intervalInput.value),
+    balanceAlert: {
+      cny: numberValue(cnyInput.value),
+      usd: numberValue(usdInput.value),
+    },
+    theme: (themeInputs.find((input) => input.checked)?.value ?? baseline.theme) as DesktopTheme,
+    openAtLogin: toggleInput.checked,
+    accountSort: isAccountSortOrder(sortSelect.value) ? sortSelect.value : baseline.accountSort,
   });
 
-  container.appendChild(form);
+  const showErrors = (errors: readonly string[]) => {
+    errorContainer.textContent = errors.join(". ");
+    errorContainer.hidden = errors.length === 0;
+  };
+
+  const validateDraft = (draft: DesktopSettings): boolean => {
+    const result = validateDesktopSettings(draft);
+    showErrors(result.errors);
+    return result.valid;
+  };
+
+  const markDirty = (field: keyof typeof dirty, predicate: (draft: DesktopSettings) => boolean) => {
+    dirty[field] = predicate(readDraft());
+  };
+
+  intervalInput.addEventListener("input", () => {
+    markDirty("interval", (draft) => draft.intervalSeconds !== baseline.intervalSeconds);
+  });
+  cnyInput.addEventListener("input", () => {
+    markDirty("cny", (draft) => draft.balanceAlert.cny !== baseline.balanceAlert.cny);
+  });
+  usdInput.addEventListener("input", () => {
+    markDirty("usd", (draft) => draft.balanceAlert.usd !== baseline.balanceAlert.usd);
+  });
+
+  cancelBtn.addEventListener("click", () => {
+    if (pending) return;
+    applyThemePreference(baseline.theme);
+    onClose();
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (pending || destroyed) return;
+    const draft = readDraft();
+    if (!validateDraft(draft)) return;
+
+    pending = true;
+    setEnabled(false);
+    const snapshot = { ...draft, balanceAlert: { ...draft.balanceAlert } };
+    void onSave(snapshot)
+      .then((result) => {
+        if (!result.valid) {
+          showErrors(result.errors.length > 0 ? result.errors : ["Settings were not saved."]);
+          return;
+        }
+        saved = true;
+        baseline = snapshot;
+        onClose();
+      })
+      .catch((error: unknown) => {
+        showErrors([
+          `Settings were not saved: ${error instanceof Error ? error.message : String(error)}`,
+        ]);
+      })
+      .finally(() => {
+        pending = false;
+        if (!destroyed) setEnabled(true);
+      });
+  });
+
   return {
     element: container,
-    destroy: cleanup,
+    actions,
+    syncSettings(settings: DesktopSettings): void {
+      if (destroyed || pending) return;
+      baseline = settings;
+      if (!dirty.interval) intervalInput.value = String(settings.intervalSeconds);
+      if (!dirty.cny) cnyInput.value = String(settings.balanceAlert.cny);
+      if (!dirty.usd) usdInput.value = String(settings.balanceAlert.usd);
+      if (!dirty.login) toggleInput.checked = settings.openAtLogin;
+      if (!dirty.sort) sortSelect.value = settings.accountSort;
+      if (!dirty.theme) {
+        for (const input of themeInputs) {
+          input.checked = input.value === settings.theme;
+        }
+        applyThemePreference(settings.theme);
+      }
+    },
+    destroy(): void {
+      if (destroyed) return;
+      destroyed = true;
+      if (!saved) applyThemePreference(baseline.theme);
+    },
   };
 }

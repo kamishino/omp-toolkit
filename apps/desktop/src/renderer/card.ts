@@ -1,25 +1,28 @@
-import {
-  mdiCheck,
-  mdiChevronDown,
-  mdiChevronRight,
-  mdiContentCopy,
-  mdiFlash,
-  mdiStethoscope,
-} from "@mdi/js";
+import { mdiCheck, mdiChevronRight, mdiContentCopy, mdiFlash, mdiStethoscope } from "@mdi/js";
 import {
   type DashboardProvider,
+  type DashboardRow,
   formatPercent,
   supportsWarmUp,
+  usageLevel,
   warmUpEligibility,
 } from "@omp-toolkit/core";
+import tokens from "../../../../design/tokens.json";
 import type { PanelState } from "../ipc";
 import { icon } from "./icon";
 import { renderLimitCell } from "./limit-cell";
 import { providerLogo } from "./provider-logos";
 
-export type FilterScope = "all" | "ok" | "hot" | "issues";
+export type FilterScope = "all" | "high-usage" | "attention";
 
 const COLLAPSED_STORAGE_KEY = "omp.collapsedProviders";
+
+const USAGE_THRESHOLDS = {
+  warm: tokens.usage.warmThreshold.$value,
+  hot: tokens.usage.hotThreshold.$value,
+  critical: tokens.usage.criticalThreshold.$value,
+  above: tokens.usage.aboveThreshold.$value,
+};
 
 export function isProviderCollapsed(providerId: string): boolean {
   try {
@@ -50,6 +53,25 @@ export function setProviderCollapsed(providerId: string, collapsed: boolean): vo
     // headless fallback
   }
 }
+
+/**
+ * The single filter predicate shared by chip counts and visible rows.
+ * High usage is a quota-threshold test; attention is a triage grouping.
+ */
+export function matchesFilter(
+  row: DashboardRow,
+  scope: FilterScope,
+  aboveThreshold: number,
+): boolean {
+  if (scope === "all") return true;
+  if (scope === "high-usage") return row.maxUsed >= aboveThreshold;
+  return (
+    row.level === "critical" ||
+    row.limits.some((limit) => limit.low) ||
+    (row.health !== null && row.health !== "ok")
+  );
+}
+
 const ROUTE_TITLES: Record<string, string> = {
   OK: "Route healthy",
   HANG: "Route stalled — no response from this route; use Check to probe it",
@@ -60,26 +82,26 @@ const ROUTE_TITLES: Record<string, string> = {
   "—": "No route health data yet",
 };
 
+function worstRoute(rows: readonly DashboardRow[]): DashboardRow | undefined {
+  return (
+    rows.find((r) => r.route.text === "HANG" || r.route.text === "ERR") ??
+    rows.find((r) => r.route.text === "AUTH" || r.route.text === "MODEL") ??
+    rows.find((r) => r.route.text === "STALE") ??
+    rows.find((r) => r.route.text === "OK") ??
+    rows[0]
+  );
+}
+
 export function renderProviderCard(
   provider: DashboardProvider,
-  hasAnyRoute: boolean,
+  aboveThreshold: number,
   providerIndex: number,
   state: PanelState,
   filterScope: FilterScope = "all",
 ): HTMLElement | null {
-  const matchingRows = provider.rows.filter((row) => {
-    if (filterScope === "all") return true;
-    if (filterScope === "ok") {
-      return (row.health === null || row.health === "ok") && row.level === "ok";
-    }
-    if (filterScope === "hot") {
-      return row.maxUsed >= 0.8 || row.level === "hot" || row.level === "critical";
-    }
-    if (filterScope === "issues") {
-      return row.health !== null && row.health !== "ok";
-    }
-    return true;
-  });
+  const matchingRows = provider.rows.filter((row) =>
+    matchesFilter(row, filterScope, aboveThreshold),
+  );
 
   if (filterScope !== "all" && matchingRows.length === 0) {
     return null;
@@ -87,6 +109,10 @@ export function renderProviderCard(
 
   let isCollapsed = isProviderCollapsed(provider.id);
   const hasWarmUp = supportsWarmUp(provider.id);
+  const showRoute = provider.rows.some((row) => row.health !== null);
+  const titleId = `provider-title-${providerIndex}`;
+  const tableId = `provider-table-${providerIndex}`;
+
   const card = document.createElement("section");
   card.className = isCollapsed ? "provider-card card-collapsed" : "provider-card";
   const headerDiv = document.createElement("div");
@@ -95,12 +121,16 @@ export function renderProviderCard(
   const toggleBtn = document.createElement("button");
   toggleBtn.type = "button";
   toggleBtn.className = "card-toggle-btn";
+  toggleBtn.dataset.provider = provider.id;
+  toggleBtn.dataset.action = "toggle";
+  toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+  toggleBtn.setAttribute("aria-controls", tableId);
   toggleBtn.setAttribute(
     "aria-label",
     isCollapsed ? `Expand ${provider.name}` : `Collapse ${provider.name}`,
   );
   toggleBtn.title = isCollapsed ? "Expand card" : "Collapse card";
-  toggleBtn.appendChild(icon(isCollapsed ? mdiChevronRight : mdiChevronDown));
+  toggleBtn.appendChild(icon(mdiChevronRight));
   headerDiv.appendChild(toggleBtn);
 
   const logoSlot = document.createElement("span");
@@ -133,70 +163,75 @@ export function renderProviderCard(
   }
   headerDiv.appendChild(logoSlot);
 
-  const titleId = `provider-title-${providerIndex}`;
   const h2 = document.createElement("h2");
   h2.id = titleId;
   h2.className = "provider-title";
-  h2.textContent = `${provider.name}${provider.suffix} · ${matchingRows.length} ${matchingRows.length === 1 ? "account" : "accounts"}`;
-  h2.style.cursor = "pointer";
+  h2.textContent = `${provider.name}${provider.suffix}`;
   headerDiv.appendChild(h2);
 
-  // Collapsed summary preview
+  const trailing = document.createElement("div");
+  trailing.className = "provider-trailing";
+
   const previewDiv = document.createElement("div");
-  previewDiv.className = "collapsed-preview";
+  previewDiv.className = "provider-summary";
 
   const countBadge = document.createElement("span");
-  countBadge.className = "collapsed-badge";
-  countBadge.textContent = `${matchingRows.length} ${matchingRows.length === 1 ? "acct" : "accts"}`;
+  countBadge.className = "provider-summary-badge";
+  countBadge.textContent = `${provider.accounts} ${provider.accounts === 1 ? "account" : "accounts"}`;
   previewDiv.appendChild(countBadge);
 
-  const hasRouteData = matchingRows.some((r) => r.route.text !== "—");
-  if (hasAnyRoute && hasWarmUp && hasRouteData) {
-    const worstRoute =
-      matchingRows.find((r) => r.route.text === "HANG" || r.route.text === "ERR") ??
-      matchingRows.find((r) => r.route.text === "AUTH" || r.route.text === "MODEL") ??
-      matchingRows.find((r) => r.route.text === "STALE") ??
-      matchingRows.find((r) => r.route.text === "OK") ??
-      matchingRows[0];
-    if (worstRoute && worstRoute.route.text !== "—") {
+  if (showRoute) {
+    const routeRow = worstRoute(provider.rows);
+    if (routeRow && routeRow.route.text !== "—") {
       const badgeKind =
-        worstRoute.route.level === "ok"
+        routeRow.route.level === "ok"
           ? "ok"
-          : worstRoute.route.level === "critical"
+          : routeRow.route.level === "critical"
             ? "danger"
             : "neutral";
       const routeBadge = document.createElement("span");
-      routeBadge.className = `collapsed-badge badge-${badgeKind}`;
-      routeBadge.textContent = worstRoute.route.text;
+      routeBadge.className = `provider-summary-badge badge-${badgeKind}`;
+      routeBadge.textContent = routeRow.route.text;
+      routeBadge.title = ROUTE_TITLES[routeRow.route.text] ?? routeRow.route.text;
       previewDiv.appendChild(routeBadge);
     }
   }
 
-  const maxUsed = Math.max(0, ...matchingRows.map((r) => r.maxUsed));
+  const maxUsed = Math.max(0, ...provider.rows.map((row) => row.maxUsed));
   if (maxUsed > 0) {
     const maxBadge = document.createElement("span");
-    const level =
-      maxUsed >= 0.85 ? "danger" : maxUsed >= 0.7 ? "hot" : maxUsed >= 0.4 ? "warn" : "ok";
-    maxBadge.className = `collapsed-badge badge-${level}`;
+    const level = usageLevel(maxUsed, USAGE_THRESHOLDS);
+    const badgeKind = level === "critical" ? "danger" : level;
+    maxBadge.className = `provider-summary-badge badge-${badgeKind}`;
     maxBadge.textContent = `${formatPercent(maxUsed)} max`;
     previewDiv.appendChild(maxBadge);
   }
-  headerDiv.appendChild(previewDiv);
+
+  if (filterScope !== "all") {
+    const filteredBadge = document.createElement("span");
+    filteredBadge.className = "provider-summary-badge badge-neutral";
+    filteredBadge.textContent = `showing ${matchingRows.length} of ${provider.rows.length}`;
+    previewDiv.appendChild(filteredBadge);
+  }
+
+  trailing.appendChild(previewDiv);
+  headerDiv.appendChild(trailing);
 
   const toggleCollapse = () => {
     isCollapsed = !isCollapsed;
     setProviderCollapsed(provider.id, isCollapsed);
     card.className = isCollapsed ? "provider-card card-collapsed" : "provider-card";
+    toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
     toggleBtn.setAttribute(
       "aria-label",
       isCollapsed ? `Expand ${provider.name}` : `Collapse ${provider.name}`,
     );
     toggleBtn.title = isCollapsed ? "Expand card" : "Collapse card";
-    toggleBtn.replaceChildren(icon(isCollapsed ? mdiChevronRight : mdiChevronDown));
+    table.hidden = isCollapsed;
+    table.classList.toggle("motion-enter", !isCollapsed);
   };
 
   toggleBtn.addEventListener("click", toggleCollapse);
-  h2.addEventListener("click", toggleCollapse);
 
   if (provider.timeWindow) {
     const badge = document.createElement("span");
@@ -205,19 +240,21 @@ export function renderProviderCard(
     badge.textContent = `${provider.timeWindow.label} · ${provider.timeWindow.formattedTimeUntilNext}`;
     badge.title = `${provider.timeWindow.badgeText} (reference clock: ${provider.timeWindow.referenceTimeZone})`;
     badge.setAttribute("aria-label", provider.timeWindow.badgeText);
-    headerDiv.appendChild(badge);
+    trailing.appendChild(badge);
   }
 
   if (hasWarmUp) {
-    const eligibleCount = matchingRows.filter(
-      (r) => warmUpEligibility(provider.id, r.health) === "warm",
+    const eligibleCount = provider.rows.filter(
+      (row) => warmUpEligibility(provider.id, row.health) === "warm",
     ).length;
-    const skippedCount = matchingRows.length - eligibleCount;
+    const skippedCount = provider.rows.length - eligibleCount;
     const warmupAllBtn = document.createElement("button");
     warmupAllBtn.type = "button";
     warmupAllBtn.className = "provider-action";
+    warmupAllBtn.dataset.provider = provider.id;
+    warmupAllBtn.dataset.action = "warm-all";
     warmupAllBtn.setAttribute("aria-label", `Warm up all ${provider.name} accounts`);
-    warmupAllBtn.title = `${eligibleCount} eligible; ${skippedCount} non-OK skipped`;
+    warmupAllBtn.title = `${eligibleCount} eligible; ${skippedCount} non-OK skipped (all accounts)`;
     warmupAllBtn.appendChild(icon(mdiFlash));
     warmupAllBtn.appendChild(document.createTextNode("Warm up all"));
     if (state.warmup.running || eligibleCount === 0) {
@@ -226,13 +263,36 @@ export function renderProviderCard(
     warmupAllBtn.addEventListener("click", () => {
       window.omp.warmup({ provider: provider.id, action: "warm", all: true });
     });
-    headerDiv.appendChild(warmupAllBtn);
+    trailing.appendChild(warmupAllBtn);
   }
 
   card.appendChild(headerDiv);
   const table = document.createElement("table");
+  table.id = tableId;
   table.className = hasWarmUp ? "table has-actions" : "table";
   table.setAttribute("aria-labelledby", titleId);
+  table.hidden = isCollapsed;
+
+  const colgroup = document.createElement("colgroup");
+  const accountCol = document.createElement("col");
+  accountCol.className = "col-account";
+  colgroup.appendChild(accountCol);
+  if (showRoute) {
+    const routeCol = document.createElement("col");
+    routeCol.className = "col-route";
+    colgroup.appendChild(routeCol);
+  }
+  for (const _column of provider.columns) {
+    const limitCol = document.createElement("col");
+    limitCol.className = "col-limit";
+    colgroup.appendChild(limitCol);
+  }
+  if (hasWarmUp) {
+    const actionCol = document.createElement("col");
+    actionCol.className = "col-action";
+    colgroup.appendChild(actionCol);
+  }
+  table.appendChild(colgroup);
 
   const thead = document.createElement("thead");
   const trHead = document.createElement("tr");
@@ -243,7 +303,7 @@ export function renderProviderCard(
   thAccount.textContent = "ACCOUNT";
   trHead.appendChild(thAccount);
 
-  if (hasAnyRoute) {
+  if (showRoute) {
     const thRoute = document.createElement("th");
     thRoute.scope = "col";
     thRoute.className = "col-route";
@@ -275,32 +335,62 @@ export function renderProviderCard(
 
     const thAcc = document.createElement("th");
     thAcc.scope = "row";
-    thAcc.className = `account col-account level-${row.level} account-clickable`;
-    thAcc.textContent = row.displayAccount;
-    thAcc.title = `Click to copy ${row.account}`;
+    thAcc.className = "account col-account";
 
-    const copyIconSpan = document.createElement("span");
-    copyIconSpan.className = "account-copy-icon";
-    copyIconSpan.appendChild(icon(mdiContentCopy));
-    thAcc.appendChild(copyIconSpan);
+    const accountLine = document.createElement("div");
+    accountLine.className = "account-line";
 
-    thAcc.addEventListener("click", () => {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(row.account);
-        copyIconSpan.replaceChildren(icon(mdiCheck));
-        const copiedTag = document.createElement("span");
-        copiedTag.className = "account-copied-tag";
-        copiedTag.textContent = "Copied!";
-        thAcc.appendChild(copiedTag);
-        setTimeout(() => {
-          copyIconSpan.replaceChildren(icon(mdiContentCopy));
-          copiedTag.remove();
-        }, 1500);
+    const accountName = document.createElement("span");
+    accountName.className = "account-name";
+    accountName.textContent = row.displayAccount;
+    accountName.title = row.account;
+    accountLine.appendChild(accountName);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "account-copy";
+    copyBtn.dataset.provider = provider.id;
+    copyBtn.dataset.action = "copy";
+    copyBtn.dataset.account = row.account;
+    copyBtn.setAttribute("aria-label", `Copy account ${row.account}`);
+    copyBtn.title = `Copy ${row.account}`;
+    copyBtn.appendChild(icon(mdiContentCopy));
+    accountLine.appendChild(copyBtn);
+
+    const copyStatus = document.createElement("span");
+    copyStatus.className = "account-copy-status";
+    copyStatus.setAttribute("role", "status");
+    copyStatus.setAttribute("aria-live", "polite");
+    thAcc.appendChild(accountLine);
+    thAcc.appendChild(copyStatus);
+
+    copyBtn.addEventListener("click", () => {
+      const clipboard = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
+      if (!clipboard?.writeText) {
+        copyStatus.textContent = "Copy unavailable";
+        return;
       }
+      copyBtn.disabled = true;
+      void clipboard
+        .writeText(row.account)
+        .then(() => {
+          copyStatus.textContent = "Copied";
+          copyBtn.replaceChildren(icon(mdiCheck));
+        })
+        .catch(() => {
+          copyStatus.textContent = "Copy failed";
+        })
+        .finally(() => {
+          copyBtn.disabled = false;
+          setTimeout(() => {
+            copyStatus.textContent = "";
+            copyBtn.replaceChildren(icon(mdiContentCopy));
+          }, tokens.desktop.motion.duration.copyFeedback.$value);
+        });
     });
     tr.appendChild(thAcc);
 
-    if (hasAnyRoute) {
+    if (showRoute) {
       const tdRoute = document.createElement("td");
       tdRoute.className = "col-route";
       const routeSpan = document.createElement("span");
@@ -318,25 +408,8 @@ export function renderProviderCard(
       if (row.route.detail) {
         title += ` · ${row.route.detail}`;
       }
-
-      const isClickable = hasWarmUp && row.route.text !== "OK" && row.route.text !== "—";
-      if (isClickable) {
-        routeSpan.className += " route-clickable";
-        routeSpan.title = `${title} — Click to probe now`;
-        routeSpan.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (state.warmup.running) return;
-          window.omp.warmup({
-            provider: provider.id,
-            action: "check",
-            account: row.account,
-          });
-        });
-      } else {
-        routeSpan.title = title;
-      }
-
-      routeSpan.setAttribute("aria-label", routeSpan.title);
+      routeSpan.title = title;
+      routeSpan.setAttribute("aria-label", title);
       tdRoute.appendChild(routeSpan);
       tr.appendChild(tdRoute);
     }
@@ -352,6 +425,9 @@ export function renderProviderCard(
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = `row-action action-${eligibility}`;
+        btn.dataset.provider = provider.id;
+        btn.dataset.action = eligibility === "warm" ? "warm" : "check";
+        btn.dataset.account = row.account;
         const isWarm = eligibility === "warm";
         btn.setAttribute("aria-label", `${isWarm ? "Warm up" : "Check"} ${row.displayAccount}`);
         btn.title = `${isWarm ? "Warm up" : "Check (unhang)"} ${row.account}`;

@@ -15,6 +15,7 @@ import { createOmpBuildReader } from "./omp-build";
 import { DesktopPanel } from "./panel";
 import { agentDir, findBun, panelPaths, resolveGatewayScript } from "./paths";
 import { DesktopRuntime } from "./runtime";
+import type { DesktopSettings } from "./settings";
 import { DesktopTray } from "./tray";
 
 app.setName("OMP Provider Usage");
@@ -302,15 +303,21 @@ void app.whenReady().then(async () => {
       panel?.sendState(runtime.getState());
     }
   });
-  onIpc(IPC.saveSettings, (_event, newSettings) => {
-    runtime?.updateSettings(newSettings);
-    desktopTray?.rebuildMenu();
-  });
   onIpc(IPC.warmup, async (_event, request) => {
     await runtime?.handleWarmUp(request, panel?.window);
   });
   onIpc(IPC.resize, (_event, height: number) => {
     panel?.setHeight(height);
+  });
+  ipcMain.handle(IPC.saveSettings, (_event, newSettings: DesktopSettings) => {
+    if (!runtime) {
+      return { valid: false, errors: ["Settings are not available."] };
+    }
+    const result = runtime.updateSettings(newSettings);
+    if (result.valid) {
+      desktopTray?.rebuildMenu();
+    }
+    return result;
   });
   ipcMain.handle(IPC.gatewayAction, async (_event, action: string) => {
     try {

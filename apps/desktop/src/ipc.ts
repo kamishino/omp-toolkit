@@ -23,8 +23,12 @@ export interface RendererToMainEvents {
   [IPC.openOrca]: () => void;
   [IPC.ready]: () => void;
   [IPC.warmup]: (request: WarmUpRequest) => void;
-  [IPC.saveSettings]: (settings: DesktopSettings) => void;
   [IPC.resize]: (height: number) => void;
+}
+
+export interface SettingsSaveResult {
+  valid: boolean;
+  errors: string[];
 }
 
 export interface MainToRendererEvents {
@@ -147,7 +151,7 @@ export interface OmpApi {
   openTerminal(): void;
   openOrca(): void;
   warmup(request: WarmUpRequest): void;
-  saveSettings(settings: DesktopSettings): void;
+  saveSettings(settings: DesktopSettings): Promise<SettingsSaveResult>;
   resize(height: number): void;
   onOpenSettings(callback: () => void): () => void;
   gatewayAction(action: "start" | "stop" | "restart" | "doctor"): Promise<GatewayActionResult>;

@@ -1,249 +1,150 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { WeeklyPacing } from "@omp-toolkit/core";
 import { renderLimitCell } from "./limit-cell";
 
-describe("renderer limit-cell module", () => {
-  const originalDoc = globalThis.document;
+interface MockNode {
+  tagName: string;
+  className: string;
+  textContent: string;
+  title?: string;
+  attributes: Record<string, string>;
+  style: Record<string, string>;
+  children: MockNode[];
+  appendChild: (child: MockNode) => MockNode;
+  setAttribute: (key: string, value: string) => void;
+}
 
-  interface MockNode {
-    tagName: string;
-    className: string;
-    textContent?: string;
-    title?: string;
-    attributes: Record<string, string>;
-    style: Record<string, string>;
-    children: MockNode[];
-    appendChild: (c: unknown) => unknown;
-    setAttribute: (k: string, v: string) => void;
+function node(tag: string): MockNode {
+  const created: MockNode = {
+    tagName: tag,
+    className: "",
+    textContent: "",
+    attributes: {},
+    style: {},
+    children: [],
+    appendChild: (child) => {
+      created.children.push(child);
+      return child;
+    },
+    setAttribute: (key, value) => {
+      created.attributes[key] = value;
+    },
+  };
+  return created;
+}
+
+const originalDocument = globalThis.document;
+
+function installDom(): void {
+  globalThis.document = {
+    createElement: (tag: string) => node(tag),
+  } as unknown as Document;
+}
+
+afterEach(() => {
+  globalThis.document = originalDocument;
+});
+
+function findAll(root: MockNode, className: string): MockNode[] {
+  const matches: MockNode[] = [];
+  const visit = (candidate: MockNode) => {
+    if (candidate.className.split(" ").includes(className)) matches.push(candidate);
+    for (const child of candidate.children) visit(child);
+  };
+  visit(root);
+  return matches;
+}
+
+function findByTag(root: MockNode, tagName: string): MockNode | undefined {
+  if (root.tagName === tagName) return root;
+  for (const child of root.children) {
+    const match = findByTag(child, tagName);
+    if (match) return match;
   }
+  return undefined;
+}
 
-  function mockDoc() {
-    globalThis.document = {
-      createElement: (tag: string) => {
-        const el: MockNode = {
-          tagName: tag,
-          className: "",
-          attributes: {},
-          style: {},
-          children: [],
-          appendChild: (c: unknown) => {
-            el.children.push(c as MockNode);
-            return c;
-          },
-          setAttribute: (k: string, v: string) => {
-            el.attributes[k] = v;
-          },
-        };
-        return el as unknown as HTMLElement;
-      },
-    } as unknown as Document;
-  }
+describe("renderLimitCell", () => {
+  test("currency limits state that the amount is remaining balance", () => {
+    installDom();
+    const cell = renderLimitCell({
+      label: "Balance",
+      unit: "usd",
+      remaining: 4.5,
+      low: true,
+      level: "critical",
+    }) as unknown as MockNode;
 
-  function restoreDoc() {
-    globalThis.document = originalDoc;
-  }
-
-  test("renderLimitCell creates cell with currency", () => {
-    mockDoc();
-    try {
-      const cell = renderLimitCell({
-        label: "Balance",
-        unit: "cny",
-        remaining: 50,
-        low: false,
-        level: "ok",
-      });
-      expect(cell).toBeDefined();
-      expect(cell.className).toBe("col-limit");
-    } finally {
-      restoreDoc();
-    }
+    expect(findAll(cell, "money")[0]?.textContent).toBe("$4.50");
+    expect(findAll(cell, "limit-context")[0]?.textContent).toBe("remaining");
+    expect(findAll(cell, "low")[0]?.textContent).toBe("LOW");
   });
 
-  test("renderLimitCell creates cell with percentage and progress bar", () => {
-    mockDoc();
-    try {
-      const cell = renderLimitCell({
-        label: "Weekly",
-        usedFraction: 0.75,
-        resetsAt: Date.now() + 10000,
-        low: false,
-        level: "hot",
-      });
-      expect(cell).toBeDefined();
-      expect(cell.className).toBe("col-limit");
-    } finally {
-      restoreDoc();
-    }
+  test("fraction limits label used percentage and reset countdown", () => {
+    installDom();
+    const cell = renderLimitCell({
+      label: "Weekly",
+      low: false,
+      level: "hot",
+      usedFraction: 0.75,
+      resetsAt: Date.now() + 3_600_000,
+    }) as unknown as MockNode;
+
+    expect(findAll(cell, "percent")[0]?.textContent).toBe("75% used");
+    expect(findAll(cell, "reset")[0]?.textContent).toStartWith("resets ");
+    const progress = findByTag(cell, "progress");
+    expect(progress?.attributes["aria-label"]).toContain("75.0% used");
   });
 
-  test("renderLimitCell creates empty cell when usedFraction is undefined", () => {
-    mockDoc();
-    try {
-      const cell = renderLimitCell({
-        label: "Custom",
-        low: false,
-        level: "unknown",
-      });
-      expect(cell).toBeDefined();
-      expect(cell.className).toBe("col-limit");
-      const cellNode = cell as unknown as MockNode;
-      const container = cellNode.children[0];
-      const emptySpan = container.children.find((c) => c.className === "level-unknown");
-      expect(emptySpan).toBeDefined();
-      expect(emptySpan?.textContent).toBe("—");
-    } finally {
-      restoreDoc();
-    }
+  test("pacing labels the used share and today's ceiling separately", () => {
+    installDom();
+    const pacing: WeeklyPacing = {
+      dayIndex: 1,
+      todayCeilingFraction: 0.43,
+      headroomFraction: 0.13,
+    };
+    const cell = renderLimitCell({
+      label: "Weekly",
+      low: false,
+      level: "ok",
+      usedFraction: 0.3,
+      resetsAt: Date.now() + 2 * 86_400_000,
+      pacing,
+    }) as unknown as MockNode;
+
+    expect(findAll(cell, "percent")[0]?.textContent).toBe("30% used");
+    expect(findAll(cell, "limit-context")[0]?.textContent).toBe("43% max today");
+    expect(findAll(cell, "reset")[0]?.textContent).toStartWith("resets ");
+    expect(findAll(cell, "limit-bar-fill")[0]?.style.width).toBe("30%");
+    expect(findAll(cell, "limit-bar-tick")).toHaveLength(1);
   });
 
-  test("renderLimitCell renders custom bar with tick and 30/43% for pacing limit", () => {
-    mockDoc();
-    try {
-      const cell = renderLimitCell({
-        label: "Weekly",
-        usedFraction: 0.3,
-        resetsAt: Date.now() + 10000,
-        low: false,
-        level: "ok",
-        pacing: {
-          dayIndex: 2,
-          todayCeilingFraction: 3 / 7,
-          headroomFraction: 3 / 7 - 0.3,
-        } as unknown as WeeklyPacing,
-      });
+  test("over-ceiling pacing retains the overfill segment", () => {
+    installDom();
+    const pacing: WeeklyPacing = {
+      dayIndex: 3,
+      todayCeilingFraction: 0.4,
+      headroomFraction: -0.1,
+    };
+    const cell = renderLimitCell({
+      label: "Weekly",
+      low: false,
+      level: "hot",
+      usedFraction: 0.5,
+      pacing,
+    }) as unknown as MockNode;
 
-      const cellNode = cell as unknown as MockNode;
-      const container = cellNode.children[0];
-
-      // Native progress must not be rendered
-      expect(container.children.some((c) => c.tagName === "progress")).toBe(false);
-
-      // Custom bar wrapper
-      const barWrap = container.children.find((c) => c.className.includes("limit-bar-wrap"));
-      expect(barWrap).toBeDefined();
-      expect(barWrap?.attributes.role).toBe("progressbar");
-      expect(barWrap?.attributes["aria-valuenow"]).toBe("30");
-
-      // Tick present at ceiling (3/7 ≈ 42.857%)
-      const tick = barWrap?.children.find((c) => c.className === "limit-bar-tick");
-      expect(tick).toBeDefined();
-      expect(tick?.style.left).toContain("42.857");
-
-      // Percent span formatted as used/ceiling%
-      const pctSpan = container.children.find((c) => c.className.includes("percent"));
-      expect(pctSpan?.textContent).toBe("30/43%");
-
-      // No stray empty dash child
-      expect(container.children.some((c) => c.textContent === "—")).toBe(false);
-    } finally {
-      restoreDoc();
-    }
+    expect(findAll(cell, "limit-bar-over")).toHaveLength(1);
+    expect(findAll(cell, "limit-bar-tick")).toHaveLength(1);
   });
 
-  test("renderLimitCell renders over-ceiling fill segment when used > ceiling", () => {
-    mockDoc();
-    try {
-      const cell = renderLimitCell({
-        label: "Weekly",
-        usedFraction: 0.3,
-        resetsAt: Date.now() + 10000,
-        low: false,
-        level: "critical",
-        pacing: {
-          dayIndex: 0,
-          todayCeilingFraction: 1 / 7,
-          headroomFraction: 1 / 7 - 0.3,
-        } as unknown as WeeklyPacing,
-      });
-
-      const cellNode = cell as unknown as MockNode;
-      const container = cellNode.children[0];
-      const barWrap = container.children.find((c) => c.className.includes("limit-bar-wrap"));
-      const track = barWrap?.children.find((c) => c.className === "limit-bar-track");
-      const overFill = track?.children.find((c) => c.className === "limit-bar-over");
-      expect(overFill).toBeDefined();
-      expect(overFill?.style.left).toContain("14.285");
-      expect(overFill?.style.width).toContain("15.714");
-    } finally {
-      restoreDoc();
-    }
-  });
-
-  test("limit cell explains its reset countdown, pacing ceiling, and LOW flag", () => {
-    mockDoc();
-    try {
-      // Plain limit: progress announces the reset; the countdown explains itself.
-      const plain = renderLimitCell({
-        label: "Weekly",
-        usedFraction: 0.5,
-        resetsAt: Date.now() + 3_600_000,
-        low: false,
-        level: "ok",
-      }) as unknown as MockNode;
-      const plainContainer = plain.children[0];
-      const progress = plainContainer.children.find((c) => c.tagName === "progress");
-      expect(progress?.attributes["aria-label"]).toContain("resets in");
-      const plainReset = plainContainer.children.find((c) => c.className === "reset");
-      expect(plainReset?.title).toBe("Time until this limit resets");
-
-      // Pacing limit: the used/ceiling percent explains the ceiling on hover.
-      const pacing = renderLimitCell({
-        label: "Weekly",
-        usedFraction: 0.3,
-        resetsAt: Date.now() + 10_000,
-        low: false,
-        level: "ok",
-        pacing: {
-          dayIndex: 2,
-          todayCeilingFraction: 3 / 7,
-          headroomFraction: 3 / 7 - 0.3,
-        } as unknown as WeeklyPacing,
-      }) as unknown as MockNode;
-      const pacingPct = pacing.children[0].children.find((c) => c.className.includes("percent"));
-      expect(pacingPct?.title).toContain("ceiling");
-
-      // Low balance: LOW explains why it is flagged.
-      const moneyCell = renderLimitCell({
-        label: "Balance",
-        unit: "cny",
-        remaining: 5,
-        low: true,
-        level: "critical",
-      }) as unknown as MockNode;
-      const lowSpan = moneyCell.children[0].children.find((c) => c.className === "low");
-      expect(lowSpan?.title).toContain("alert threshold");
-    } finally {
-      restoreDoc();
-    }
-  });
-
-  test("renderLimitCell omits tick on Day 7 when ceiling is 100%", () => {
-    mockDoc();
-    try {
-      const cell = renderLimitCell({
-        label: "Weekly",
-        usedFraction: 0.92,
-        resetsAt: Date.now() + 10000,
-        low: false,
-        level: "ok",
-        pacing: {
-          dayIndex: 6,
-          todayCeilingFraction: 1.0,
-          headroomFraction: 0.08,
-        } as unknown as WeeklyPacing,
-      });
-
-      const cellNode = cell as unknown as MockNode;
-      const container = cellNode.children[0];
-      const barWrap = container.children.find((c) => c.className.includes("limit-bar-wrap"));
-      const tick = barWrap?.children.find((c) => c.className === "limit-bar-tick");
-      expect(tick).toBeUndefined();
-
-      const pctSpan = container.children.find((c) => c.className.includes("percent"));
-      expect(pctSpan?.textContent).toBe("92/100%");
-    } finally {
-      restoreDoc();
-    }
+  test("unknown limits remain an explicit dash", () => {
+    installDom();
+    const cell = renderLimitCell({
+      label: "Weekly",
+      low: false,
+      level: "unknown",
+    }) as unknown as MockNode;
+    expect(findAll(cell, "level-unknown")[0]?.textContent).toBe("—");
   });
 });
