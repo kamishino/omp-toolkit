@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
+import { createContext, runInContext, SourceTextModule } from "node:vm";
 import { DEFAULT_DESKTOP_SETTINGS } from "../settings";
 
 interface MockNode {
@@ -7,9 +9,12 @@ interface MockNode {
   textContent?: string;
   title?: string;
   attributes: Record<string, string>;
-  style: Record<string, string>;
+  dataset: Record<string, string>;
+  style: Record<string, string> & { setProperty?: (name: string, value: string) => void };
   children: MockNode[];
   appendChild: (c: unknown) => unknown;
+  replaceChildren: (...children: unknown[]) => void;
+  querySelector: (selector: string) => MockNode | null;
   setAttribute: (k: string, v: string) => void;
   addEventListener: () => void;
 }
@@ -19,12 +24,17 @@ function makeNode(tag: string): MockNode {
     tagName: tag,
     className: "",
     attributes: {},
+    dataset: {},
     style: {},
     children: [],
     appendChild: (c: unknown) => {
       el.children.push(c as MockNode);
       return c;
     },
+    replaceChildren: (...children: unknown[]) => {
+      el.children = children as MockNode[];
+    },
+    querySelector: (selector: string) => findDescendant(el, selector),
     setAttribute: (k: string, v: string) => {
       el.attributes[k] = v;
     },
@@ -50,6 +60,22 @@ function findByClass(node: MockNode, cls: string): MockNode | undefined {
     if (hit) return hit;
   }
   return undefined;
+}
+
+function findDescendant(node: MockNode, selector: string): MockNode | null {
+  const classes = selector
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith("."))
+    .map((part) => part.slice(1));
+  if (classes.length === 0) return null;
+  for (const child of node.children ?? []) {
+    const childClasses = (child.className ?? "").split(" ");
+    if (classes.some((cls) => childClasses.includes(cls))) return child;
+    const nested = findDescendant(child, selector);
+    if (nested) return nested;
+  }
+  return null;
 }
 
 function dashboardWith(overrides: Record<string, unknown>): never {
@@ -321,5 +347,89 @@ describe("renderer panel", () => {
     expect(controls).toBeDefined();
     expect(findByClass(controls as MockNode, "gw-action-btn")).toBeDefined();
     expect(findByClass(controls as MockNode, "gw-toggle-btn")).toBeDefined();
+  });
+
+  test("browser bundle paints loading and error states without Node globals", async () => {
+    // bun-types 1.4.3 omits `write: false` even though the Bun 1.4.3 runtime supports it.
+    const buildConfig = {
+      entrypoints: [path.join(import.meta.dir, "renderer.ts")],
+      target: "browser",
+      format: "esm",
+      write: false,
+    } as Parameters<typeof Bun.build>[0];
+    const build = await Bun.build(buildConfig);
+    if (!build.success) {
+      throw new Error(build.logs.map((log) => log.message).join("\n"));
+    }
+    const artifact = build.outputs.find((output) => output.path.endsWith(".js"));
+    if (!artifact) throw new Error("renderer build produced no JavaScript output");
+
+    const app = makeNode("main");
+    const documentElement = makeNode("html");
+    documentElement.style.setProperty = () => {};
+    const stateListeners: Array<(state: unknown) => void> = [];
+
+    const context = createContext({
+      document: {
+        documentElement,
+        createElement: (tag: string) => makeNode(tag),
+        createElementNS: (_ns: string, tag: string) => makeNode(tag),
+        createTextNode: (text: string) => ({ textContent: text }),
+        querySelector: (selector: string) => (selector === "#app" ? app : null),
+        addEventListener: () => {},
+      },
+      window: {
+        matchMedia: () => ({ matches: false, addEventListener: () => {} }),
+        addEventListener: () => {},
+        setTimeout: () => 0,
+        clearTimeout: () => {},
+        getComputedStyle: () => ({ paddingTop: "20", paddingBottom: "20", rowGap: "16" }),
+        omp: {
+          onState: (callback: (state: unknown) => void) => {
+            stateListeners.push(callback);
+            return () => {};
+          },
+          onOpenSettings: () => () => {},
+        },
+      },
+      crypto: globalThis.crypto,
+      console,
+      localStorage: {
+        getItem: () => null,
+        setItem: () => {},
+      },
+    });
+
+    expect(runInContext("typeof Buffer", context)).toBe("undefined");
+    expect(runInContext("typeof process", context)).toBe("undefined");
+
+    const module = new SourceTextModule(await artifact.text(), {
+      context,
+      identifier: "renderer.js",
+    });
+    await module.link(() => {
+      throw new Error("renderer bundle must not import");
+    });
+    await module.evaluate({ timeout: 2_000 });
+
+    expect(findByClass(app, "panel")).toBeDefined();
+    expect(findByClass(app, "footer-settings")?.textContent).toBe("Settings");
+    const loadingContent = findByClass(app, "content");
+    expect(loadingContent?.attributes["aria-busy"]).toBe("true");
+    expect(stateListeners).toHaveLength(1);
+
+    stateListeners[0]({
+      status: "error",
+      data: null,
+      message: "fixture monitor failure",
+      intervalSeconds: 300,
+      warmup: { running: false, message: null },
+      settings: DEFAULT_DESKTOP_SETTINGS,
+    });
+
+    const errorContent = findByClass(app, "content");
+    expect(errorContent?.attributes["aria-busy"]).toBe("false");
+    expect(JSON.stringify(errorContent)).toContain("fixture monitor failure");
+    expect(findByClass(errorContent as MockNode, "button-secondary")?.textContent).toBe("Retry");
   });
 });

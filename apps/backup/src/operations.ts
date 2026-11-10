@@ -19,7 +19,7 @@ import {
   encryptBackupPayload,
   extractPortableSettings,
   validateCredentialRecord,
-} from "@omp-toolkit/core";
+} from "@omp-toolkit/core/backup";
 import { YAML } from "bun";
 import type { BackupContext } from "./omp-adapter";
 

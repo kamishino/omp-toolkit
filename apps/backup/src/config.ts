@@ -1,4 +1,4 @@
-import type { BackupSourceProfile } from "@omp-toolkit/core";
+import type { BackupSourceProfile } from "@omp-toolkit/core/backup";
 
 export type BackupCliAction = "export" | "import" | "launch" | "check-runtime" | "help";
 

@@ -3,7 +3,10 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { assertSupportedAuthSchemaVersion, validateBackupRuntimeVersion } from "@omp-toolkit/core";
+import {
+  assertSupportedAuthSchemaVersion,
+  validateBackupRuntimeVersion,
+} from "@omp-toolkit/core/backup";
 
 export interface BackupProcessInfo {
   pid: number;
