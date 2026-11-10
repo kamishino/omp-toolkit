@@ -125,7 +125,9 @@ export async function buildDesktop(): Promise<void> {
   const requiredFiles = [
     ...DESKTOP_DIST_ARTIFACTS.map((file) => path.join(distDir, file)),
     path.join(assetsDir, "app-icon.png"),
-    path.join(assetsDir, "providers", "google-gemini.svg"),
+    path.join(assetsDir, "providers", "antigravity-color.svg"),
+    path.join(assetsDir, "providers", "antigravity-white.svg"),
+    path.join(assetsDir, "providers", "muse-code.svg"),
     path.join(assetsDir, "providers", "openai-light.svg"),
     path.join(assetsDir, "providers", "openai-dark.svg"),
     path.join(assetsDir, "providers", "deepseek.svg"),

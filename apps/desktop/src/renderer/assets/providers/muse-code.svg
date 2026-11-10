@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <title>Muse Code</title>
-  <rect width="64" height="64" rx="14" fill="#6366F1"/>
-  <path d="M16 42V22l8 10 8-10v20" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M38 28l5 4-5 4m10-8l-5 4 5 4" stroke="#A5B4FC" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="64" height="64" rx="12" fill="#5b45e0"/>
+  <path d="M14 46V18h8l10 15 10-15h8v28h-8V31L32 46 22 31v15z" fill="white"/>
 </svg>

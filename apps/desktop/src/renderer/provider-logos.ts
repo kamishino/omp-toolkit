@@ -3,11 +3,13 @@ export interface ProviderLogo {
   dark?: string;
 }
 
-// Vendored offline from @lobehub/icons-static-svg@1.102.0 (MIT), except
-// muse-code.svg which predates the set. See assets/providers/SOURCES.md.
-// Color marks ship one file; mono glyphs ship a #000/#fff light/dark pair.
+// Vendored offline from @lobehub/icons-static-svg@1.102.0 (MIT), except the
+// official Meta Muse Code SDK mark and Google Antigravity brand marks.
+// See assets/providers/SOURCES.md.
+// Marks ship as one color file, an official light/dark pair, or a derived
+// #000/#fff mono pair for theme contrast.
 const PROVIDER_LOGOS: Record<string, ProviderLogo> = {
-  "google-antigravity": { light: "google-gemini.svg" },
+  "google-antigravity": { light: "antigravity-color.svg", dark: "antigravity-white.svg" },
   "openai-codex": { light: "openai-light.svg", dark: "openai-dark.svg" },
   deepseek: { light: "deepseek.svg" },
   "muse-code": { light: "muse-code.svg" },
