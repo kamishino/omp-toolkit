@@ -350,7 +350,7 @@ export function createGatewayView(
     pool.hidden = !showPool;
     if (provider && showPool) {
       poolNum.textContent = `${provider.rows.length}`;
-      poolCap.textContent = "accounts observed";
+      poolCap.textContent = "usage accounts observed";
       poolCap.className = "gw-pool-cap";
     }
 
