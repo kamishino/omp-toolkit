@@ -1,0 +1,6 @@
+schema = 1
+id = "omp-toolkit"
+name = "OMP Toolkit"
+version = "0.1.0"
+description = "Open existing OMP tools in Tern."
+window = "window.luau"
