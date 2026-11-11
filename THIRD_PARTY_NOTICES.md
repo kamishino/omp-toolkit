@@ -205,9 +205,9 @@ specific language governing permissions and limitations under the License.
 **Modifications:**
 - Provider logos under `apps/desktop/src/renderer/assets/providers/` are now
   vendored from Lobe Icons (`@lobehub/icons-static-svg@1.102.0`, MIT,
-  https://github.com/lobehub/lobe-icons), except the official Meta Muse Code SDK
-  favicon (section 11) and Google's official Antigravity brand marks; see that
-  folder's `SOURCES.md` for the per-file manifest. Mono glyphs ship as derived
+  https://github.com/lobehub/lobe-icons), except Meta's Muse product icon
+  (section 11) and Google's official Antigravity brand marks; see that folder's
+  `SOURCES.md` for the per-file manifest. Mono glyphs ship as derived
   `#000`/`#fff` light/dark pairs (path fill changed from `currentColor`) for
   theme contrast. Dashboard-Icons was the previous source for the
   Gemini/OpenAI/DeepSeek marks and is retained above for history. Google's
@@ -551,36 +551,15 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ---
 
-## 11. Muse Code SDK favicon (Meta)
+## 11. Muse icon (Meta)
 
-- **Source:** `https://raw.githubusercontent.com/meta-models/muse-code-sdk/gh-pages/1.4/favicon.svg`
-- **Repository:** `https://github.com/meta-models/muse-code-sdk`
-- **License:** MIT
-- **Copyright:** Copyright (c) Meta Platforms, Inc. and affiliates.
+- **Source (archival):** `https://commons.wikimedia.org/wiki/File:Muse_icon.svg`
+- **Original source:** `https://muse.ai`
+- **Author:** Meta Platforms, Inc.
 - **Retrieved:** 2026-11-11
 
-The favicon is bundled as `muse-code.svg` with an added accessibility `<title>`; its artwork is unchanged.
-
-```text
-MIT License
-
-Copyright (c) Meta Platforms, Inc. and affiliates.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+The icon is bundled as `muse-code.svg` with an added accessibility `<title>`;
+its artwork is unchanged. Wikimedia Commons marks this simple-geometry logo as
+public domain because it does not meet the threshold of originality. It remains
+a Meta trademark, used here solely for service identification; no trademark
+license is claimed.

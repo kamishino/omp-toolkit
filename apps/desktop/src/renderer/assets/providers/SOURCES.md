@@ -9,13 +9,14 @@ Official-first rule: where a vendor publishes a clean official SVG, that asset
 wins; otherwise the Lobe mark is used and logged here as `fallback`. Marks are
 trademarks of their owners; the icon-file license is not a trademark license.
 
-Official assets added 2026-11-11:
+Official/non-Lobe assets added 2026-11-11:
 
-- `muse-code.svg` — Meta Muse Code SDK documentation favicon,
-  `https://raw.githubusercontent.com/meta-models/muse-code-sdk/gh-pages/1.4/favicon.svg`.
-  MIT, copyright Meta Platforms, Inc. and affiliates; full text in
-  `THIRD_PARTY_NOTICES.md` section 11. One color file for both themes; an
-  accessibility `<title>` was added without changing its artwork.
+- `muse-code.svg` — Meta's Muse product mark, archived on Wikimedia Commons
+  (`https://commons.wikimedia.org/wiki/File:Muse_icon.svg`; original source
+  `https://muse.ai`), retrieved 2026-11-11. Wikimedia marks the simple-geometry
+  logo public domain; it remains a Meta trademark and is used for
+  identification only. One color file for both themes; an accessibility
+  `<title>` was added without changing its artwork.
 - `antigravity-color.svg` / `antigravity-white.svg` — Google Antigravity brand
   assets,
   `https://antigravity.google/assets/image/brand/antigravity-icon__full-color.svg`
@@ -31,7 +32,7 @@ Official assets added 2026-11-11:
 | `antigravity-color.svg` / `antigravity-white.svg` | Google Antigravity | official Antigravity brand assets | official (light/dark) | Color/white pair |
 | `openai-light.svg` / `openai-dark.svg` | OpenAI Codex | `openai.svg` | fallback (mono pair) | Fill `currentColor` → `#000` / `#fff` |
 | `deepseek.svg` | DeepSeek | `deepseek-color.svg` | fallback (color) | Whale, `#4D6BFE` |
-| `muse-code.svg` | Muse Code | Meta SDK documentation favicon | official (color) | Bundled unmodified, MIT |
+| `muse-code.svg` | Muse Code | Wikimedia Commons `Muse_icon.svg` (Meta, `muse.ai`) | official (color) | Public-domain geometry; Meta trademark |
 | `anthropic-light.svg` / `anthropic-dark.svg` | Anthropic | `anthropic.svg` | fallback (mono pair) | Fill derived as above |
 | `claude.svg` | Claude | `claude-color.svg` | fallback (color) | `#D97757` |
 | `mistral.svg` | Mistral | `mistral-color.svg` | fallback (color) | |
