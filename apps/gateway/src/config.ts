@@ -287,7 +287,7 @@ Read commands:
   accounts  Antigravity accounts: check status, blocks, policies, quota (masked)
   clients   Scoped gateway clients (digests shown as fingerprints only)
   models    Served model ids from the gateway (/v1/models; --json for array)
-  pool      Pool summary: availability, earliest reset, pin distribution
+  pool      Pool summary: observed block/drain/check/quota counts with evidence warnings
   recipe [claude-code|codex|opencode|pi|cline|aider|goose|crush|qwen-code|hermes|dsh|curl|...]
             Client setup snippet (placeholder token; default: harnesses).
             Remote: --base-url=https://<host> [--model=<id>]
@@ -303,9 +303,12 @@ Read commands:
 Write & Onboarding commands (audited to History; blocks always expire):
   connect <platform> [name] [--force]
             1-step onboarding: registers client token and prints the exact
-            copy-pasteable setup snippet (claude-code, opencode, cline, ...)
-  remote-pair <platform> [name] [--base-url=<url>]
-            1-click secondary PC setup script (PowerShell & Bash 1-liners)
+            copy-pasteable setup snippet (16 recipe platforms).
+            With Cloudflare Access flags, only curl, dsh, omp,
+            python-openai, python-anthropic, vscode-continue.
+  remote-pair <platform> [name] --base-url=https://<host>
+            Remote secondary-PC setup for the six Access-capable platforms
+            above (requires both --cf-client-id and --cf-client-secret).
   clients-add <name> [--models=p/*,...] [--account-id=<id> ...] [--force]
   clients-revoke <name>
   block <account-id> [--seconds=900]

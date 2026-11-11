@@ -6,6 +6,7 @@ import {
   mdiStethoscope,
   mdiStop,
 } from "@mdi/js";
+import { SUPPORTED_RECIPE_PLATFORMS } from "@omp-toolkit/core/gateway/recipes";
 import type { PanelState } from "../ipc";
 import { UNKNOWN_GATEWAY_PANEL_VIEW } from "../ipc";
 import { icon } from "./icon";
@@ -145,17 +146,10 @@ export function createGatewayView(
   const recipeSelect = document.createElement("select");
   recipeSelect.id = "gw-recipe-select";
   recipeSelect.className = "select-input gw-recipe-select";
-  for (const platform of [
-    { id: "claude-code", label: "Claude Code" },
-    { id: "opencode", label: "OpenCode" },
-    { id: "cline", label: "Cline" },
-    { id: "cursor", label: "Cursor" },
-    { id: "aider", label: "Aider" },
-    { id: "curl", label: "curl" },
-  ]) {
+  for (const platform of SUPPORTED_RECIPE_PLATFORMS) {
     const option = document.createElement("option");
-    option.value = platform.id;
-    option.textContent = platform.label;
+    option.value = platform;
+    option.textContent = platform;
     recipeSelect.appendChild(option);
   }
   const copyRecipeBtn = document.createElement("button");
@@ -166,8 +160,37 @@ export function createGatewayView(
   recipeBar.appendChild(recipeLabel);
   recipeBar.appendChild(recipeSelect);
   recipeBar.appendChild(copyRecipeBtn);
+  const clientRow = el("div", "gw-client-row");
+  const clientNameLabel = document.createElement("label");
+  clientNameLabel.className = "gw-recipe-label";
+  clientNameLabel.htmlFor = "gw-client-name";
+  clientNameLabel.textContent = "Client name";
+  const clientNameInput = document.createElement("input");
+  clientNameInput.id = "gw-client-name";
+  clientNameInput.className = "text-input gw-client-name";
+  clientNameInput.type = "text";
+  clientNameInput.value = recipeSelect.value;
+  clientNameInput.placeholder = "Use a separate name per machine, for example omp-pc2.";
+  clientNameInput.title = "Use a separate name per machine, for example omp-pc2.";
+  clientRow.appendChild(clientNameLabel);
+  clientRow.appendChild(clientNameInput);
+  drawer.appendChild(clientRow);
   drawer.appendChild(recipeBar);
   container.appendChild(drawer);
+
+  const diagnostic = el("div", "gw-diagnostic");
+  diagnostic.hidden = true;
+  const diagnosticTitle = el("p", "gw-diagnostic-title", "Latest doctor result");
+  const diagnosticOutput = el("pre", "gw-diagnostic-output");
+  diagnosticOutput.setAttribute("aria-live", "polite");
+  const dismissDiagnosticBtn = document.createElement("button");
+  dismissDiagnosticBtn.type = "button";
+  dismissDiagnosticBtn.className = "button button-secondary gw-diagnostic-dismiss";
+  dismissDiagnosticBtn.textContent = "Dismiss";
+  diagnostic.appendChild(diagnosticTitle);
+  diagnostic.appendChild(diagnosticOutput);
+  diagnostic.appendChild(dismissDiagnosticBtn);
+  container.appendChild(diagnostic);
 
   let currentState = initialState;
   let drawerOpen = readDrawerOpen();
@@ -175,6 +198,9 @@ export function createGatewayView(
   let recipePending = false;
   let confirmingAction: "stop" | "restart" | null = null;
   let destroyed = false;
+  let lastDoctor: { ok: boolean; text: string } | null = null;
+  let clientNameTouched = false;
+  let cachedSetup: { platform: string; name: string; snippet: string } | null = null;
 
   const feedback = (message: string) => {
     if (!destroyed) onFeedback(message);
@@ -213,7 +239,7 @@ export function createGatewayView(
   };
 
   const runAction = (action: LifecycleAction) => {
-    if (pendingAction || destroyed) return;
+    if (pendingAction || recipePending || destroyed) return;
     pendingAction = action;
     confirmingAction = null;
     confirmation.hidden = true;
@@ -223,6 +249,13 @@ export function createGatewayView(
     void window.omp
       .gatewayAction(action)
       .then((result) => {
+        if (destroyed) return;
+        if (action === "doctor") {
+          lastDoctor = {
+            ok: result.success,
+            text: result.message === "" ? "(no output)" : result.message,
+          };
+        }
         feedback(
           result.success
             ? `Gateway ${action} completed`
@@ -230,24 +263,52 @@ export function createGatewayView(
         );
       })
       .catch((error: unknown) => {
+        if (destroyed) return;
+        if (action === "doctor") {
+          const text = error instanceof Error ? error.message : String(error);
+          lastDoctor = { ok: false, text: text === "" ? "(no output)" : text };
+        }
         feedback(
           `Gateway ${action} failed: ${error instanceof Error ? error.message : String(error)}`,
         );
       })
       .finally(() => {
         pendingAction = null;
-        sync();
+        if (!destroyed) sync();
+      });
+  };
+
+  const writeSetupClipboard = (snippet: string, note: string): void => {
+    const clipboard = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
+    if (!clipboard?.writeText) {
+      feedback("Clipboard is unavailable.");
+      recipePending = false;
+      copyRecipeBtn.disabled = pendingAction !== null;
+      return;
+    }
+    void clipboard
+      .writeText(snippet)
+      .then(() => {
+        feedback(note);
+      })
+      .catch(() => {
+        feedback("Could not copy the setup snippet. Retry to use the saved artifact.");
+      })
+      .finally(() => {
+        recipePending = false;
+        if (!destroyed) copyRecipeBtn.disabled = pendingAction !== null;
       });
   };
 
   function sync(): void {
     const gateway = currentState.gateway ?? UNKNOWN_GATEWAY_PANEL_VIEW;
     container.dataset.state = gateway.state;
+    container.dataset.access = gateway.access;
     container.setAttribute("aria-label", gateway.label);
 
     stateLabel.textContent =
       gateway.state === "active"
-        ? "Active"
+        ? "Alive"
         : gateway.state === "off"
           ? "Off"
           : gateway.state === "error"
@@ -266,6 +327,15 @@ export function createGatewayView(
       if (gateway.clientCount !== null) {
         parts.push(`${gateway.clientCount} client${gateway.clientCount === 1 ? "" : "s"}`);
       }
+      parts.push(
+        gateway.access === "ok"
+          ? "access verified"
+          : gateway.access === "denied"
+            ? "access denied"
+            : gateway.access === "error"
+              ? "access unavailable"
+              : "access not checked",
+      );
       meta.textContent = parts.join(" · ");
     } else if (gateway.state === "off") {
       meta.textContent = "Start it to let gateway clients connect.";
@@ -279,13 +349,14 @@ export function createGatewayView(
     const showPool = Boolean(provider) && gateway.state === "active";
     pool.hidden = !showPool;
     if (provider && showPool) {
-      const total = provider.rows.length;
-      const degraded = provider.rows.filter(
-        (row) => typeof row.health === "string" && row.health !== "ok",
-      ).length;
-      poolNum.textContent = `${total - degraded}/${total}`;
-      poolCap.textContent = degraded > 0 ? "accounts · degraded" : "accounts up";
-      poolCap.className = degraded > 0 ? "gw-pool-cap gw-pool-warn" : "gw-pool-cap";
+      poolNum.textContent = `${provider.rows.length}`;
+      poolCap.textContent = "accounts observed";
+      poolCap.className = "gw-pool-cap";
+    }
+
+    diagnostic.hidden = lastDoctor === null;
+    if (lastDoctor) {
+      diagnosticOutput.textContent = lastDoctor.text;
     }
 
     const showStart = gateway.state === "off" || gateway.state === "error";
@@ -299,7 +370,7 @@ export function createGatewayView(
     }
     copyEndpointBtn.disabled = busy;
     copyRecipeBtn.disabled = busy || recipePending;
-    endpointLabel.textContent = `Endpoint: http://${gateway.endpoint}`;
+    endpointLabel.textContent = `Endpoint: ${gateway.endpoint}`;
   }
 
   startBtn.addEventListener("click", () => runAction("start"));
@@ -325,41 +396,73 @@ export function createGatewayView(
       return;
     }
     void clipboard
-      .writeText(`http://${gateway.endpoint}`)
+      .writeText(gateway.endpoint)
       .then(() => feedback("Endpoint copied"))
       .catch(() => feedback("Could not copy the endpoint."));
   });
 
   copyRecipeBtn.addEventListener("click", () => {
-    if (pendingAction || recipePending) return;
+    if (pendingAction || recipePending || destroyed) return;
+    const platform = recipeSelect.value;
+    const typed = clientNameInput.value.trim();
+    const name = typed === "" ? platform : typed;
+    if (cachedSetup && cachedSetup.platform === platform && cachedSetup.name === name) {
+      writeSetupClipboard(cachedSetup.snippet, "Copied saved setup snippet.");
+      return;
+    }
     recipePending = true;
     copyRecipeBtn.disabled = true;
     void window.omp
-      .gatewayConnect(recipeSelect.value)
+      .gatewayConnect(platform, name)
       .then((result) => {
-        if (result.success && result.recipe?.snippet) {
-          const clipboard = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
-          if (clipboard?.writeText) {
-            void clipboard
-              .writeText(result.recipe.snippet)
-              .then(() => feedback(`Copied ${result.recipe?.title} setup snippet`))
-              .catch(() => feedback("Could not copy the setup snippet."));
-          } else {
-            feedback("Clipboard is unavailable.");
-          }
+        if (destroyed) return;
+        const snippet = result.recipe?.snippet;
+        const token = result.token;
+        if (result.success && typeof snippet === "string" && snippet !== "") {
+          cachedSetup = { platform, name, snippet };
+          writeSetupClipboard(
+            snippet,
+            `Copied ${result.recipe?.title ?? platform} setup snippet — token shown once; keep it secure.`,
+          );
+        } else if (
+          result.outcome === "applied" &&
+          typeof snippet === "string" &&
+          snippet !== "" &&
+          typeof token === "string" &&
+          token !== ""
+        ) {
+          cachedSetup = { platform, name, snippet };
+          writeSetupClipboard(
+            snippet,
+            `Setup applied with a warning${result.message ? `: ${result.message}` : ""} — token shown once; keep it secure.`,
+          );
         } else {
           feedback(result.message || "Failed to generate the setup snippet.");
+          recipePending = false;
+          copyRecipeBtn.disabled = pendingAction !== null;
         }
       })
       .catch((error: unknown) => {
+        if (destroyed) return;
         feedback(
           `Failed to generate the setup snippet: ${error instanceof Error ? error.message : String(error)}`,
         );
-      })
-      .finally(() => {
         recipePending = false;
         copyRecipeBtn.disabled = pendingAction !== null;
       });
+  });
+
+  dismissDiagnosticBtn.addEventListener("click", () => {
+    lastDoctor = null;
+    sync();
+  });
+
+  recipeSelect.addEventListener("change", () => {
+    if (!clientNameTouched) clientNameInput.value = recipeSelect.value;
+  });
+
+  clientNameInput.addEventListener("input", () => {
+    clientNameTouched = true;
   });
 
   syncToggle();

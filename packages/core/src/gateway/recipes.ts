@@ -38,6 +38,39 @@ const BUILDERS: Record<ClientRecipePlatform, RecipeBuilder> = {
   dsh: buildDshRecipe,
   omp: buildOmpRecipe,
 };
+/** Platforms with a first-class client setup recipe, in canonical display order. */
+export const SUPPORTED_RECIPE_PLATFORMS: readonly ClientRecipePlatform[] = [
+  "claude-code",
+  "codex",
+  "opencode",
+  "pi",
+  "cline",
+  "aider",
+  "goose",
+  "crush",
+  "qwen-code",
+  "hermes",
+  "dsh",
+  "curl",
+  "python-openai",
+  "python-anthropic",
+  "vscode-continue",
+  "omp",
+];
+
+/**
+ * Recipe platforms whose builders emit Cloudflare Access credentials when
+ * provided. Remote setup carrying Access credentials is limited to these;
+ * other platforms must use ordinary loopback connect.
+ */
+export const CF_ACCESS_RECIPE_PLATFORMS: readonly ClientRecipePlatform[] = [
+  "curl",
+  "dsh",
+  "omp",
+  "python-openai",
+  "python-anthropic",
+  "vscode-continue",
+];
 
 export function generateClientRecipe(
   platform: ClientRecipePlatform,

@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { app, dialog, ipcMain, Menu, Notification, nativeTheme, powerMonitor } from "electron";
 import tokens from "../../../design/tokens.json";
 import { desktopSourcePaths, findStaleDist } from "./freshness";
+import { executeGatewayAction } from "./gateway-actions";
 import { GatewayStatusProbe } from "./gateway-status";
 import { IPC, type RendererToMainEvents } from "./ipc";
 import { consumeLaunchFailure } from "./launch-failure";
@@ -325,13 +326,9 @@ void app.whenReady().then(async () => {
       if (!ctlScript) throw new Error("Gateway control script not found");
       const bun = findBun(process.env, process.platform);
       if (!bun) throw new Error("Bun not found");
-      const execFileAsync = promisify(execFile);
-      const { stdout, stderr } = await execFileAsync(bun, [ctlScript, action], {
-        timeout: 60_000,
-        windowsHide: true,
-      });
+      const result = await executeGatewayAction({ bun, script: ctlScript }, action);
       syncTrayWithGateway();
-      return { success: true, message: String(stdout || stderr || "").trim() };
+      return result;
     } catch (err) {
       syncTrayWithGateway();
       return {
@@ -341,6 +338,62 @@ void app.whenReady().then(async () => {
     }
   });
   ipcMain.handle(IPC.gatewayConnect, async (_event, platform: string, name?: string) => {
+    const parseSetup = (raw: string) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(String(raw));
+      } catch {
+        const message = String(raw).trim();
+        return {
+          success: false,
+          message: message === "" ? "gateway returned non-JSON output" : message,
+        };
+      }
+      if (!parsed || typeof parsed !== "object") {
+        return { success: false, message: "gateway returned an unexpected setup payload" };
+      }
+      const setup = parsed as {
+        ok?: unknown;
+        token?: unknown;
+        clientName?: unknown;
+        recipe?: unknown;
+        error?: unknown;
+        outcome?: unknown;
+        audit?: unknown;
+      };
+      const recipe = setup.recipe as {
+        platform?: unknown;
+        title?: unknown;
+        snippet?: unknown;
+      } | null;
+      const validRecipe =
+        recipe &&
+        typeof recipe.platform === "string" &&
+        typeof recipe.title === "string" &&
+        typeof recipe.snippet === "string"
+          ? { platform: recipe.platform, title: recipe.title, snippet: recipe.snippet }
+          : undefined;
+      return {
+        success: setup.ok === true,
+        token: typeof setup.token === "string" ? setup.token : undefined,
+        clientName: typeof setup.clientName === "string" ? setup.clientName : undefined,
+        recipe: validRecipe,
+        outcome:
+          setup.outcome === "applied" ||
+          setup.outcome === "noop" ||
+          setup.outcome === "partial" ||
+          setup.outcome === "failed"
+            ? setup.outcome
+            : undefined,
+        audit:
+          setup.audit === "recorded" ||
+          setup.audit === "unavailable" ||
+          setup.audit === "not-attempted"
+            ? setup.audit
+            : undefined,
+        message: typeof setup.error === "string" ? setup.error : undefined,
+      };
+    };
     try {
       const ctlScript = resolveGatewayScript(process.env, checkoutRoot);
       if (!ctlScript) throw new Error("Gateway control script not found");
@@ -350,19 +403,25 @@ void app.whenReady().then(async () => {
       const args = ["connect", platform];
       if (name) args.push(name);
       args.push("--json");
-      const { stdout } = await execFileAsync(bun, [ctlScript, ...args], {
-        timeout: 60_000,
-        windowsHide: true,
-      });
-      const parsed = JSON.parse(String(stdout));
-      syncTrayWithGateway();
-      return {
-        success: parsed.ok === true,
-        token: parsed.token,
-        clientName: parsed.clientName,
-        recipe: parsed.recipe,
-        message: parsed.error,
-      };
+      try {
+        const { stdout } = await execFileAsync(bun, [ctlScript, ...args], {
+          timeout: 60_000,
+          windowsHide: true,
+        });
+        syncTrayWithGateway();
+        return parseSetup(String(stdout));
+      } catch (err) {
+        syncTrayWithGateway();
+        const captured =
+          err && typeof err === "object" && "stdout" in err && typeof err.stdout === "string"
+            ? err.stdout
+            : null;
+        if (captured !== null && captured.trim() !== "") return parseSetup(captured);
+        return {
+          success: false,
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     } catch (err) {
       return {
         success: false,

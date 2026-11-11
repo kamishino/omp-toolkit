@@ -303,6 +303,176 @@ describe("createGatewayView", () => {
     expect(select.value).toBe("cursor");
     expect(findByClass(root, "gw-drawer")?.hidden).toBe(false);
   });
+
+  test("doctor result persists across updates until dismissed", async () => {
+    installDom();
+    (globalThis.window as unknown as { omp: unknown }).omp = {
+      gatewayAction: async (action: string) => {
+        expect(action).toBe("doctor");
+        return { success: false, message: "FAIL network" };
+      },
+    };
+    const controller = createGatewayView(state("active"), () => {});
+    const root = controller.element as unknown as MockNode;
+    expect(findByClass(root, "gw-diagnostic")?.hidden).toBe(true);
+
+    collect(root)
+      .find((node) => node.dataset.action === "doctor")
+      ?.click();
+    for (
+      let tick = 0;
+      tick < 20 && findByClass(root, "gw-diagnostic-output")?.textContent === "";
+      tick += 1
+    ) {
+      await Promise.resolve();
+    }
+    expect(findByClass(root, "gw-diagnostic-output")?.textContent).toBe("FAIL network");
+    expect(findByClass(root, "gw-diagnostic")?.hidden).toBe(false);
+
+    controller.update(state("off"));
+    expect(findByClass(root, "gw-diagnostic-output")?.textContent).toBe("FAIL network");
+    expect(findByClass(root, "gw-diagnostic")?.hidden).toBe(false);
+
+    findByClass(root, "gw-diagnostic-dismiss")?.click();
+    expect(findByClass(root, "gw-diagnostic")?.hidden).toBe(true);
+  });
+
+  test("setup copy caches the artifact and reuses it on retry", async () => {
+    installDom();
+    const copied: string[] = [];
+    (globalThis.navigator as unknown as { clipboard: unknown }).clipboard = {
+      writeText: async (text: string) => {
+        copied.push(text);
+      },
+    };
+    const calls: Array<[string, string | undefined]> = [];
+    (globalThis.window as unknown as { omp: unknown }).omp = {
+      gatewayConnect: async (platform: string, name?: string) => {
+        calls.push([platform, name]);
+        return {
+          success: true,
+          token: "omp_gw_live",
+          clientName: name,
+          recipe: { platform, title: "T", snippet: "SNIPPET" },
+        };
+      },
+    };
+    const feedbacks: string[] = [];
+    const controller = createGatewayView(state("active"), (message) => feedbacks.push(message));
+    const root = controller.element as unknown as MockNode;
+    const select = findById(root, "gw-recipe-select");
+    if (!select) throw new Error("recipe select missing");
+    select.value = "omp";
+    select.dispatch("change");
+    const nameInput = findById(root, "gw-client-name");
+    if (!nameInput) throw new Error("client name input missing");
+    expect(nameInput.value).toBe("omp");
+    nameInput.value = "omp-pc2";
+    nameInput.dispatch("input");
+
+    const copy = () =>
+      collect(root)
+        .find((node) => node.className.split(" ").includes("gw-recipe-copy-btn"))
+        ?.click();
+    copy();
+    for (let tick = 0; tick < 20 && copied.length === 0; tick += 1) {
+      await Promise.resolve();
+    }
+    for (let tick = 0; tick < 5; tick += 1) {
+      await Promise.resolve();
+    }
+    expect(calls).toEqual([["omp", "omp-pc2"]]);
+    expect(copied).toEqual(["SNIPPET"]);
+    expect(feedbacks.join("\n")).toContain("token shown once");
+
+    copy();
+    for (let tick = 0; tick < 20 && copied.length < 2; tick += 1) {
+      await Promise.resolve();
+    }
+    for (let tick = 0; tick < 5; tick += 1) {
+      await Promise.resolve();
+    }
+    expect(calls).toHaveLength(1);
+    expect(copied).toEqual(["SNIPPET", "SNIPPET"]);
+    expect(root).toBeDefined();
+    expect(controller).toBeDefined();
+  });
+
+  test("applied-with-warning setup is recoverable and cached", async () => {
+    installDom();
+    const copied: string[] = [];
+    (globalThis.navigator as unknown as { clipboard: unknown }).clipboard = {
+      writeText: async (text: string) => {
+        copied.push(text);
+      },
+    };
+    const calls: Array<[string, string | undefined]> = [];
+    (globalThis.window as unknown as { omp: unknown }).omp = {
+      gatewayConnect: async (platform: string, name?: string) => {
+        calls.push([platform, name]);
+        return {
+          success: false,
+          token: "omp_gw_kept",
+          clientName: name,
+          recipe: { platform, title: "T", snippet: "KEPT" },
+          outcome: "applied",
+          audit: "unavailable",
+          message: "Action applied; audit recording failed. Inspect state before retry.",
+        };
+      },
+    };
+    const feedbacks: string[] = [];
+    const controller = createGatewayView(state("active"), (message) => feedbacks.push(message));
+    expect(controller).toBeDefined();
+    const root = controller.element as unknown as MockNode;
+    const select = findById(root, "gw-recipe-select");
+    if (!select) throw new Error("recipe select missing");
+    select.value = "dsh";
+    const copy = () =>
+      collect(root)
+        .find((node) => node.className.split(" ").includes("gw-recipe-copy-btn"))
+        ?.click();
+    copy();
+    for (let tick = 0; tick < 20 && copied.length === 0; tick += 1) {
+      await Promise.resolve();
+    }
+    for (let tick = 0; tick < 5; tick += 1) {
+      await Promise.resolve();
+    }
+    expect(calls).toEqual([["dsh", "dsh"]]);
+    expect(copied).toEqual(["KEPT"]);
+    expect(feedbacks.join("\n")).toContain("applied with a warning");
+    expect(feedbacks.join("\n")).toContain("token shown once");
+
+    copy();
+    for (let tick = 0; tick < 20 && copied.length < 2; tick += 1) {
+      await Promise.resolve();
+    }
+    for (let tick = 0; tick < 5; tick += 1) {
+      await Promise.resolve();
+    }
+    expect(calls).toHaveLength(1);
+    expect(copied).toEqual(["KEPT", "KEPT"]);
+  });
+
+  test("platform change updates an untouched client name but preserves edits", () => {
+    installDom();
+    (globalThis.window as unknown as { omp: unknown }).omp = {};
+    const controller = createGatewayView(state("active"), () => {});
+    expect(controller).toBeDefined();
+    const root = controller.element as unknown as MockNode;
+    const select = findById(root, "gw-recipe-select");
+    const nameInput = findById(root, "gw-client-name");
+    if (!select || !nameInput) throw new Error("picker or name input missing");
+    select.value = "omp";
+    select.dispatch("change");
+    expect(nameInput.value).toBe("omp");
+    nameInput.value = "my-pc";
+    nameInput.dispatch("input");
+    select.value = "dsh";
+    select.dispatch("change");
+    expect(nameInput.value).toBe("my-pc");
+  });
 });
 
 function collect(root: MockNode): MockNode[] {
