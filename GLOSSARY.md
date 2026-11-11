@@ -243,6 +243,12 @@ _Avoid_: Gateway account, gateway user
 The durable binding of one gateway client (or OMP session) to one account of a
 provider, held until that account becomes ineligible.
 
+## Account eligibility
+
+Whether an account may be selected for a particular route under the applicable
+access, quota, and operator-policy constraints. An unblocked account or a
+healthy gateway process alone does not establish eligibility.
+
 ## Credential block
 
 A temporary marker that makes one account ineligible for a scope until a stated
