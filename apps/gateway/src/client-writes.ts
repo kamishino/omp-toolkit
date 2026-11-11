@@ -105,7 +105,10 @@ export async function revokeClient(ctx: WriteContext, name: string): Promise<Wri
       `clients-revoke ${target} -> failed: registry write did not confirm (${error instanceof Error ? error.message.split("\n")[0] : "unknown error"})`,
     ]);
   }
-  const lines = [`client "${name}" revocation written to the clients file`];
+  const lines = [
+    `client "${name}" revocation written to the clients file`,
+    "Expected impact: requests using this client's token should be rejected after the gateway loads the updated clients file; live reload and in-flight requests were not verified by this command.",
+  ];
   const audited = await ctx.recordAudit("gateway.client-revoke", null, { name });
   if (!audited) lines.push(AUDIT_WARNING);
   return {

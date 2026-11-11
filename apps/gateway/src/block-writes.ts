@@ -66,7 +66,10 @@ export async function blockAccount(
       ],
     };
   }
-  const lines = [`account #${credentialId} blocked until ${new Date(until).toISOString()}`];
+  const lines = [
+    `account #${credentialId} blocked until ${new Date(until).toISOString()}`,
+    "note: listed blocks are local selection controls; OMP may still attempt the wire as a last resort",
+  ];
   const audited = await ctx.recordAudit("gateway.block", credentialId, {
     blockedUntilMs: until,
     durationSeconds,
