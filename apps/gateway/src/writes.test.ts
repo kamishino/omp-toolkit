@@ -19,6 +19,7 @@ function harness(
   };
   const blocks: { id: number; until: number }[] = [];
   let clientsText = "{}";
+  let policyWrites = 0;
   let policiesRaw = JSON.stringify([
     {
       provider: "google-antigravity",
@@ -74,6 +75,7 @@ function harness(
     },
     writePolicies: async (p) => {
       if (overrides.policiesError === "write") throw new Error("policy write down");
+      policyWrites += 1;
       policiesRaw = JSON.stringify(p);
     },
     readTextFile: () => clientsText,
@@ -93,6 +95,7 @@ function harness(
     events,
     getClientsText: () => clientsText,
     getPoliciesRaw: () => policiesRaw,
+    policyWrites: () => policyWrites,
   };
 }
 
@@ -320,13 +323,51 @@ describe("GatewayWrites explicit outcomes", () => {
     expect(h.events).toHaveLength(0);
   });
 
-  test("undrain with an explicit policy but no drain record refuses", async () => {
+  test("repeated undrain preserves a later explicit policy edit", async () => {
+    const h = harness();
+    expect((await h.writes.drain(1)).outcome).toBe("applied");
+    expect((await h.writes.undrain(1)).outcome).toBe("applied");
+    expect((await h.writes.policySet(1, { priority: 9 }, "gateway.policy")).ok).toBe(true);
+    const before = h.getPoliciesRaw();
+    const writesBefore = h.policyWrites();
+    const eventsBefore = h.events.length;
+    const result = await h.writes.undrain(1);
+    expect(result.ok).toBe(true);
+    expect(result.outcome).toBe("noop");
+    expect(result.audit).toBe("not-attempted");
+    expect(h.getPoliciesRaw()).toBe(before);
+    expect(h.policyWrites()).toBe(writesBefore);
+    expect(h.events.length).toBe(eventsBefore);
+    const policies = JSON.parse(h.getPoliciesRaw()) as { priority?: number }[];
+    expect(policies[0]?.priority).toBe(9);
+  });
+
+  test("explicit non-drained policy without history remains unchanged", async () => {
     const h = harness();
     expect((await h.writes.policySet(6, { reservePct: 50 }, "gateway.policy")).ok).toBe(true);
+    const before = h.getPoliciesRaw();
+    const writesBefore = h.policyWrites();
+    const eventsBefore = h.events.length;
+    const result = await h.writes.undrain(6);
+    expect(result.ok).toBe(true);
+    expect(result.outcome).toBe("noop");
+    expect(result.audit).toBe("not-attempted");
+    expect(h.getPoliciesRaw()).toBe(before);
+    expect(h.policyWrites()).toBe(writesBefore);
+    expect(h.events.length).toBe(eventsBefore);
+  });
+
+  test("still-drained policy without history fails without a restore write", async () => {
+    const h = harness();
+    expect((await h.writes.policySet(6, { reservePct: 100 }, "gateway.policy")).ok).toBe(true);
+    const writesBefore = h.policyWrites();
+    const eventsBefore = h.events.length;
     const result = await h.writes.undrain(6);
     expect(result.ok).toBe(false);
     expect(result.outcome).toBe("failed");
+    expect(h.policyWrites()).toBe(writesBefore);
+    expect(h.events.length).toBe(eventsBefore);
     const policies = JSON.parse(h.getPoliciesRaw()) as { reservePct?: number }[];
-    expect(policies.some((p) => p.reservePct === 50)).toBe(true);
+    expect(policies.some((p) => p.reservePct === 100)).toBe(true);
   });
 });

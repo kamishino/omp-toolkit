@@ -145,32 +145,32 @@ export async function undrainAccount(
   if (!account) {
     return failure(target, [`unknown ${ctx.provider} credential id: ${credentialId}`]);
   }
-  const last = await ctx.audit.latest("gateway.drain", `id:${credentialId}`);
-  if (!last?.detail) {
-    let current: AccountPolicyLike[];
-    try {
-      current = await ctx.readPoliciesStrict();
-    } catch {
-      return failure(target, [`undrain ${target} -> failed: policy read failed`]);
-    }
-    const existing = current.some(
-      (policy) =>
-        (policy.provider ?? "") === ctx.provider &&
-        policy.account?.email?.toLowerCase() === account.email.toLowerCase(),
-    );
-    if (existing) {
-      return failure(target, [
-        `no drain audit record for account #${credentialId}; use policy to set reservePct explicitly`,
-      ]);
-    }
+  let current: AccountPolicyLike[];
+  try {
+    current = await ctx.readPoliciesStrict();
+  } catch {
+    return failure(target, [`undrain ${target} -> failed: policy read failed`]);
+  }
+  const existing = current.find(
+    (policy) =>
+      (policy.provider ?? "") === ctx.provider &&
+      policy.account?.email?.toLowerCase() === account.email.toLowerCase(),
+  );
+  if (!existing || typeof existing.reservePct !== "number" || existing.reservePct < 100) {
     return {
       ok: true,
       outcome: "noop",
       target,
       scope: "account-policy",
       audit: "not-attempted",
-      lines: [`undrain ${target} -> noop: already undrained; no policy entry to restore`],
+      lines: [`undrain ${target} -> noop: already undrained; current policy unchanged`],
     };
+  }
+  const last = await ctx.audit.latest("gateway.drain", `id:${credentialId}`);
+  if (!last?.detail) {
+    return failure(target, [
+      `no drain audit record for account #${credentialId}; use policy to set reservePct explicitly`,
+    ]);
   }
   let prior: DrainPrior | null = null;
   try {
@@ -183,12 +183,6 @@ export async function undrainAccount(
     return failure(target, [
       `drain audit record for account #${credentialId} is unreadable; use policy to set reservePct explicitly`,
     ]);
-  }
-  let current: AccountPolicyLike[];
-  try {
-    current = await ctx.readPoliciesStrict();
-  } catch {
-    return failure(target, [`undrain ${target} -> failed: policy read failed`]);
   }
   let next: AccountPolicyLike[];
   if (!prior?.hadEntry) {
