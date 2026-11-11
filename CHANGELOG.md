@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.6.0 — Gateway control plane, desktop redesign, truthful pool assessment, and Tern plugin (2026-11-11)
+
+- Add optional Tern terminal plugin (`apps/tern-plugin`) exposing rebindable command-palette actions for OMP sessions, live provider usage monitoring, and gateway status/doctor checks with reload-safe pane ownership and local session safety guards.
 - Redesign the desktop panel around status-first Usage, Gateway, and Settings views: truthful All / High usage / Needs attention filters, always-visible provider summaries, explicit quota labels, preserved Settings drafts with acknowledged saves, inline Stop/Restart confirmation, and provider-access guidance moved out of the account list.
 - Add a desktop-panel notice explaining OMP's built-in Google Antigravity pause, comparing the running OMP build (version plus SHA-256) against the recorded 18.18.6 checkpoint, and listing the reviewed manual `google-gemini-cli` login and model-selection steps; it never signs in, sends a model request, or changes configuration.
 - Pause Gemini health by default: with `GEMINI_HEALTH_ENABLED` unset or not `1`, startup checks, idle recovery, stall auto-heal, `/gemini-*` commands, the `gemini_health` tool, CLI probes, and desktop warm-up/check perform no account discovery, probing, or policy mutation, and report the pause instead; resume explicitly with `GEMINI_HEALTH_ENABLED=1`.
