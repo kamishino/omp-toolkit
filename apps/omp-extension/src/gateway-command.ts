@@ -86,12 +86,28 @@ const PASSTHROUGH: Record<string, string> = {
   "autostart-status": "autostart-status",
 };
 
+const MANUAL_WRITE_ACTIONS: Record<string, true> = {
+  "client-add": true,
+  "client-revoke": true,
+  block: true,
+  unblock: true,
+  drain: true,
+  undrain: true,
+  "drain-all": true,
+  "unblock-all": true,
+  policy: true,
+};
+
 export function formatGatewayOutput(action: string, res: GatewayCtlResult): string {
   const text = (res.stdout || res.stderr || "").trim();
   if (!text) {
     return res.exitCode === 0
       ? `✅ Gateway ${action} succeeded.`
       : `❌ Gateway ${action} failed (code ${res.exitCode}).`;
+  }
+
+  if (res.exitCode !== 0 && MANUAL_WRITE_ACTIONS[action]) {
+    return `❌ Gateway ${action} did not complete cleanly (code ${res.exitCode}).\n\n${text}`;
   }
 
   if (action === "status") {

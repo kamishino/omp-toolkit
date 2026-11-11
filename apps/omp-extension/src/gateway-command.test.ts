@@ -89,6 +89,51 @@ describe("handleGatewayCommand", () => {
     const result = await handleGatewayCommand(["foobar"], createMockDeps());
     expect(result).toContain("Usage: /gateway");
   });
+
+  test("manual-write actions with non-zero exit code prepend non-clean status header", async () => {
+    const drainPartialDeps = createMockDeps({
+      runCtl: async () => ({
+        stdout:
+          "drain-all pool google-antigravity -> partial: 1 applied, unconfirmed at account #6, 1 not attempted",
+        exitCode: 1,
+      }),
+    });
+    const drainResult = await handleGatewayCommand(["drain-all"], drainPartialDeps);
+    expect(drainResult).toContain("❌ Gateway drain-all did not complete cleanly (code 1).");
+    expect(drainResult).toContain("1 applied, unconfirmed at account #6, 1 not attempted");
+
+    const blockAuditFailDeps = createMockDeps({
+      runCtl: async () => ({
+        stdout:
+          "account #1 blocked until 2026-11-11T12:00:00.000Z\nAction applied; audit recording failed. Inspect state before retry.",
+        exitCode: 1,
+      }),
+    });
+    const blockResult = await handleGatewayCommand(["block", "1"], blockAuditFailDeps);
+    expect(blockResult).toContain("❌ Gateway block did not complete cleanly (code 1).");
+    expect(blockResult).toContain("Action applied; audit recording failed");
+
+    const revokeUsageDeps = createMockDeps({
+      runCtl: async () => ({
+        stdout: "",
+        stderr: "usage: gateway:ctl clients-revoke <name>",
+        exitCode: 2,
+      }),
+    });
+    const revokeResult = await handleGatewayCommand(["client-revoke"], revokeUsageDeps);
+    expect(revokeResult).toContain("❌ Gateway client-revoke did not complete cleanly (code 2).");
+    expect(revokeResult).toContain("usage: gateway:ctl clients-revoke <name>");
+
+    const okDeps = createMockDeps({
+      runCtl: async () => ({
+        stdout: 'client "laptop" revocation written to the clients file',
+        exitCode: 0,
+      }),
+    });
+    const okResult = await handleGatewayCommand(["client-revoke", "laptop"], okDeps);
+    expect(okResult).not.toContain("did not complete cleanly");
+    expect(okResult).toContain('client "laptop" revocation written to the clients file');
+  });
 });
 
 describe("resolveGatewayCtlPath", () => {
