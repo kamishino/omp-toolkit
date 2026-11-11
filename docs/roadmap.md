@@ -50,6 +50,7 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `R01` | Operational Must-Haves (Autonomous Safeguards) — **partial** | commits `d5b45d1`, `52d676a`, `c630336`, `3269972` | Quota decision helper (`evaluateQuotaCooldowns`) exists; production automatic-sweep wiring (`autoCooldownSweep`) was not found, so the helper is not an active service. Desktop OS notifications (`evaluateQuotaAlerts`, 15-minute debouncing) and `gateway:ctl remote-pair <platform> [name]` remain dated historical evidence from 2026-11-06, not newly verified runtime behavior |
 | `G04` | Remote Client Doctor (`gateway:ctl doctor --remote`) | `packages/core/src/gateway/doctor.ts`, `apps/gateway/src/doctor.ts` | Unit-verified (`control.test.ts`, `doctor.test.ts`): diagnoses base URL, CF Access headers, public tunnel reachability, and gateway bearer auth in 1 command with actionable fix hints |
 | `G05` | Truthful gateway and pool assessment | `packages/core/src/gateway/account-views.ts`, `apps/gateway/src/views.ts`, `apps/desktop/src/gateway-status.ts`, `apps/desktop/src/renderer/gateway-view.ts` | Verified 2026-11-11: 41 unit tests pass (`account-views`, `views`, `gateway-status`, `gateway-view`); Chromium browser-verified across 4 desktop states: alive-with-denied access shows access denied with `3 usage accounts observed` concurrently without readiness claims, zero-row provider shows `0 usage accounts observed`, absent provider and off-state hide count; glossary defines `Gateway account snapshot` |
+| `G06` | Explainable manual account and client actions | `apps/gateway/src/block-writes.ts`, `apps/gateway/src/client-writes.ts`, `apps/gateway/src/policy-writes.ts`, `apps/omp-extension/src/gateway-command.ts` | Verified 2026-11-11: 43 unit tests pass (`writes`, `daemon`, `gateway-command` regressions); in-memory and isolated CLI execution verified: soft-selection control notes appended to block output, expected reload impact line appended to revocation output without token disclosure, non-zero write exit codes (1, 2) cleanly formatted with error headers in `/gateway` output |
 
 ---
 
@@ -63,18 +64,12 @@ No Gemini probe/recovery opt-in is required for this increment. Leave existing c
 
 ### Development Musts
 
-All Must Have development items are completed. `G06` is the single active development candidate in Should Have.
+All Must Have development items are completed. `G07` is the single active development candidate in Should Have.
 ---
 
 ## Should Have
 
-`G05` is complete. Proceed strictly one feature or intervention at a time: `G06` (active candidate) then `G07`.
-
-- **`G06`: Explainable manual account and client actions** (depends on `G05`). Preserve operator-triggered writes, bounded block durations, audit records, credential secrecy, and managed-process ownership safeguards.
-  - Make target, scope and observed outcome clear for existing block/drain/unblock/revoke operations. Local blocks are soft upstream selection controls, not guaranteed no-serve protection. Distinguish an empty/no-op result from restricting a populated pool.
-  - Observable outcomes: draining an empty snapshot does not claim populated-pool exhaustion; an unknown account fails without changing another account; action failures cannot show success; revocation identifies the named client and expected impact without printing its stored token. No plaintext credentials in logs/audits.
-  - Reuse existing write modules and action surfaces; no new rotation API, database schema, serving-account attribution, or unverified token-reload guarantee.
-  - Source anchors: `apps/gateway/src/block-writes.ts`, `apps/gateway/src/client-writes.ts`, `apps/gateway/src/policy-writes.ts`, `apps/gateway/src/daemon-manager.ts` (existing safeguards).
+`G05` and `G06` are complete. Proceed strictly one feature or intervention at a time: `G07` (active candidate).
 
 - **`G07`: Correct secondary-PC setup and persistent diagnostic results** (follows `G06`). Correct concrete output/feedback gaps; do not rebuild shipped `connect`, `remote-pair`, recipes, or `doctor --remote`.
   - Reuse the platform-specific recipe generator. An OMP thin client receives OMP configuration, not Anthropic-only variables. Missing required remote settings or failed client creation must not produce a successful-looking live setup payload or silently rotate another client's credentials.
@@ -128,7 +123,7 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 
 ## Recommended Execution Sequence
 
-`G05` is complete. `G06` (Should) is the single active development candidate, followed by `G07`. `G08` stays conditional until `G06`–`G07` meet their outcomes and each candidate provider's supported identity/credential paths are established. `G04` and `G05` are complete and are not future work.
+`G05` and `G06` are complete. `G07` (Should) is the single active development candidate. `G08` stays conditional until `G07` meets its outcomes and each candidate provider's supported identity/credential paths are established. `G04`, `G05`, and `G06` are complete and are not future work.
 
 Autonomous account restriction is a separate gated proposal only after trustworthy observations, upstream last-resort/enforcement behavior, and recovery semantics are established; the survivor heuristic does not prove hard protection. This sequence adds no HA, new dashboard, second proxy/vault, model degradation, or periodic inference checks.
 
