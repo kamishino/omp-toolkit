@@ -35,8 +35,14 @@ export interface BrokerClient {
 }
 
 async function defaultReadStickyRows(agentDbPath: string): Promise<StickyRowLike[]> {
+  let present = false;
   try {
-    if (!fs.existsSync(agentDbPath)) return [];
+    present = fs.existsSync(agentDbPath);
+  } catch {
+    present = false;
+  }
+  if (!present) throw new Error("sticky cache is unreadable; pin distribution unavailable");
+  try {
     // bun:sqlite is available under the Bun runtime this app ships on.
     const sqlite = (await import("bun:sqlite")) as {
       Database: new (
@@ -57,8 +63,62 @@ async function defaultReadStickyRows(agentDbPath: string): Promise<StickyRowLike
       db.close();
     }
   } catch {
-    return [];
+    throw new Error("sticky cache is unreadable; pin distribution unavailable");
   }
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validBlockList(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (block) =>
+      isObject(block) &&
+      typeof block.providerKey === "string" &&
+      typeof block.blockScope === "string" &&
+      typeof block.blockedUntilMs === "number" &&
+      Number.isFinite(block.blockedUntilMs),
+  );
+}
+
+function validSnapshotRow(row: unknown): row is SnapshotEntryLike {
+  if (!isObject(row)) return false;
+  if (!Number.isInteger(row.id) || (row.id as number) <= 0) return false;
+  if (typeof row.provider !== "string") return false;
+  if (
+    row.identityKey !== undefined &&
+    row.identityKey !== null &&
+    typeof row.identityKey !== "string"
+  ) {
+    return false;
+  }
+  if (row.blocks !== undefined && !validBlockList(row.blocks)) return false;
+  return true;
+}
+
+function validCheckRow(row: unknown): row is CredentialCheckLike {
+  if (!isObject(row)) return false;
+  if (!Number.isInteger(row.id)) return false;
+  if (typeof row.provider !== "string") return false;
+  if (row.ok !== undefined && typeof row.ok !== "boolean") return false;
+  return true;
+}
+
+function validUsageRow(row: unknown): row is UsageReportLike {
+  if (!isObject(row)) return false;
+  if (typeof row.provider !== "string") return false;
+  if (row.metadata !== undefined && !isObject(row.metadata)) return false;
+  if (row.limits !== undefined) {
+    if (!Array.isArray(row.limits)) return false;
+    for (const limit of row.limits) {
+      if (!isObject(limit)) return false;
+      if (limit.amount !== undefined && !isObject(limit.amount)) return false;
+      if (limit.window !== undefined && !isObject(limit.window)) return false;
+    }
+  }
+  return true;
 }
 
 export function createBrokerClient(
@@ -130,27 +190,38 @@ export function createBrokerClient(
         .filter((id): id is string => typeof id === "string");
     },
     async getSnapshot(): Promise<SnapshotEntryLike[]> {
-      const data = (await getJson(`${brokerBase}/v1/snapshot`, config.brokerTokenPath)) as {
-        credentials?: SnapshotEntryLike[];
-        entries?: SnapshotEntryLike[];
+      const url = `${brokerBase}/v1/snapshot`;
+      const data = (await getJson(url, config.brokerTokenPath)) as {
+        credentials?: unknown;
+        entries?: unknown;
       };
-      return data.credentials ?? data.entries ?? [];
+      const list = isObject(data) ? (data.credentials ?? data.entries) : undefined;
+      if (!Array.isArray(list) || !list.every(validSnapshotRow)) {
+        throw new Error(`GET ${url} returned an unusable snapshot payload`);
+      }
+      return list;
     },
     async getCredentialCheck(): Promise<CredentialCheckLike[]> {
-      const data = (await getJson(
-        `${gatewayBase}/v1/credentials/check`,
-        config.gatewayTokenPath,
-        120_000,
-      )) as {
-        credentials?: CredentialCheckLike[];
+      const url = `${gatewayBase}/v1/credentials/check`;
+      const data = (await getJson(url, config.gatewayTokenPath, 120_000)) as {
+        credentials?: unknown;
       };
-      return data.credentials ?? [];
+      const list = isObject(data) ? data.credentials : undefined;
+      if (!Array.isArray(list) || !list.every(validCheckRow)) {
+        throw new Error(`GET ${url} returned an unusable credential-check payload`);
+      }
+      return list;
     },
     async getUsage(): Promise<UsageReportLike[]> {
-      const data = (await getJson(`${gatewayBase}/v1/usage`, config.gatewayTokenPath, 60_000)) as {
-        reports?: UsageReportLike[];
+      const url = `${gatewayBase}/v1/usage`;
+      const data = (await getJson(url, config.gatewayTokenPath, 60_000)) as {
+        reports?: unknown;
       };
-      return data.reports ?? [];
+      const list = isObject(data) ? data.reports : undefined;
+      if (!Array.isArray(list) || !list.every(validUsageRow)) {
+        throw new Error(`GET ${url} returned an unusable usage payload`);
+      }
+      return list;
     },
     readStickyRows: () => (deps.readStickyRows ?? defaultReadStickyRows)(config.agentDbPath),
     tokenPresent: (kind) =>

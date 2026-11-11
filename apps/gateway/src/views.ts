@@ -4,12 +4,22 @@ import {
   buildAccountViews,
   buildPoolView,
   type GatewayClientView,
+  type ObservationState,
   type PoolView,
   parseClientsFile,
   type StickySummaryEntry,
   summarizeSticky,
 } from "@omp-toolkit/core";
 import type { BrokerClient } from "./broker-client";
+
+export type SourceKey = "snapshot" | "checks" | "usage" | "policies" | "sticky";
+
+export class SnapshotUnavailableError extends Error {
+  constructor() {
+    super("Account snapshot unavailable; no pool assessment was made.");
+    this.name = "SnapshotUnavailableError";
+  }
+}
 
 export interface ViewsDependencies {
   client: BrokerClient;
@@ -23,32 +33,62 @@ export interface ViewsDependencies {
 }
 
 export interface AccountsOutput {
+  provider: string;
   accounts: AccountView[];
   pool: PoolView;
   sticky: StickySummaryEntry[];
+  sources: Record<SourceKey, ObservationState>;
+  warnings: string[];
 }
+
+const SOURCE_WARNINGS: Record<Exclude<SourceKey, "snapshot">, string> = {
+  checks: "credential-check unavailable; ok=unknown",
+  usage: "usage unavailable; quota=unknown",
+  policies: "policy unavailable; drained=unknown",
+  sticky: "pin distribution unavailable",
+};
 
 export async function getAccountsOutput(deps: ViewsDependencies): Promise<AccountsOutput> {
   const nowMs = (deps.now ?? Date.now)();
-  const [snapshot, checks, usage, stickyRows, policies] = await Promise.all([
-    deps.client.getSnapshot(),
-    deps.client.getCredentialCheck(),
-    deps.client.getUsage(),
-    deps.client.readStickyRows(),
-    deps.getPolicies ? deps.getPolicies().catch(() => []) : Promise.resolve([]),
-  ]);
+  const [snapshotResult, checksResult, usageResult, stickyResult, policiesResult] =
+    await Promise.allSettled([
+      deps.client.getSnapshot(),
+      deps.client.getCredentialCheck(),
+      deps.client.getUsage(),
+      deps.client.readStickyRows(),
+      deps.getPolicies ? deps.getPolicies() : Promise.reject(new Error("no policies source")),
+    ]);
+  if (snapshotResult.status === "rejected") throw new SnapshotUnavailableError();
+  const sources: Record<SourceKey, ObservationState> = {
+    snapshot: "ok",
+    checks: checksResult.status === "fulfilled" ? "ok" : "unavailable",
+    usage: usageResult.status === "fulfilled" ? "ok" : "unavailable",
+    policies: policiesResult.status === "fulfilled" ? "ok" : "unavailable",
+    sticky: stickyResult.status === "fulfilled" ? "ok" : "unavailable",
+  };
+  const warnings = (Object.keys(SOURCE_WARNINGS) as (keyof typeof SOURCE_WARNINGS)[])
+    .filter((key) => sources[key] === "unavailable")
+    .map((key) => SOURCE_WARNINGS[key]);
   const accounts = buildAccountViews({
     nowMs,
-    snapshot,
-    checks,
-    usage,
-    policies,
+    snapshot: snapshotResult.value,
+    checks: checksResult.status === "fulfilled" ? checksResult.value : [],
+    usage: usageResult.status === "fulfilled" ? usageResult.value : [],
+    policies: policiesResult.status === "fulfilled" ? policiesResult.value : undefined,
     provider: deps.provider,
   });
   return {
+    provider: deps.provider,
     accounts,
-    pool: buildPoolView(accounts),
-    sticky: summarizeSticky(stickyRows, deps.provider),
+    pool: buildPoolView(accounts, {
+      checks: sources.checks,
+      usage: sources.usage,
+      policies: sources.policies,
+    }),
+    sticky:
+      stickyResult.status === "fulfilled" ? summarizeSticky(stickyResult.value, deps.provider) : [],
+    sources,
+    warnings,
   };
 }
 
@@ -93,22 +133,27 @@ export function renderAccountsText(output: AccountsOutput): string[] {
 
 export function renderPoolText(output: AccountsOutput): string[] {
   const { pool } = output;
+  const count = (value: number | null): string => (value === null ? "unknown" : String(value));
   const lines = [
-    `pool: total=${pool.total} available=${pool.available} blocked=${pool.blocked} exhausted=${pool.exhausted ? "yes" : "no"} earliestReset=${iso(pool.earliestResetMs)}`,
+    `pool: total=${pool.total} unblocked=${pool.unblocked} blocked=${pool.blocked} drained=${count(pool.drained)} check-failed=${count(pool.checkFailed)} check-unknown=${pool.checkUnknown} quota-depleted=${count(pool.quotaDepleted)} quota-unknown=${pool.quotaUnknown} earliestReset=${iso(pool.earliestResetMs)}`,
   ];
+  if (output.accounts.length === 0) {
+    lines.push(`pool: empty snapshot (no ${output.provider} credentials), not an exhausted pool`);
+  }
   if (output.sticky.length > 0) {
     lines.push(
       `pin distribution (sessions per account id): ${output.sticky.map((s) => `#${s.credentialId}=${s.sessions}`).join(", ")}`,
     );
+  } else if (output.sources.sticky === "ok") {
+    lines.push("no active pins observed");
   } else {
-    lines.push("pin distribution: unavailable (sticky cache not readable)");
+    lines.push("pin distribution unavailable");
   }
-  if (pool.exhausted) {
-    lines.push(
-      "note: pool is Exhausted by local blocks/reserve, but OMP may still attempt the wire as a last resort",
-    );
-  }
+  lines.push(
+    "note: listed blocks are local selection controls; OMP may still attempt the wire as a last resort",
+  );
   lines.push("note: per-client pin and per-request serving account are not exposed by the gateway");
+  for (const warning of output.warnings) lines.push(`warning: ${warning}`);
   return lines;
 }
 

@@ -19,6 +19,7 @@ interface MockNode {
   replaceChildren(...children: MockNode[]): void;
   setAttribute(key: string, value: string): void;
   addEventListener(type: string, handler: () => void): void;
+  dispatch(type: string): void;
   click(): void;
   focus(): void;
   remove(): void;
@@ -58,6 +59,9 @@ function makeNode(tag: string): MockNode {
     },
     click() {
       for (const handler of listeners.get("click") ?? []) handler();
+    },
+    dispatch(type: string) {
+      for (const handler of listeners.get(type) ?? []) handler();
     },
     focus() {
       node.focused = true;
@@ -162,8 +166,10 @@ function state(state: "active" | "off" | "error" | "unknown"): PanelState {
         ? undefined
         : {
             state,
-            label: state === "active" ? "Gateway: Active (:4000)" : `Gateway: ${state}`,
-            endpoint: "127.0.0.1:4000",
+            label: state === "active" ? "Gateway: Alive · access verified" : `Gateway: ${state}`,
+            endpoint: "http://127.0.0.1:4000",
+            access: "ok",
+            accessHttpStatus: 200,
             modelCount: 4,
             antigravityModelCount: 2,
             clientCount: 1,

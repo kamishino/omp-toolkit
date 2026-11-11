@@ -86,7 +86,10 @@ export interface BuildAccountViewsInput {
 
 export function buildAccountViews(input: BuildAccountViewsInput): AccountView[] {
   const provider = input.provider ?? "google-antigravity";
-  const checkById = new Map(input.checks.map((c) => [c.id, c]));
+  const checkById = new Map<number, CredentialCheckLike>();
+  for (const check of input.checks) {
+    if (check.provider === provider && !checkById.has(check.id)) checkById.set(check.id, check);
+  }
   const usageByEmail = new Map<string, UsageReportLike>();
   for (const report of input.usage) {
     const email = report.metadata?.email?.toLowerCase();
@@ -104,20 +107,32 @@ export function buildAccountViews(input: BuildAccountViewsInput): AccountView[] 
     .sort((a, b) => a.id - b.id)
     .map((entry) => {
       const activeBlocks = (entry.blocks ?? [])
-        .filter((b) => b.blockedUntilMs > input.nowMs)
+        .filter(
+          (b) =>
+            typeof b.blockedUntilMs === "number" &&
+            Number.isFinite(b.blockedUntilMs) &&
+            b.blockedUntilMs > input.nowMs,
+        )
         .map((b) => ({ scope: b.blockScope, blockedUntilMs: b.blockedUntilMs }));
       const email = emailFromIdentityKey(entry.identityKey);
       const report = email ? usageByEmail.get(email) : undefined;
-      const limits: AccountLimitView[] = (report?.limits ?? []).map((limit) => ({
-        label: limit.label ?? limit.id ?? "limit",
-        windowLabel: limit.window?.label ?? null,
-        status: limit.status ?? "unknown",
-        remainingFraction:
-          typeof limit.amount?.remainingFraction === "number"
-            ? limit.amount.remainingFraction
-            : null,
-        resetsAtMs: typeof limit.window?.resetsAt === "number" ? limit.window.resetsAt : null,
-      }));
+      const limits: AccountLimitView[] = (report?.limits ?? []).map((limit) => {
+        const fraction = limit.amount?.remainingFraction;
+        const resetsAt = limit.window?.resetsAt;
+        return {
+          label: limit.label ?? limit.id ?? "limit",
+          windowLabel: limit.window?.label ?? null,
+          status: limit.status ?? "unknown",
+          remainingFraction:
+            typeof fraction === "number" &&
+            Number.isFinite(fraction) &&
+            fraction >= 0 &&
+            fraction <= 1
+              ? fraction
+              : null,
+          resetsAtMs: typeof resetsAt === "number" && Number.isFinite(resetsAt) ? resetsAt : null,
+        };
+      });
 
       const resetCandidates: number[] = activeBlocks.map((b) => b.blockedUntilMs);
       for (const limit of limits) {
@@ -125,13 +140,15 @@ export function buildAccountViews(input: BuildAccountViewsInput): AccountView[] 
           resetCandidates.push(limit.resetsAtMs);
       }
 
+      const check = checkById.get(entry.id);
+
       return {
         id: entry.id,
         provider: entry.provider,
         identityMasked: entry.identityKey
           ? maskIdentityKey(entry.identityKey)
           : `(credential ${entry.id})`,
-        ok: checkById.get(entry.id)?.ok ?? null,
+        ok: typeof check?.ok === "boolean" ? check.ok : null,
         blocked: activeBlocks.length > 0,
         blocks: activeBlocks,
         limits,
@@ -158,21 +175,43 @@ export function earliestResetMs(accounts: readonly AccountView[]): number | null
   return min;
 }
 
+export type ObservationState = "ok" | "unavailable";
+
+export interface PoolEvidence {
+  checks: ObservationState;
+  usage: ObservationState;
+  policies: ObservationState;
+}
+
 export interface PoolView {
   total: number;
   blocked: number;
-  available: number;
-  exhausted: boolean;
+  unblocked: number;
+  drained: number | null;
+  checkFailed: number | null;
+  checkUnknown: number;
+  quotaDepleted: number | null;
+  quotaUnknown: number;
   earliestResetMs: number | null;
 }
 
-export function buildPoolView(accounts: readonly AccountView[]): PoolView {
+export function buildPoolView(accounts: readonly AccountView[], evidence: PoolEvidence): PoolView {
   const blocked = accounts.filter((a) => a.blocked).length;
   return {
     total: accounts.length,
     blocked,
-    available: accounts.length - blocked,
-    exhausted: accounts.length > 0 && blocked === accounts.length,
+    unblocked: accounts.length - blocked,
+    drained:
+      evidence.policies === "ok" ? accounts.filter((a) => a.policy?.drained ?? false).length : null,
+    checkFailed: evidence.checks === "ok" ? accounts.filter((a) => a.ok === false).length : null,
+    checkUnknown: accounts.filter((a) => a.ok === null).length,
+    quotaDepleted:
+      evidence.usage === "ok"
+        ? accounts.filter((a) => a.limits.some((l) => l.remainingFraction === 0)).length
+        : null,
+    quotaUnknown: accounts.filter(
+      (a) => a.limits.length === 0 || a.limits.some((l) => l.remainingFraction === null),
+    ).length,
     earliestResetMs: earliestResetMs(accounts),
   };
 }

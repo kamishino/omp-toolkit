@@ -1,4 +1,4 @@
-import type { GatewayPanelView } from "./ipc";
+import type { GatewayPanelStateKind, GatewayPanelView } from "./ipc";
 
 export interface GatewayResponse {
   ok: boolean;
@@ -27,28 +27,38 @@ export async function fetchGatewayPanelView(
   now: () => number = Date.now,
 ): Promise<GatewayPanelView> {
   const base = (options.gatewayBaseUrl ?? "http://127.0.0.1:4000").replace(/\/$/, "");
-  const endpoint = base.replace(/^https?:\/\//, "");
+  const endpoint = base;
   const checkedAt = now();
   const clientCount = options.readClientCount ? safeRead(options.readClientCount) : null;
+  const down = (state: GatewayPanelStateKind, label: string): GatewayPanelView => ({
+    state,
+    label,
+    endpoint,
+    access: "unknown",
+    accessHttpStatus: null,
+    modelCount: null,
+    antigravityModelCount: null,
+    clientCount,
+    checkedAt,
+  });
 
   try {
     const res = await fetchFn(`${base}/healthz`, { signal: AbortSignal.timeout(1000) });
     if (!res.ok) {
-      return {
-        state: "error",
-        label: `Gateway: HTTP ${res.status}`,
-        endpoint,
-        modelCount: null,
-        antigravityModelCount: null,
-        clientCount,
-        checkedAt,
-      };
+      return down("error", `Gateway: HTTP ${res.status}`);
     }
   } catch {
+    return down("off", "Gateway: Off");
+  }
+
+  const token = options.readGatewayToken ? safeRead(options.readGatewayToken) : null;
+  if (!token) {
     return {
-      state: "off",
-      label: "Gateway: Off",
+      state: "active",
+      label: "Gateway: Alive · access not checked",
       endpoint,
+      access: "unknown",
+      accessHttpStatus: null,
       modelCount: null,
       antigravityModelCount: null,
       clientCount,
@@ -56,35 +66,76 @@ export async function fetchGatewayPanelView(
     };
   }
 
-  let modelCount: number | null = null;
-  let antigravityModelCount: number | null = null;
-  const token = options.readGatewayToken ? safeRead(options.readGatewayToken) : null;
-  if (token) {
-    try {
-      const res = await fetchFn(`${base}/v1/models`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(2_500),
-      });
-      if (res.ok && res.json) {
-        const data = (await res.json()) as { data?: { id?: string }[] };
-        const ids = (data.data ?? []).map((m) => m.id ?? "");
-        modelCount = ids.length;
-        antigravityModelCount = ids.filter((id) => id.includes("google-antigravity")).length;
-      }
-    } catch {
-      // Catalog is decorative here; health alone still proves liveness.
+  try {
+    const res = await fetchFn(`${base}/v1/models`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(2_500),
+    });
+    if (res.status === 401 || res.status === 403) {
+      return {
+        state: "active",
+        label: "Gateway: Alive · access denied",
+        endpoint,
+        access: "denied",
+        accessHttpStatus: res.status,
+        modelCount: null,
+        antigravityModelCount: null,
+        clientCount,
+        checkedAt,
+      };
     }
+    if (!res.ok || !res.json) {
+      return {
+        state: "active",
+        label: "Gateway: Alive · access unavailable",
+        endpoint,
+        access: "error",
+        accessHttpStatus: res.status,
+        modelCount: null,
+        antigravityModelCount: null,
+        clientCount,
+        checkedAt,
+      };
+    }
+    const data = (await res.json()) as { data?: { id?: unknown }[] };
+    if (!Array.isArray(data.data) || !data.data.every((m) => typeof m.id === "string")) {
+      return {
+        state: "active",
+        label: "Gateway: Alive · access unavailable",
+        endpoint,
+        access: "error",
+        accessHttpStatus: res.status,
+        modelCount: null,
+        antigravityModelCount: null,
+        clientCount,
+        checkedAt,
+      };
+    }
+    const ids = data.data.map((m) => m.id as string);
+    return {
+      state: "active",
+      label: "Gateway: Alive · access verified",
+      endpoint,
+      access: "ok",
+      accessHttpStatus: res.status,
+      modelCount: ids.length,
+      antigravityModelCount: ids.filter((id) => id.includes("google-antigravity")).length,
+      clientCount,
+      checkedAt,
+    };
+  } catch {
+    return {
+      state: "active",
+      label: "Gateway: Alive · access unavailable",
+      endpoint,
+      access: "error",
+      accessHttpStatus: null,
+      modelCount: null,
+      antigravityModelCount: null,
+      clientCount,
+      checkedAt,
+    };
   }
-
-  return {
-    state: "active",
-    label: "Gateway: Active (:4000)",
-    endpoint,
-    modelCount,
-    antigravityModelCount,
-    clientCount,
-    checkedAt,
-  };
 }
 
 function safeRead<T>(read: () => T | null): T | null {

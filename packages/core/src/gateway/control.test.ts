@@ -249,13 +249,16 @@ describe("buildAccountViews + pool", () => {
     expect(earliestResetMs(views)).toBe(NOW + 5_000);
   });
 
-  test("pool is exhausted only when every account is blocked", () => {
-    const pool = buildPoolView(views);
+  test("pool reports overlapping observations, not eligibility", () => {
+    const pool = buildPoolView(views, { checks: "ok", usage: "ok", policies: "ok" });
     expect(pool.total).toBe(2);
     expect(pool.blocked).toBe(1);
-    expect(pool.exhausted).toBe(false);
-    const allBlocked = buildPoolView(views.map((v) => ({ ...v, blocked: true })));
-    expect(allBlocked.exhausted).toBe(true);
+    expect(pool.unblocked).toBe(1);
+    expect(pool.drained).toBe(0);
+    expect(pool.checkFailed).toBe(0);
+    expect(pool.checkUnknown).toBe(0);
+    expect(pool.quotaDepleted).toBe(1);
+    expect(pool.quotaUnknown).toBe(1);
   });
 
   test("view JSON never contains a full email", () => {

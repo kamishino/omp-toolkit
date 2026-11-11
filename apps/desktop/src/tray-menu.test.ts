@@ -155,7 +155,7 @@ describe("buildTrayMenuTemplate", () => {
       isRefreshing: false,
       lastDashboard: null,
       lastError: null,
-      gatewayStatus: "Gateway: Active (:4000)",
+      gatewayStatus: "Gateway: fixture status",
       onRefreshNow: () => {},
       onTogglePanel: () => {},
       onOpenTerminal: () => {},
@@ -163,7 +163,7 @@ describe("buildTrayMenuTemplate", () => {
       onToggleAutostart: () => {},
       onQuit: () => {},
     });
-    const item = withGateway.find((i) => i.label?.includes("Gateway: Active (:4000)"));
+    const item = withGateway.find((i) => i.label?.includes("Gateway: fixture status"));
     expect(item).toBeDefined();
     expect(item?.enabled).toBe(false);
   });

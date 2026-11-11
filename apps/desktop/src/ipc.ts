@@ -88,16 +88,26 @@ export interface GatewayConnectResult {
     title: string;
     snippet: string;
   };
+  /** Mirrors the gateway setup outcome; present when the gateway returned setup JSON. */
+  outcome?: "applied" | "noop" | "partial" | "failed";
+  /** Mirrors the gateway audit state; present when the gateway returned setup JSON. */
+  audit?: "recorded" | "unavailable" | "not-attempted";
   message?: string;
 }
 
 export type GatewayPanelStateKind = "active" | "off" | "error" | "unknown";
 
+export type GatewayAccessState = "ok" | "denied" | "error" | "unknown";
+
 export interface GatewayPanelView {
   state: GatewayPanelStateKind;
-  /** Tray-compatible one-liner, e.g. "Gateway: Active (:4000)". */
+  /** Tray-compatible one-liner, e.g. "Gateway: Alive · access verified". */
   label: string;
+  /** Complete normalized gateway URL, e.g. "http://127.0.0.1:4000". */
   endpoint: string;
+  /** Authenticated catalogue access; independent of process liveness. */
+  access: GatewayAccessState;
+  accessHttpStatus: number | null;
   modelCount: number | null;
   antigravityModelCount: number | null;
   clientCount: number | null;
@@ -107,7 +117,9 @@ export interface GatewayPanelView {
 export const UNKNOWN_GATEWAY_PANEL_VIEW: GatewayPanelView = {
   state: "unknown",
   label: "Gateway: …",
-  endpoint: "127.0.0.1:4000",
+  endpoint: "http://127.0.0.1:4000",
+  access: "unknown",
+  accessHttpStatus: null,
   modelCount: null,
   antigravityModelCount: null,
   clientCount: null,

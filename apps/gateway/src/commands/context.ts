@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import type { AccountPolicyLike } from "@omp-toolkit/core";
+import { type AccountPolicyLike, parseAccountPolicies } from "@omp-toolkit/core";
 import { type BrokerClient, createBrokerClient } from "../broker-client";
 import type { GatewayCtlConfig } from "../config";
 import type { DoctorDependencies } from "../doctor";
@@ -27,8 +27,7 @@ export function createCommandContext(config: GatewayCtlConfig): CommandContext {
     return out;
   };
   const getPolicies = async (): Promise<AccountPolicyLike[]> => {
-    const parsed: unknown = JSON.parse((await readPoliciesRaw()).trim() || "[]");
-    return Array.isArray(parsed) ? (parsed as AccountPolicyLike[]) : [];
+    return parseAccountPolicies(await readPoliciesRaw());
   };
   const viewsDeps: ViewsDependencies = {
     client,

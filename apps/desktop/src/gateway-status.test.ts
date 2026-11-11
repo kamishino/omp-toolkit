@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { checkGatewayStatus, fetchGatewayPanelView, GatewayStatusProbe } from "./gateway-status";
 
 describe("gateway status probe", () => {
-  test("active when health endpoint is ok", async () => {
-    const status = await checkGatewayStatus(async () => ({ ok: true, status: 200 }));
-    expect(status).toBe("Gateway: Active (:4000)");
+  test("alive without access check when no token is configured", async () => {
+    const urls: string[] = [];
+    const status = await checkGatewayStatus(async (url) => {
+      urls.push(url);
+      return { ok: true, status: 200 };
+    });
+    expect(status).toBe("Gateway: Alive · access not checked");
+    expect(urls).toEqual(["http://127.0.0.1:4000/healthz"]);
   });
 
   test("reports HTTP status when not ok", async () => {
@@ -24,8 +29,8 @@ describe("gateway status probe", () => {
       () => now,
     );
 
-    expect(await probe.get()).toBe("Gateway: Active (:4000)");
-    expect(await probe.get()).toBe("Gateway: Active (:4000)");
+    expect(await probe.get()).toBe("Gateway: Alive · access not checked");
+    expect(await probe.get()).toBe("Gateway: Alive · access not checked");
     expect(fetches).toBe(1);
 
     const [a, b] = await Promise.all([probe.get(), probe.get()]);
@@ -33,11 +38,11 @@ describe("gateway status probe", () => {
     expect(fetches).toBe(1);
 
     now += 30_001;
-    expect(await probe.get()).toBe("Gateway: Active (:4000)");
+    expect(await probe.get()).toBe("Gateway: Alive · access not checked");
     expect(fetches).toBe(2);
   });
 
-  test("panel view enriches active state with model and client counts", async () => {
+  test("verified catalogue reports counts and full endpoint", async () => {
     const view = await fetchGatewayPanelView(
       async (url) =>
         url.endsWith("/v1/models")
@@ -53,10 +58,67 @@ describe("gateway status probe", () => {
       () => 42,
     );
     expect(view.state).toBe("active");
+    expect(view.label).toBe("Gateway: Alive · access verified");
+    expect(view.endpoint).toBe("http://127.0.0.1:4000");
+    expect(view.access).toBe("ok");
+    expect(view.accessHttpStatus).toBe(200);
     expect(view.modelCount).toBe(2);
     expect(view.antigravityModelCount).toBe(1);
     expect(view.clientCount).toBe(2);
     expect(view.checkedAt).toBe(42);
+  });
+
+  test("denied catalogue keeps liveness with denied access", async () => {
+    const view = await fetchGatewayPanelView(
+      async (url) =>
+        url.endsWith("/v1/models") ? { ok: false, status: 401 } : { ok: true, status: 200 },
+      { readGatewayToken: () => "tok" },
+      () => 7,
+    );
+    expect(view.state).toBe("active");
+    expect(view.label).toBe("Gateway: Alive · access denied");
+    expect(view.access).toBe("denied");
+    expect(view.accessHttpStatus).toBe(401);
+    expect(view.modelCount).toBeNull();
+  });
+
+  test("broken catalogue keeps liveness with unavailable access", async () => {
+    const view = await fetchGatewayPanelView(
+      async (url) =>
+        url.endsWith("/v1/models") ? { ok: false, status: 500 } : { ok: true, status: 200 },
+      { readGatewayToken: () => "tok" },
+      () => 7,
+    );
+    expect(view.state).toBe("active");
+    expect(view.access).toBe("error");
+    expect(view.modelCount).toBeNull();
+  });
+
+  test("malformed catalogue is an error, not zero models", async () => {
+    const view = await fetchGatewayPanelView(
+      async (url) =>
+        url.endsWith("/v1/models")
+          ? { ok: true, status: 200, json: async () => ({ data: [{ id: 7 }] }) }
+          : { ok: true, status: 200 },
+      { readGatewayToken: () => "tok" },
+      () => 7,
+    );
+    expect(view.access).toBe("error");
+    expect(view.modelCount).toBeNull();
+  });
+
+  test("empty catalogue is known zero, not an error", async () => {
+    const view = await fetchGatewayPanelView(
+      async (url) =>
+        url.endsWith("/v1/models")
+          ? { ok: true, status: 200, json: async () => ({ data: [] }) }
+          : { ok: true, status: 200 },
+      { readGatewayToken: () => "tok" },
+      () => 7,
+    );
+    expect(view.access).toBe("ok");
+    expect(view.modelCount).toBe(0);
+    expect(view.antigravityModelCount).toBe(0);
   });
 
   test("panel view is off without probing models when health fails", async () => {
@@ -66,6 +128,7 @@ describe("gateway status probe", () => {
       throw new Error("ECONNREFUSED");
     });
     expect(view.state).toBe("off");
+    expect(view.access).toBe("unknown");
     expect(urls).toHaveLength(1);
   });
 
