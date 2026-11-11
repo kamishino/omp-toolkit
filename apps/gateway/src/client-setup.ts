@@ -128,7 +128,7 @@ export async function setupGatewayClient(
     accountIds: config.accountIds,
     force: config.force,
   });
-  if (!addResult.ok) {
+  if (!addResult.ok && addResult.outcome !== "applied") {
     const lines = [...addResult.lines];
     if (addResult.lines.some((line) => line.includes("already exists"))) {
       lines.push(
@@ -227,15 +227,21 @@ export async function setupGatewayClient(
     );
   }
   return {
-    exitCode: addResult.audit === "unavailable" ? 1 : 0,
+    exitCode: addResult.ok ? 0 : 1,
     payload: {
-      ok: addResult.audit !== "unavailable",
+      ok: addResult.ok,
       clientName,
       platform,
       outcome: addResult.outcome,
       audit: addResult.audit,
       token,
       recipe,
+      ...(addResult.audit === "unavailable"
+        ? {
+            error:
+              "Client registered, but audit recording failed. Save this setup; do not register again.",
+          }
+        : {}),
     },
     lines,
   };

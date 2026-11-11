@@ -11,9 +11,10 @@ const CF_ENV = {
   OMP_CF_CLIENT_SECRET: "fixture-secret",
 };
 
-function setupWrites() {
+function setupWrites(overrides: { auditError?: boolean } = {}) {
   let nonce = 0;
   let clientsText = "{}";
+  let registryWrites = 0;
   const events: AuditEvent[] = [];
   const client: BrokerClient = {
     brokerHealth: async () => true,
@@ -37,6 +38,7 @@ function setupWrites() {
     writePolicies: async () => {},
     readTextFile: () => clientsText,
     writeTextFileAtomic: (_p, text) => {
+      registryWrites += 1;
       clientsText = text;
     },
     fileExists: () => true,
@@ -44,6 +46,7 @@ function setupWrites() {
     provider: "google-antigravity",
     audit: {
       record: async (e) => {
+        if (overrides.auditError) throw new Error("fixture audit unavailable");
         events.push(e);
       },
       latest: async () => null,
@@ -54,7 +57,12 @@ function setupWrites() {
       return nonce.toString(16).padStart(2 * n, "a");
     },
   });
-  return { writes, events, getClientsText: () => clientsText };
+  return {
+    writes,
+    events,
+    getClientsText: () => clientsText,
+    registryWrites: () => registryWrites,
+  };
 }
 
 function remoteConfig(argv: string[]) {
@@ -182,5 +190,31 @@ describe("setupGatewayClient", () => {
     );
     expect(result.exitCode).toBe(2);
     expect(getClientsText()).toBe("{}");
+  });
+
+  test("retains the real setup artifact when registration applies but audit fails", async () => {
+    const { writes, events, getClientsText, registryWrites } = setupWrites({ auditError: true });
+    const result = await setupGatewayClient(
+      remoteConfig(["remote-pair", "omp", "pc2", "--base-url=https://gw.example.test"]),
+      "remote-pair",
+      writes,
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.payload.ok).toBe(false);
+    expect(result.payload.outcome).toBe("applied");
+    expect(result.payload.audit).toBe("unavailable");
+    expect(result.payload.token).toStartWith("omp_gw_");
+    expect(result.payload.recipe?.platform).toBe("omp");
+    expect(result.payload.recipe?.snippet).toContain("models.yml");
+    expect(result.payload.recipe?.snippet).toContain("CF-Access-Client-Id: fixture-id");
+    expect(result.payload.recipe?.snippet).toContain(result.payload.token ?? "never-in-snippet");
+    expect(result.payload.error).toBe(
+      "Client registered, but audit recording failed. Save this setup; do not register again.",
+    );
+    expect(registryWrites()).toBe(1);
+    const stored = JSON.parse(getClientsText()) as Record<string, { tokenSha256?: unknown }>;
+    expect(stored.pc2?.tokenSha256).toBe(sha256Hex(result.payload.token ?? ""));
+    expect(getClientsText()).not.toContain(result.payload.token ?? "never-in-registry");
+    expect(JSON.stringify(events)).not.toContain(result.payload.token ?? "never-in-audit");
   });
 });
