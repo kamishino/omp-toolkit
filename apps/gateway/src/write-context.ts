@@ -1,10 +1,22 @@
-import { type AccountPolicyLike, emailFromIdentityKey } from "@omp-toolkit/core";
+import {
+  type AccountPolicyLike,
+  emailFromIdentityKey,
+  parseAccountPolicies,
+} from "@omp-toolkit/core";
 import type { GatewayAudit } from "./audit";
 import type { BrokerClient } from "./broker-client";
 
+export type WriteOutcome = "applied" | "noop" | "partial" | "failed";
+
 export interface WriteResult {
   ok: boolean;
+  outcome: WriteOutcome;
+  target: string;
+  scope: "global-block" | "account-policy" | "client-registration";
+  /** "not-attempted" when no mutation was attempted; "unavailable" when a mutation was acknowledged but its audit failed. */
+  audit: "recorded" | "unavailable" | "not-attempted";
   lines: string[];
+  progress?: { applied: number[]; unconfirmed: number[]; notAttempted: number[] };
   /** One-time plaintext client token; only returned by clients-add. */
   clientToken?: string;
 }
@@ -33,11 +45,12 @@ export interface ResolvedAccount {
 /** Dependencies plus the shared write helpers (audit, account lookup, policies). */
 export interface WriteContext extends WriteDependencies {
   now(): number;
+  /** Returns true when the audit event persisted; false when audit recording failed. */
   recordAudit(
     kind: string,
     accountId: number | null,
     detail: Record<string, unknown>,
-  ): Promise<void>;
+  ): Promise<boolean>;
   resolveAccount(credentialId: number): Promise<ResolvedAccount | null>;
   providerKey(): string;
   allAccountIds(): Promise<number[]>;
@@ -54,13 +67,18 @@ export function createWriteContext(deps: WriteDependencies): WriteContext {
     ...deps,
     now,
     async recordAudit(kind, accountId, detail) {
-      await deps.audit.record({
-        at: now(),
-        kind,
-        provider: deps.provider,
-        account: accountId === null ? null : accountRef(accountId),
-        detail: JSON.stringify(detail),
-      });
+      try {
+        await deps.audit.record({
+          at: now(),
+          kind,
+          provider: deps.provider,
+          account: accountId === null ? null : accountRef(accountId),
+          detail: JSON.stringify(detail),
+        });
+        return true;
+      } catch {
+        return false;
+      }
     },
     async resolveAccount(credentialId) {
       const snapshot = await deps.client.getSnapshot();
@@ -80,11 +98,7 @@ export function createWriteContext(deps: WriteDependencies): WriteContext {
         .sort((a, b) => a - b);
     },
     async readPoliciesStrict() {
-      const raw = (await deps.readPoliciesRaw()).trim().replace(/^\uFEFF/, "");
-      const parsed: unknown = JSON.parse(raw || "[]");
-      if (!Array.isArray(parsed))
-        throw new Error("auth.accountPolicies is not an array; refusing to write");
-      return parsed as AccountPolicyLike[];
+      return parseAccountPolicies(await deps.readPoliciesRaw());
     },
   };
 }

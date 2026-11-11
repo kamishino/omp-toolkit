@@ -1,16 +1,30 @@
 import {
+  type AccountsOutput,
   getAccountsOutput,
   getClientsOutput,
   renderAccountsText,
   renderClientsText,
   renderPoolText,
+  SnapshotUnavailableError,
 } from "../views";
 import type { CommandContext } from "./context";
 import { print } from "./output";
 
 export async function runAccountsCommand(ctx: CommandContext): Promise<void> {
   const { config, viewsDeps } = ctx;
-  const output = await getAccountsOutput(viewsDeps);
+  let output: AccountsOutput;
+  try {
+    output = await getAccountsOutput(viewsDeps);
+  } catch (error) {
+    if (error instanceof SnapshotUnavailableError) {
+      if (config.json)
+        console.log(JSON.stringify({ ok: false, error: "snapshot-unavailable" }, null, 2));
+      else console.log("Account snapshot unavailable; no pool assessment was made.");
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
   print(
     config,
     output,

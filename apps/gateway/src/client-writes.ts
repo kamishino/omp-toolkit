@@ -1,9 +1,21 @@
 import crypto from "node:crypto";
 import { removeClientEntry, upsertClientEntry } from "@omp-toolkit/core";
-import type { WriteContext, WriteResult } from "./write-context";
+import { AUDIT_WARNING } from "./block-writes";
+import type { ResolvedAccount, WriteContext, WriteResult } from "./write-context";
 
 export function sha256Hex(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+function failure(target: string, lines: string[]): WriteResult {
+  return {
+    ok: false,
+    outcome: "failed",
+    target,
+    scope: "client-registration",
+    audit: "not-attempted",
+    lines,
+  };
 }
 
 export async function addClient(
@@ -11,12 +23,18 @@ export async function addClient(
   name: string,
   options: { models: string[] | null; accountIds: number[]; force: boolean },
 ): Promise<WriteResult> {
+  const target = `client "${name}"`;
   let accounts: Record<string, string[]> | undefined;
   if (options.accountIds.length > 0) {
     const keys: string[] = [];
     for (const id of options.accountIds) {
-      const account = await ctx.resolveAccount(id);
-      if (!account) return { ok: false, lines: [`unknown ${ctx.provider} credential id: ${id}`] };
+      let account: ResolvedAccount | null;
+      try {
+        account = await ctx.resolveAccount(id);
+      } catch {
+        return failure(target, [`clients-add ${target} -> failed: account lookup failed`]);
+      }
+      if (!account) return failure(target, [`unknown ${ctx.provider} credential id: ${id}`]);
       keys.push(account.identityKey);
     }
     accounts = { [ctx.provider]: keys };
@@ -34,32 +52,68 @@ export async function addClient(
     },
     { force: options.force },
   );
-  if (result.error) return { ok: false, lines: [result.error] };
-  ctx.writeTextFileAtomic(ctx.clientsPath, result.text);
-  await ctx.recordAudit("gateway.client-add", null, {
+  if (result.error) return failure(target, [result.error]);
+  try {
+    ctx.writeTextFileAtomic(ctx.clientsPath, result.text);
+  } catch (error) {
+    return failure(target, [
+      `clients-add ${target} -> failed: registry write did not confirm (${error instanceof Error ? error.message.split("\n")[0] : "unknown error"})`,
+    ]);
+  }
+  const audited = await ctx.recordAudit("gateway.client-add", null, {
     name,
     models: options.models,
     accountIds: options.accountIds,
   });
+  const lines = [
+    `client "${name}" added`,
+    "token (shown once, transmit securely):",
+    token,
+    "the running gateway reloads the clients file on its own cadence",
+  ];
+  if (!audited) lines.push(AUDIT_WARNING);
   return {
-    ok: true,
+    ok: audited,
+    outcome: "applied",
+    target,
+    scope: "client-registration",
+    audit: audited ? "recorded" : "unavailable",
     clientToken: token,
-    lines: [
-      `client "${name}" added`,
-      "token (shown once, transmit securely):",
-      token,
-      "the running gateway hot-reloads the clients file within ~10s",
-    ],
+    lines,
   };
 }
 
 export async function revokeClient(ctx: WriteContext, name: string): Promise<WriteResult> {
+  const target = `client "${name}"`;
   if (!ctx.fileExists(ctx.clientsPath)) {
-    return { ok: false, lines: [`client "${name}" not found (no clients file)`] };
+    return failure(target, [`client "${name}" not found (no clients file)`]);
   }
-  const result = removeClientEntry(ctx.readTextFile(ctx.clientsPath), name);
-  if (result.error) return { ok: false, lines: [result.error] };
-  ctx.writeTextFileAtomic(ctx.clientsPath, result.text);
-  await ctx.recordAudit("gateway.client-revoke", null, { name });
-  return { ok: true, lines: [`client "${name}" revoked (effective within ~10s, no restart)`] };
+  let text: string;
+  try {
+    text = ctx.readTextFile(ctx.clientsPath);
+  } catch (error) {
+    return failure(target, [
+      `clients-revoke ${target} -> failed: registry read failed (${error instanceof Error ? error.message.split("\n")[0] : "unknown error"})`,
+    ]);
+  }
+  const result = removeClientEntry(text, name);
+  if (result.error) return failure(target, [result.error]);
+  try {
+    ctx.writeTextFileAtomic(ctx.clientsPath, result.text);
+  } catch (error) {
+    return failure(target, [
+      `clients-revoke ${target} -> failed: registry write did not confirm (${error instanceof Error ? error.message.split("\n")[0] : "unknown error"})`,
+    ]);
+  }
+  const lines = [`client "${name}" revocation written to the clients file`];
+  const audited = await ctx.recordAudit("gateway.client-revoke", null, { name });
+  if (!audited) lines.push(AUDIT_WARNING);
+  return {
+    ok: audited,
+    outcome: "applied",
+    target,
+    scope: "client-registration",
+    audit: audited ? "recorded" : "unavailable",
+    lines,
+  };
 }
