@@ -49,6 +49,7 @@ All roadmap development is evaluated against these non-negotiable operational pr
 | `G03` | Gateway UX & 1-Step Onboarding | commits `52d676a`, `c630336`, `3269972` | Desktop Gateway Strip with 1-click Start/Stop/Restart/Doctor controls, expandable Gateway Drawer with 1-click endpoint copy and quick harness recipe selector, unified 1-step `gateway:ctl connect <platform> [name]` command, in-OMP `/gateway` markdown parity, and CLI `--help` fix |
 | `R01` | Operational Must-Haves (Autonomous Safeguards) — **partial** | commits `d5b45d1`, `52d676a`, `c630336`, `3269972` | Quota decision helper (`evaluateQuotaCooldowns`) exists; production automatic-sweep wiring (`autoCooldownSweep`) was not found, so the helper is not an active service. Desktop OS notifications (`evaluateQuotaAlerts`, 15-minute debouncing) and `gateway:ctl remote-pair <platform> [name]` remain dated historical evidence from 2026-11-06, not newly verified runtime behavior |
 | `G04` | Remote Client Doctor (`gateway:ctl doctor --remote`) | `packages/core/src/gateway/doctor.ts`, `apps/gateway/src/doctor.ts` | Unit-verified (`control.test.ts`, `doctor.test.ts`): diagnoses base URL, CF Access headers, public tunnel reachability, and gateway bearer auth in 1 command with actionable fix hints |
+| `G05` | Truthful gateway and pool assessment | `packages/core/src/gateway/account-views.ts`, `apps/gateway/src/views.ts`, `apps/desktop/src/gateway-status.ts`, `apps/desktop/src/renderer/gateway-view.ts` | Verified 2026-11-11: 41 unit tests pass (`account-views`, `views`, `gateway-status`, `gateway-view`); Chromium browser-verified across 4 desktop states: alive-with-denied access shows access denied with `3 usage accounts observed` concurrently without readiness claims, zero-row provider shows `0 usage accounts observed`, absent provider and off-state hide count; glossary defines `Gateway account snapshot` |
 
 ---
 
@@ -62,18 +63,12 @@ No Gemini probe/recovery opt-in is required for this increment. Leave existing c
 
 ### Development Musts
 
-- **`G05`: Truthful gateway and pool assessment** — first and only active development candidate. Reuse `buildAccountViews()` / `buildPoolView()`, existing gateway view rendering, and `fetchGatewayPanelView()`; no second status collector or probe service.
-  - Distinguish unblocked counts, operator-drained state, reported credential-check failure/unknown, and quota evidence. Eligibility is route-specific; an unblocked count alone does not establish it. Missing policy evidence is not permission; missing quota is neither zero nor unlimited quota.
-  - Preserve readable snapshot/account information when a supporting read fails and identify incomplete observations. Distinguish a failed authoritative snapshot from a successful empty snapshot. Do not invent a freshness TTL where the source supplies no timestamp.
-  - Distinguish desktop process liveness from authenticated catalogue access. Catalogue success does not prove tool-turn/stream compatibility. No live inference or resumed Gemini checks.
-  - Observable outcomes: three drained accounts are not presented as three usable accounts; a missing credential check stays unknown rather than success; a failed usage read retains known account identities plus an explicit usage warning; a successful empty snapshot is labeled empty, not an exhausted live pool; `/healthz` 200 with `/v1/models` 401 shows alive-but-access-failed, not serving-ready success.
-  - Source anchors: `packages/core/src/gateway/account-views.ts:buildPoolView`, `apps/gateway/src/views.ts:getAccountsOutput/renderPoolText`, `apps/desktop/src/gateway-status.ts:fetchGatewayPanelView`.
-
+All Must Have development items are completed. `G06` is the single active development candidate in Should Have.
 ---
 
 ## Should Have
 
-Sequenced after `G05`, strictly one feature or intervention at a time: `G06` then `G07`.
+`G05` is complete. Proceed strictly one feature or intervention at a time: `G06` (active candidate) then `G07`.
 
 - **`G06`: Explainable manual account and client actions** (depends on `G05`). Preserve operator-triggered writes, bounded block durations, audit records, credential secrecy, and managed-process ownership safeguards.
   - Make target, scope and observed outcome clear for existing block/drain/unblock/revoke operations. Local blocks are soft upstream selection controls, not guaranteed no-serve protection. Distinguish an empty/no-op result from restricting a populated pool.
@@ -133,7 +128,7 @@ Explicitly rejected based on empirical refutation, architectural invariants, or 
 
 ## Recommended Execution Sequence
 
-`G05` (Must) is the single active development candidate. On its acceptance outcomes, proceed `G06` → `G07` (Shoulds), strictly one feature or intervention at a time. `G08` stays conditional until `G05`–`G07` outcomes hold and each candidate provider's supported identity/credential paths are established. `G04` is complete and is not future work.
+`G05` is complete. `G06` (Should) is the single active development candidate, followed by `G07`. `G08` stays conditional until `G06`–`G07` meet their outcomes and each candidate provider's supported identity/credential paths are established. `G04` and `G05` are complete and are not future work.
 
 Autonomous account restriction is a separate gated proposal only after trustworthy observations, upstream last-resort/enforcement behavior, and recovery semantics are established; the survivor heuristic does not prove hard protection. This sequence adds no HA, new dashboard, second proxy/vault, model degradation, or periodic inference checks.
 
