@@ -66,6 +66,12 @@ restoration after consecutive healthy checks.
 
 The latest recorded observations and recovery evidence for the known probe
 routes, together with any active incident.
+
+## Gateway account snapshot
+
+An observation of known gateway provider accounts and their reported state. A
+successful observation containing no accounts is distinct from an unavailable
+observation.
 ## Backup snapshot
 
 A captured restore point for portable preferences and provider logins, stored as an encrypted archive (.enc).
